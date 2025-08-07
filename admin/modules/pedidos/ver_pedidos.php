@@ -1,158 +1,4 @@
-<a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
-                                               target="_blank" class="text-green-600 hover:text-green-900" title="WhatsApp">
-                                                <i class="fab fa-whatsapp"></i>
-                                            </a>
-                                            <button onclick="eliminarPedido(<?= $pedido['id'] ?>, '#<?= $pedido['id'] ?> - <?= htmlspecialchars($pedido['nombre']) ?>')" 
-                                                    class="text-red-600 hover:text-red-900" title="Eliminar">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Footer con totales -->
-        <div class="mt-6 text-center text-gray-500">
-            <p>
-                Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?>
-                <?php if ($buscar || $filtro_estado || $filtro_fecha || $filtro_modalidad): ?>
-                    | <a href="?" class="text-blue-600 hover:underline">Limpiar filtros</a>
-                <?php endif; ?>
-            </p>
-        </div>
-    </main>
-
-    <!-- Modal para impresión -->
-    <div id="impresionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-print text-orange-500 mr-2"></i>Imprimir Comanda
-            </h3>
-            <div id="impresionContent">
-                <p>Preparando impresión...</p>
-            </div>
-            <div class="flex justify-end space-x-2 mt-6">
-                <button onclick="cerrarModalImpresion()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                    Cancelar
-                </button>
-                <button onclick="confirmarImpresion()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-print mr-1"></i>Imprimir
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let pedidoAImprimir = null;
-
-        function cambiarEstado(id, nuevoEstado) {
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.innerHTML = `
-                <input type="hidden" name="accion" value="cambiar_estado">
-                <input type="hidden" name="id" value="${id}">
-                <input type="hidden" name="estado" value="${nuevoEstado}">
-            `;
-            document.body.appendChild(form);
-            form.submit();
-        }
-
-        function eliminarPedido(id, descripcion) {
-            if (confirm(`¿Estás seguro de eliminar el pedido ${descripcion}?`)) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="eliminar">
-                    <input type="hidden" name="id" value="${id}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        function imprimirComanda(pedidoId) {
-            pedidoAImprimir = pedidoId;
-            
-            document.getElementById('impresionContent').innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-print text-4xl text-orange-500 mb-3"></i>
-                    <p class="mb-2">Se enviará la comanda del pedido <strong>#${pedidoId}</strong> a la impresora.</p>
-                    <p class="text-sm text-gray-600 mb-4">Comandita 3nstar RPT006S - 80mm</p>
-                    <div class="bg-gray-50 p-3 rounded text-left text-sm">
-                        <p class="font-medium mb-1">Se imprimirá:</p>
-                        <ul class="text-gray-600 text-xs space-y-1">
-                            <li>• Datos del cliente</li>
-                            <li>• Producto y cantidad</li>
-                            <li>• Precio y forma de pago</li>
-                            <li>• Modalidad (Retira/Delivery)</li>
-                            <li>• Observaciones</li>
-                        </ul>
-                    </div>
-                </div>
-            `;
-            
-            document.getElementById('impresionModal').classList.remove('hidden');
-        }
-
-        function confirmarImpresion() {
-            if (pedidoAImprimir) {
-                fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `accion=marcar_impreso&id=${pedidoAImprimir}`
-                }).then(() => {
-                    location.reload();
-                });
-            }
-            cerrarModalImpresion();
-        }
-
-        function reimprimir(pedidoId) {
-            if (confirm('¿Reimprimir la comanda del pedido #' + pedidoId + '?\n\nEsto creará una nueva impresión.')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="reimprimir">
-                    <input type="hidden" name="id" value="${pedidoId}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        function cerrarModalImpresion() {
-            document.getElementById('impresionModal').classList.add('hidden');
-            pedidoAImprimir = null;
-        }
-
-        // Cerrar modal al hacer clic fuera
-        document.getElementById('impresionModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                cerrarModalImpresion();
-            }
-        });
-
-        // Establecer fecha de hoy por defecto si no hay fecha seleccionada
-        document.addEventListener('DOMContentLoaded', function() {
-            const fechaInput = document.querySelector('input[name="fecha"]');
-            if (fechaInput && !fechaInput.value) {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (!urlParams.has('buscar') && !urlParams.has('estado') && !urlParams.has('modalidad')) {
-                    const hoy = new Date().toISOString().split('T')[0];
-                    fechaInput.value = hoy;
-                }
-            }
-        });
-    </script>
-</body>
-</html><?php
+<?php
 require_once '../../config.php';
 requireLogin();
 
@@ -191,28 +37,6 @@ if ($_POST) {
                     $mensaje = 'Pedido eliminado correctamente';
                 } catch (Exception $e) {
                     $error = 'Error al eliminar pedido';
-                }
-                break;
-                
-            case 'marcar_impreso':
-                $id = (int)$_POST['id'];
-                try {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $mensaje = 'Comanda marcada como impresa';
-                } catch (Exception $e) {
-                    $error = 'Error al marcar como impreso';
-                }
-                break;
-                
-            case 'reimprimir':
-                $id = (int)$_POST['id'];
-                try {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $mensaje = 'Comanda reimpresa - Verificar impresora';
-                } catch (Exception $e) {
-                    $error = 'Error al reimprimir';
                 }
                 break;
         }
@@ -281,7 +105,6 @@ $stats_sql = "SELECT
     SUM(CASE WHEN estado = 'Preparando' THEN 1 ELSE 0 END) as preparando,
     SUM(CASE WHEN estado = 'Listo' THEN 1 ELSE 0 END) as listos,
     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
-    SUM(CASE WHEN impreso = 1 THEN 1 ELSE 0 END) as impresos,
     SUM(precio) as total_ventas
     FROM pedidos";
 
@@ -337,7 +160,7 @@ $stats = $pdo->query($stats_sql)->fetch();
         <?php endif; ?>
 
         <!-- Estadísticas rápidas -->
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-gray-800"><?= $stats['total'] ?></div>
                 <div class="text-sm text-gray-600">Total</div>
@@ -359,11 +182,7 @@ $stats = $pdo->query($stats_sql)->fetch();
                 <div class="text-sm text-gray-600">Entregados</div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-purple-600"><?= $stats['impresos'] ?></div>
-                <div class="text-sm text-gray-600">Impresos</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-green-600"><?= formatPrice($stats['total_ventas']) ?></div>
+                <div class="text-2xl font-bold text-purple-600"><?= formatPrice($stats['total_ventas']) ?></div>
                 <div class="text-sm text-gray-600">Ventas</div>
             </div>
         </div>
@@ -495,15 +314,6 @@ $stats = $pdo->query($stats_sql)->fetch();
                                             <i class="fas fa-comment text-xs mr-1"></i><?= htmlspecialchars($pedido['observaciones']) ?>
                                         </div>
                                         <?php endif; ?>
-                                        <?php if ($pedido['impreso']): ?>
-                                        <div class="text-xs text-green-600 mt-1">
-                                            <i class="fas fa-print text-xs mr-1"></i>Comanda impresa
-                                        </div>
-                                        <?php else: ?>
-                                        <div class="text-xs text-red-600 mt-1">
-                                            <i class="fas fa-exclamation-circle text-xs mr-1"></i>Sin imprimir
-                                        </div>
-                                        <?php endif; ?>
                                     </td>
                                     <td class="px-6 py-4 text-sm font-medium text-gray-900">
                                         <?= formatPrice($pedido['precio']) ?>
@@ -542,15 +352,101 @@ $stats = $pdo->query($stats_sql)->fetch();
                                     </td>
                                     <td class="px-6 py-4 text-sm font-medium">
                                         <div class="flex space-x-2">
-                                            <?php if ($pedido['impreso']): ?>
-                                                <button onclick="reimprimir(<?= $pedido['id'] ?>)" 
-                                                        class="text-gray-600 hover:text-gray-900" title="Reimprimir">
-                                                    <i class="fas fa-print"></i>
-                                                </button>
-                                            <?php else: ?>
-                                                <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
-                                                        class="text-blue-600 hover:text-blue-900" title="Imprimir comanda">
-                                                    <i class="fas fa-print"></i>
-                                                </button>
-                                            <?php endif; ?>
-                                            <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20está%20<?= urlencode(st
+                                            <button onclick="verDetalles(<?= $pedido['id'] ?>)" 
+                                                    class="text-blue-600 hover:text-blue-900" title="Ver detalles">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
+                                               target="_blank" class="text-green-600 hover:text-green-900" title="WhatsApp">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </a>
+                                            <button onclick="eliminarPedido(<?= $pedido['id'] ?>, '#<?= $pedido['id'] ?> - <?= htmlspecialchars($pedido['nombre']) ?>')" 
+                                                    class="text-red-600 hover:text-red-900" title="Eliminar">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Footer con totales -->
+        <div class="mt-6 text-center text-gray-500">
+            <p>
+                Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?>
+                <?php if ($buscar || $filtro_estado || $filtro_fecha || $filtro_modalidad): ?>
+                    | <a href="?" class="text-blue-600 hover:underline">Limpiar filtros</a>
+                <?php endif; ?>
+            </p>
+        </div>
+    </main>
+
+    <!-- Modal para ver detalles (placeholder) -->
+    <div id="detallesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 class="text-xl font-bold mb-4">Detalles del Pedido</h3>
+            <div id="detallesContent">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="flex justify-end mt-6">
+                <button onclick="cerrarDetalles()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function cambiarEstado(id, nuevoEstado) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.innerHTML = `
+                <input type="hidden" name="accion" value="cambiar_estado">
+                <input type="hidden" name="id" value="${id}">
+                <input type="hidden" name="estado" value="${nuevoEstado}">
+            `;
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function eliminarPedido(id, descripcion) {
+            if (confirm(`¿Estás seguro de eliminar el pedido ${descripcion}?`)) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.innerHTML = `
+                    <input type="hidden" name="accion" value="eliminar">
+                    <input type="hidden" name="id" value="${id}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
+        function verDetalles(id) {
+            // Implementar después si es necesario
+            alert('Funcionalidad de detalles en desarrollo');
+        }
+
+        function cerrarDetalles() {
+            document.getElementById('detallesModal').classList.add('hidden');
+        }
+
+        // Establecer fecha de hoy por defecto si no hay fecha seleccionada
+        document.addEventListener('DOMContentLoaded', function() {
+            const fechaInput = document.querySelector('input[name="fecha"]');
+            if (fechaInput && !fechaInput.value) {
+                // Solo establecer hoy si no hay otros filtros activos
+                const urlParams = new URLSearchParams(window.location.search);
+                if (!urlParams.has('buscar') && !urlParams.has('estado') && !urlParams.has('modalidad')) {
+                    const hoy = new Date().toISOString().split('T')[0];
+                    fechaInput.value = hoy;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
