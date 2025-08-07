@@ -35,9 +35,19 @@ if ($_POST) {
         $forma_pago = $_POST['forma_pago'];
         $observaciones = sanitize($_POST['observaciones']);
         
+        // NUEVOS CAMPOS DE FECHA Y HORA
+        $fecha_entrega = $_POST['fecha_entrega'] ?? null;
+        $hora_entrega = $_POST['hora_entrega'] ?? null;
+        $notas_horario = sanitize($_POST['notas_horario'] ?? '');
+        
         // Validar campos obligatorios
         if (!$nombre || !$apellido || !$telefono || !$modalidad || !$forma_pago) {
             throw new Exception('Todos los campos obligatorios deben completarse');
+        }
+        
+        // Validar fecha de entrega (no puede ser anterior a hoy)
+        if ($fecha_entrega && $fecha_entrega < date('Y-m-d')) {
+            throw new Exception('La fecha de entrega no puede ser anterior a hoy');
         }
         
         // Procesar producto seleccionado
@@ -113,18 +123,20 @@ if ($_POST) {
                 throw new Exception("Error en los datos del producto. Producto: '$producto', Cantidad: $cantidad, Precio: $precio");
             }
             
-            // Insertar pedido
+            // Insertar pedido con los nuevos campos
             $stmt = $pdo->prepare("
                 INSERT INTO pedidos (nombre, apellido, telefono, direccion, producto, cantidad, precio, 
-                                   forma_pago, modalidad, observaciones, cliente_fijo_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   forma_pago, modalidad, observaciones, cliente_fijo_id, 
+                                   fecha_entrega, hora_entrega, notas_horario) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $cliente_fijo_id = $cliente_seleccionado ? $cliente_seleccionado['id'] : null;
             
             $stmt->execute([
                 $nombre, $apellido, $telefono, $direccion, $producto, $cantidad, 
-                $precio, $forma_pago, $modalidad, $observaciones, $cliente_fijo_id
+                $precio, $forma_pago, $modalidad, $observaciones, $cliente_fijo_id,
+                $fecha_entrega, $hora_entrega, $notas_horario
             ]);
             
             $mensaje = 'Pedido creado correctamente';
@@ -181,7 +193,7 @@ if ($_POST) {
         <form method="POST" id="pedidoForm">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <!-- Columna 1: Datos del Cliente -->
+                <!-- Columna 1: Datos del Cliente + FECHA/HORA -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">
                         <i class="fas fa-user text-blue-500 mr-2"></i>Datos del Cliente
@@ -210,6 +222,62 @@ if ($_POST) {
                             <label class="block text-gray-700 mb-2">Dirección</label>
                             <input type="text" name="direccion" value="<?= $cliente_seleccionado['direccion'] ?? ($_POST['direccion'] ?? '') ?>"
                                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <!-- NUEVOS CAMPOS DE FECHA Y HORA -->
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-800 mb-3">
+                                <i class="fas fa-calendar-clock text-orange-500 mr-2"></i>¿Para cuándo es el pedido?
+                            </h4>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm text-gray-700 mb-1">Fecha de entrega</label>
+                                    <input type="date" name="fecha_entrega" 
+                                           value="<?= $_POST['fecha_entrega'] ?? date('Y-m-d') ?>"
+                                           min="<?= date('Y-m-d') ?>"
+                                           class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm text-gray-700 mb-1">Hora aproximada</label>
+                                    <select name="hora_entrega" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                        <option value="">Sin horario específico</option>
+                                        <option value="09:00">9:00 AM</option>
+                                        <option value="10:00">10:00 AM</option>
+                                        <option value="11:00">11:00 AM</option>
+                                        <option value="12:00">12:00 PM (Mediodía)</option>
+                                        <option value="13:00">1:00 PM</option>
+                                        <option value="14:00">2:00 PM</option>
+                                        <option value="15:00">3:00 PM</option>
+                                        <option value="16:00">4:00 PM</option>
+                                        <option value="17:00">5:00 PM</option>
+                                        <option value="18:00">6:00 PM</option>
+                                        <option value="19:00">7:00 PM</option>
+                                        <option value="20:00">8:00 PM</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <label class="block text-sm text-gray-700 mb-1">Notas sobre horario</label>
+                                <input type="text" name="notas_horario" 
+                                       placeholder="Ej: Flexible, después de las 15:00, urgente..."
+                                       class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                            </div>
+                            
+                            <!-- Botones rápidos -->
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <button type="button" onclick="setHoyAhora()" class="bg-green-100 text-green-800 px-3 py-1 rounded text-xs hover:bg-green-200 transition">
+                                    <i class="fas fa-bolt mr-1"></i>Para YA
+                                </button>
+                                <button type="button" onclick="setMañana()" class="bg-blue-100 text-blue-800 px-3 py-1 rounded text-xs hover:bg-blue-200 transition">
+                                    <i class="fas fa-calendar-plus mr-1"></i>Mañana
+                                </button>
+                                <button type="button" onclick="setMediadia()" class="bg-orange-100 text-orange-800 px-3 py-1 rounded text-xs hover:bg-orange-200 transition">
+                                    <i class="fas fa-sun mr-1"></i>Mediodía
+                                </button>
+                            </div>
                         </div>
                         
                         <div>
@@ -253,7 +321,7 @@ if ($_POST) {
                     </div>
                 </div>
 
-                <!-- Columna 2: Selección de Producto -->
+                <!-- Columna 2: Selección de Producto (igual que antes) -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">
                         <i class="fas fa-shopping-cart text-orange-500 mr-2"></i>Seleccionar Producto
@@ -294,86 +362,105 @@ if ($_POST) {
                             <?php endforeach; ?>
                         </div>
                         
-                        <!-- Selección de sabores Premium -->
+                        <!-- Selección de sabores Premium MEJORADA -->
                         <div id="sabores-premium" class="mt-4 hidden">
                             <h4 class="font-medium mb-2">Seleccionar Sabores (<span id="sabores-cantidad">6</span>):</h4>
-                            <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                                <p class="text-sm text-yellow-800">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Podés repetir sabores. Ejemplo: 4 de Jamón Crudo + 2 de Atún = 6 total
+                                </p>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto">
                                 <?php foreach ($sabores_premium as $sabor): ?>
-                                    <label class="flex items-center text-sm">
-                                        <input type="checkbox" name="sabores_premium[]" value="<?= $sabor ?>" class="mr-2 sabor-checkbox">
-                                        <?= $sabor ?>
-                                    </label>
+                                    <div class="flex items-center justify-between bg-white border rounded-lg p-3">
+                                        <label class="flex items-center flex-1">
+                                            <span class="font-medium text-gray-700"><?= $sabor ?></span>
+                                        </label>
+                                        <div class="flex items-center space-x-2">
+                                            <button type="button" onclick="cambiarCantidadSabor('<?= $sabor ?>', -1)" 
+                                                    class="bg-red-100 text-red-700 w-8 h-8 rounded-full hover:bg-red-200 transition">
+                                                <i class="fas fa-minus text-xs"></i>
+                                            </button>
+                                            <input type="number" id="sabor_<?= str_replace([' ', 'ó'], ['_', 'o'], $sabor) ?>" 
+                                                   name="sabores_premium[<?= $sabor ?>]" value="0" min="0" 
+                                                   class="w-12 text-center border rounded text-sm font-medium"
+                                                   onchange="updateSaboresPremium()">
+                                            <button type="button" onclick="cambiarCantidadSabor('<?= $sabor ?>', 1)" 
+                                                    class="bg-green-100 text-green-700 w-8 h-8 rounded-full hover:bg-green-200 transition">
+                                                <i class="fas fa-plus text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 <?php endforeach; ?>
                             </div>
-                            <div class="text-sm text-gray-600 mt-2">
-                                Podés repetir sabores. Seleccionados: <span id="sabores-seleccionados">0</span>
+                            
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
+                                <div class="text-sm text-blue-800">
+                                    <div class="flex justify-between">
+                                        <span>Total seleccionados:</span>
+                                        <span id="sabores-seleccionados-total" class="font-bold">0</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>Máximo permitido:</span>
+                                        <span id="sabores-maximo" class="font-bold">6</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Tab Personalizado -->
+                    <!-- Tab Personalizado MEJORADO -->
                     <div id="content-personalizado" class="tab-content hidden">
                         <div class="space-y-4">
-                            <!-- Tipo de sándwich -->
+                            <!-- Cantidad total -->
                             <div>
-                                <label class="block text-gray-700 mb-2">Tipo de Sándwich:</label>
-                                <div class="space-y-2">
-                                    <label class="flex items-center">
-                                        <input type="radio" name="tipo_personalizado" value="comun" checked class="mr-2" onchange="updatePersonalizado()">
-                                        <div>
-                                            <div class="font-medium">Común</div>
-                                            <div class="text-sm text-gray-600">$3,500 por plancha (8 sándwiches)</div>
-                                        </div>
-                                    </label>
-                                    <label class="flex items-center">
-                                        <input type="radio" name="tipo_personalizado" value="premium" class="mr-2" onchange="updatePersonalizado()">
-                                        <div>
-                                            <div class="font-medium">Premium</div>
-                                            <div class="text-sm text-gray-600">$7,000 por plancha (8 sándwiches)</div>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                            
-                            <div>
-                                <label class="block text-gray-700 mb-2">Cantidad de Sándwiches:</label>
+                                <label class="block text-gray-700 mb-2">Cantidad Total de Sándwiches:</label>
                                 <input type="number" name="cantidad_personalizada" min="1" max="200" value="8"
-                                       class="w-full px-3 py-2 border rounded-lg" onchange="updatePersonalizado()">
+                                       class="w-full px-3 py-2 border rounded-lg" onchange="updatePersonalizadoComplejo()">
                                 <div class="text-sm text-gray-600 mt-1">
-                                    Planchas: <span id="planchas-necesarias">1</span> | 
-                                    Sabores permitidos: <span id="sabores-permitidos">1</span>
+                                    Planchas necesarias: <span id="planchas-totales">1</span>
                                 </div>
                             </div>
                             
-                            <div>
-                                <label class="block text-gray-700 mb-2">Sabores:</label>
-                                <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                                    <?php foreach ($sabores_premium as $sabor): ?>
-                                        <label class="flex items-center text-sm">
-                                            <input type="checkbox" name="sabores_personalizados[]" value="<?= $sabor ?>" class="mr-2 sabor-personalizado">
-                                            <?= $sabor ?>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
+                            <!-- Lista de planchas -->
+                            <div id="planchas-container" class="space-y-3">
+                                <!-- Las planchas se generan dinámicamente -->
                             </div>
                             
-                            <div class="bg-blue-50 p-3 rounded">
-                                <div class="text-sm space-y-1">
-                                    <div>Tipo: <span id="tipo-mostrar">Común</span></div>
-                                    <div>Precio por plancha: <span id="precio-plancha">$3,500</span></div>
-                                    <div>Planchas necesarias: <span id="planchas-mostrar">1</span></div>
-                                    <div class="font-medium text-lg">Total: <span id="total-personalizado">$3,500</span></div>
+                            <!-- Resumen de precios -->
+                            <div class="bg-blue-50 p-4 rounded-lg">
+                                <h4 class="font-medium mb-2">Resumen de Facturación:</h4>
+                                <div id="resumen-planchas" class="space-y-1 text-sm">
+                                    <!-- Se llena dinámicamente -->
+                                </div>
+                                <hr class="my-2">
+                                <div class="font-bold text-lg">
+                                    Total: <span id="total-personalizado-complejo">$0</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Columna 3: Resumen -->
+                <!-- Columna 3: Resumen + INFO DE FECHA -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">
                         <i class="fas fa-receipt text-purple-500 mr-2"></i>Resumen del Pedido
                     </h3>
+                    
+                    <!-- INFO ADICIONAL DE FECHA/HORA -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                        <h4 class="font-medium text-blue-800 mb-2">
+                            <i class="fas fa-info-circle mr-1"></i>Información del Pedido
+                        </h4>
+                        <div class="text-sm text-blue-700 space-y-1">
+                            <div><strong>Tomado:</strong> <?= date('d/m/Y H:i') ?></div>
+                            <div id="info-entrega"><strong>Para:</strong> <span class="text-gray-500">Seleccionar fecha/hora</span></div>
+                            <div id="info-tiempo-prep" class="hidden"><strong>Tiempo:</strong> <span></span></div>
+                        </div>
+                    </div>
                     
                     <div id="resumen-pedido" class="space-y-3">
                         <div class="text-gray-500 text-center py-8">
@@ -394,6 +481,65 @@ if ($_POST) {
         let currentProduct = null;
         let paymentMethod = 'Efectivo';
         
+        // NUEVAS FUNCIONES PARA FECHA/HORA
+        function setHoyAhora() {
+            document.querySelector('input[name="fecha_entrega"]').value = new Date().toISOString().split('T')[0];
+            document.querySelector('select[name="hora_entrega"]').value = '';
+            document.querySelector('input[name="notas_horario"]').value = 'URGENTE - Para ya';
+            updateInfoEntrega();
+        }
+        
+        function setMañana() {
+            const mañana = new Date();
+            mañana.setDate(mañana.getDate() + 1);
+            document.querySelector('input[name="fecha_entrega"]').value = mañana.toISOString().split('T')[0];
+            document.querySelector('select[name="hora_entrega"]').value = '';
+            document.querySelector('input[name="notas_horario"]').value = '';
+            updateInfoEntrega();
+        }
+        
+        function setMediadia() {
+            document.querySelector('input[name="fecha_entrega"]').value = new Date().toISOString().split('T')[0];
+            document.querySelector('select[name="hora_entrega"]').value = '12:00';
+            document.querySelector('input[name="notas_horario"]').value = '';
+            updateInfoEntrega();
+        }
+        
+        function updateInfoEntrega() {
+            const fecha = document.querySelector('input[name="fecha_entrega"]').value;
+            const hora = document.querySelector('select[name="hora_entrega"]').value;
+            const notas = document.querySelector('input[name="notas_horario"]').value;
+            
+            const infoDiv = document.getElementById('info-entrega');
+            const tiempoDiv = document.getElementById('info-tiempo-prep');
+            
+            if (fecha) {
+                const fechaObj = new Date(fecha);
+                const hoy = new Date();
+                const esMañana = fechaObj.toDateString() !== hoy.toDateString();
+                
+                let texto = fechaObj.toLocaleDateString('es-AR');
+                if (hora) texto += ` a las ${hora}`;
+                if (notas) texto += ` (${notas})`;
+                
+                infoDiv.innerHTML = `<strong>Para:</strong> ${texto}`;
+                
+                // Mostrar tiempo de preparación
+                if (esMañana) {
+                    tiempoDiv.innerHTML = '<strong>Tiempo:</strong> <span class="text-green-600">Con tiempo suficiente</span>';
+                    tiempoDiv.classList.remove('hidden');
+                } else if (notas.toLowerCase().includes('urgente') || notas.toLowerCase().includes('ya')) {
+                    tiempoDiv.innerHTML = '<strong>Tiempo:</strong> <span class="text-red-600">URGENTE</span>';
+                    tiempoDiv.classList.remove('hidden');
+                } else {
+                    tiempoDiv.classList.add('hidden');
+                }
+            } else {
+                infoDiv.innerHTML = '<strong>Para:</strong> <span class="text-gray-500">Seleccionar fecha/hora</span>';
+                tiempoDiv.classList.add('hidden');
+            }
+        }
+        
         // Manejo de tabs - FUNCIÓN GLOBAL
         function showTab(tab) {
             console.log('Cambiando a tab:', tab);
@@ -413,6 +559,9 @@ if ($_POST) {
             } else {
                 document.getElementById('content-personalizado').style.display = 'block';
                 document.getElementById('tab-personalizado').className = 'tab-btn py-2 px-4 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600';
+                
+                // IMPORTANTE: Generar planchas cuando se cambia a personalizado
+                updatePersonalizadoComplejo();
             }
             
             // Update hidden input
@@ -421,7 +570,7 @@ if ($_POST) {
             updateResumen();
         }
         
-        // Seleccionar producto predefinido
+        // Seleccionar producto predefinido MEJORADO
         function selectProduct(id, name, precioEfectivo, precioTransferencia) {
             currentProduct = {
                 id: id,
@@ -436,9 +585,12 @@ if ($_POST) {
                 saboresDiv.classList.remove('hidden');
                 const cantidad = name.includes('48') ? 6 : 3;
                 document.getElementById('sabores-cantidad').textContent = cantidad;
+                document.getElementById('sabores-maximo').textContent = cantidad;
                 
-                // Reset sabores
-                document.querySelectorAll('.sabor-checkbox').forEach(cb => cb.checked = false);
+                // Reset todas las cantidades de sabores
+                document.querySelectorAll('input[name^="sabores_premium"]').forEach(input => {
+                    input.value = 0;
+                });
                 updateSaboresPremium();
             } else {
                 saboresDiv.classList.add('hidden');
@@ -453,21 +605,57 @@ if ($_POST) {
             if (formaPago) {
                 paymentMethod = formaPago;
                 updateResumen();
-                updatePersonalizado();
+                updatePersonalizadoComplejo(); // También actualizar personalizado
             }
         }
         
-        // Actualizar sabores premium
-        function updateSaboresPremium() {
-            const maxSabores = parseInt(document.getElementById('sabores-cantidad').textContent);
-            const selected = document.querySelectorAll('.sabor-checkbox:checked').length;
+        // NUEVAS FUNCIONES PARA SABORES PREMIUM CON CANTIDADES
+        function cambiarCantidadSabor(sabor, cambio) {
+            const inputId = 'sabor_' + sabor.replace(/ /g, '_').replace(/ó/g, 'o');
+            const input = document.getElementById(inputId);
+            let nuevaCantidad = parseInt(input.value) + cambio;
             
-            document.getElementById('sabores-seleccionados').textContent = selected;
+            if (nuevaCantidad < 0) nuevaCantidad = 0;
             
-            // Disable checkboxes if limit reached
-            document.querySelectorAll('.sabor-checkbox:not(:checked)').forEach(cb => {
-                cb.disabled = selected >= maxSabores;
+            // Verificar límite máximo
+            const maxPermitido = parseInt(document.getElementById('sabores-maximo').textContent);
+            const totalActual = calcularTotalSabores() - parseInt(input.value); // Restar el valor actual
+            
+            if (totalActual + nuevaCantidad > maxPermitido) {
+                alert(`No podés superar los ${maxPermitido} sándwiches para este producto.`);
+                return;
+            }
+            
+            input.value = nuevaCantidad;
+            updateSaboresPremium();
+        }
+
+        function calcularTotalSabores() {
+            let total = 0;
+            document.querySelectorAll('input[name^="sabores_premium"]').forEach(input => {
+                total += parseInt(input.value) || 0;
             });
+            return total;
+        }
+
+        // Actualizar sabores premium MEJORADA
+        function updateSaboresPremium() {
+            const totalSeleccionado = calcularTotalSabores();
+            const maxPermitido = parseInt(document.getElementById('sabores-maximo').textContent);
+            
+            document.getElementById('sabores-seleccionados-total').textContent = totalSeleccionado;
+            
+            // Cambiar color según el estado
+            const totalSpan = document.getElementById('sabores-seleccionados-total');
+            if (totalSeleccionado === maxPermitido) {
+                totalSpan.className = 'font-bold text-green-600';
+            } else if (totalSeleccionado > maxPermitido) {
+                totalSpan.className = 'font-bold text-red-600';
+            } else {
+                totalSpan.className = 'font-bold text-blue-800';
+            }
+            
+            updateResumen();
         }
         
         // Actualizar personalizado
@@ -492,9 +680,9 @@ if ($_POST) {
             document.getElementById('planchas-necesarias').textContent = planchas;
             document.getElementById('sabores-permitidos').textContent = saboresPermitidos;
             document.getElementById('tipo-mostrar').textContent = tipo.charAt(0).toUpperCase() + tipo.slice(1);
-            document.getElementById('precio-plancha').textContent = `$${precioPlancha.toLocaleString()}`;
+            document.getElementById('precio-plancha').textContent = `${precioPlancha.toLocaleString()}`;
             document.getElementById('planchas-mostrar').textContent = planchas;
-            document.getElementById('total-personalizado').textContent = `$${total.toLocaleString()}`;
+            document.getElementById('total-personalizado').textContent = `${total.toLocaleString()}`;
             
             // Limit sabores selection
             const selectedSabores = document.querySelectorAll('.sabor-personalizado:checked').length;
@@ -523,18 +711,61 @@ if ($_POST) {
                     </div>
                     <div class="flex justify-between items-center font-bold text-lg">
                         <span>Total:</span>
-                        <span class="text-green-600">$${precio.toLocaleString()}</span>
+                        <span class="text-green-600">${precio.toLocaleString()}</span>
                     </div>
                 `;
                 
                 if (currentProduct.name.includes('Premium')) {
-                    const saboresSeleccionados = Array.from(document.querySelectorAll('.sabor-checkbox:checked'))
-                        .map(cb => cb.value);
+                    const saboresSeleccionados = [];
+                    document.querySelectorAll('input[name^="sabores_premium"]').forEach(input => {
+                        const cantidad = parseInt(input.value);
+                        if (cantidad > 0) {
+                            const sabor = input.name.match(/\[(.*?)\]/)[1];
+                            saboresSeleccionados.push(`${cantidad}x ${sabor}`);
+                        }
+                    });
                     if (saboresSeleccionados.length > 0) {
                         html += `
                             <div class="mt-3 text-sm">
-                                <div class="font-medium">Sabores:</div>
+                                <div class="font-medium">Sabores seleccionados:</div>
                                 <div class="text-gray-600">${saboresSeleccionados.join(', ')}</div>
+                            </div>
+                        `;
+                    }
+                }
+            } else if (activeTab === 'personalizado') {
+                const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value) || 8;
+                const tipo = document.querySelector('input[name="tipo_personalizado"]:checked').value;
+                const planchas = Math.ceil(cantidad / 8);
+                
+                // Calcular precio
+                const preciosBase = { 'comun': 3500, 'premium': 7000 };
+                const precioBase = preciosBase[tipo];
+                const descuento = paymentMethod === 'Efectivo' ? 0.9 : 1;
+                const precioPlancha = Math.round(precioBase * descuento);
+                const total = planchas * precioPlancha;
+                
+                const descuentoText = paymentMethod === 'Efectivo' ? ' (con descuento)' : '';
+                
+                html = `
+                    <div class="border-b pb-3">
+                        <div class="font-medium">Personalizado ${tipo.charAt(0).toUpperCase() + tipo.slice(1)} x${cantidad}</div>
+                        <div class="text-sm text-gray-600">${planchas} plancha${planchas > 1 ? 's' : ''} - Pago: ${paymentMethod}${descuentoText}</div>
+                        <div class="text-sm text-gray-600">${precioPlancha.toLocaleString()} por plancha</div>
+                    </div>
+                    <div class="flex justify-between items-center font-bold text-lg">
+                        <span>Total:</span>
+                        <span class="text-green-600">${total.toLocaleString()}</span>
+                    </div>
+                `;
+                
+                const saboresSeleccionados = Array.from(document.querySelectorAll('.sabor-personalizado:checked'))
+                    .map(cb => cb.value);
+                if (saboresSeleccionados.length > 0) {
+                    html += `
+                        <div class="mt-3 text-sm">
+                            <div class="font-medium">Sabores:</div>
+                            <div class="text-gray-600">${saboresSeleccionados.join(', ')}</div>
                         </div>
                     `;
                 }
@@ -555,9 +786,9 @@ if ($_POST) {
             // Initialize tabs
             showTab('predefinido');
             
-            // Sabores premium checkboxes
-            document.querySelectorAll('.sabor-checkbox').forEach(cb => {
-                cb.addEventListener('change', updateSaboresPremium);
+            // Event listeners
+            document.querySelectorAll('input[name^="sabores_premium"]').forEach(input => {
+                input.addEventListener('change', updateSaboresPremium);
             });
             
             // Sabores personalizados checkboxes
@@ -573,13 +804,19 @@ if ($_POST) {
             // Cantidad personalizada input
             const cantidadInput = document.querySelector('input[name="cantidad_personalizada"]');
             if (cantidadInput) {
-                cantidadInput.addEventListener('input', updatePersonalizado);
+                cantidadInput.addEventListener('input', updatePersonalizadoComplejo);
+                cantidadInput.addEventListener('change', updatePersonalizadoComplejo);
             }
             
             // Payment method change
             document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
                 radio.addEventListener('change', updatePrecios);
             });
+            
+            // NUEVOS EVENT LISTENERS PARA FECHA/HORA
+            document.querySelector('input[name="fecha_entrega"]').addEventListener('change', updateInfoEntrega);
+            document.querySelector('select[name="hora_entrega"]').addEventListener('change', updateInfoEntrega);
+            document.querySelector('input[name="notas_horario"]').addEventListener('input', updateInfoEntrega);
             
             // Initialize payment method
             const selectedPayment = document.querySelector('input[name="forma_pago"]:checked');
@@ -588,21 +825,24 @@ if ($_POST) {
             }
             
             // Initialize personalizado calculations
-            updatePersonalizado();
+            updatePersonalizadoComplejo();
+            
+            // Initialize info entrega
+            updateInfoEntrega();
         });
         
         // Validación antes de enviar
         document.getElementById('pedidoForm').addEventListener('submit', function(e) {
-            const tipoePedido = document.getElementById('tipo_pedido_hidden').value;
+            const tipePedido = document.getElementById('tipo_pedido_hidden').value;
             
-            if (tipoePedido === 'predefinido') {
+            if (tipePedido === 'predefinido') {
                 const productoSeleccionado = document.querySelector('input[name="producto_id"]:checked');
                 if (!productoSeleccionado) {
                     e.preventDefault();
                     alert('Por favor selecciona un producto.');
                     return false;
                 }
-            } else if (tipoePedido === 'personalizado') {
+            } else if (tipePedido === 'personalizado') {
                 const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value);
                 const saboresSeleccionados = document.querySelectorAll('.sabor-personalizado:checked').length;
                 
@@ -667,43 +907,12 @@ if ($_POST) {
             opacity: 0.5;
             cursor: not-allowed;
         }
+        
+        /* Animaciones para botones rápidos */
+        .bg-green-100:hover, .bg-blue-100:hover, .bg-orange-100:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
     </style>
 </body>
-</html></div>
-                            </div>
-                        `;
-                    }
-                }
-            } else if (activeTab === 'personalizado') {
-                const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value) || 8;
-                const tipo = document.querySelector('input[name="tipo_personalizado"]:checked').value;
-                const planchas = Math.ceil(cantidad / 8);
-                
-                // Calcular precio
-                const preciosBase = { 'comun': 3500, 'premium': 7000 };
-                const precioBase = preciosBase[tipo];
-                const descuento = paymentMethod === 'Efectivo' ? 0.9 : 1;
-                const precioPlancha = Math.round(precioBase * descuento);
-                const total = planchas * precioPlancha;
-                
-                const descuentoText = paymentMethod === 'Efectivo' ? ' (con descuento)' : '';
-                
-                html = `
-                    <div class="border-b pb-3">
-                        <div class="font-medium">Personalizado ${tipo.charAt(0).toUpperCase() + tipo.slice(1)} x${cantidad}</div>
-                        <div class="text-sm text-gray-600">${planchas} plancha${planchas > 1 ? 's' : ''} - Pago: ${paymentMethod}${descuentoText}</div>
-                        <div class="text-sm text-gray-600">$${precioPlancha.toLocaleString()} por plancha</div>
-                    </div>
-                    <div class="flex justify-between items-center font-bold text-lg">
-                        <span>Total:</span>
-                        <span class="text-green-600">$${total.toLocaleString()}</span>
-                    </div>
-                `;
-                
-                const saboresSeleccionados = Array.from(document.querySelectorAll('.sabor-personalizado:checked'))
-                    .map(cb => cb.value);
-                if (saboresSeleccionados.length > 0) {
-                    html += `
-                        <div class="mt-3 text-sm">
-                            <div class="font-medium">Sabores:</div>
-                            <div class="text-gray-600">${saboresSeleccionados.join(', ')}
+</html>

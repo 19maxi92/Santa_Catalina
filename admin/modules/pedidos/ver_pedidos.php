@@ -4,7 +4,7 @@ requireLogin();
 
 $pdo = getConnection();
 
-// Manejar acciones (cambiar estado, eliminar)
+// Manejar acciones (cambiar estado, eliminar, impresión)
 $mensaje = '';
 $error = '';
 
@@ -26,6 +26,28 @@ if ($_POST) {
                     }
                 } else {
                     $error = 'Estado no válido';
+                }
+                break;
+                
+            case 'marcar_impreso':
+                $id = (int)$_POST['id'];
+                try {
+                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $mensaje = 'Comanda marcada como impresa';
+                } catch (Exception $e) {
+                    $error = 'Error al marcar como impreso';
+                }
+                break;
+                
+            case 'reimprimir':
+                $id = (int)$_POST['id'];
+                try {
+                    $stmt = $pdo->prepare("UPDATE pedidos SET updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $mensaje = 'Comanda reimpresa - Verificar impresora';
+                } catch (Exception $e) {
+                    $error = 'Error al reimprimir';
                 }
                 break;
                 
@@ -105,6 +127,7 @@ $stats_sql = "SELECT
     SUM(CASE WHEN estado = 'Preparando' THEN 1 ELSE 0 END) as preparando,
     SUM(CASE WHEN estado = 'Listo' THEN 1 ELSE 0 END) as listos,
     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
+    SUM(CASE WHEN impreso = 1 THEN 1 ELSE 0 END) as impresos,
     SUM(precio) as total_ventas
     FROM pedidos";
 
@@ -160,7 +183,7 @@ $stats = $pdo->query($stats_sql)->fetch();
         <?php endif; ?>
 
         <!-- Estadísticas rápidas -->
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-gray-800"><?= $stats['total'] ?></div>
                 <div class="text-sm text-gray-600">Total</div>
@@ -182,7 +205,11 @@ $stats = $pdo->query($stats_sql)->fetch();
                 <div class="text-sm text-gray-600">Entregados</div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-purple-600"><?= formatPrice($stats['total_ventas']) ?></div>
+                <div class="text-2xl font-bold text-purple-600"><?= $stats['impresos'] ?></div>
+                <div class="text-sm text-gray-600">Impresos</div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow text-center">
+                <div class="text-2xl font-bold text-green-600"><?= formatPrice($stats['total_ventas']) ?></div>
                 <div class="text-sm text-gray-600">Ventas</div>
             </div>
         </div>
@@ -277,6 +304,7 @@ $stats = $pdo->query($stats_sql)->fetch();
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modalidad</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impresión</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
                             </tr>
                         </thead>
@@ -350,6 +378,29 @@ $stats = $pdo->query($stats_sql)->fetch();
                                         <div><?= date('d/m/Y', strtotime($pedido['created_at'])) ?></div>
                                         <div class="text-xs"><?= date('H:i', strtotime($pedido['created_at'])) ?></div>
                                     </td>
+                                    <td class="px-6 py-4">
+                                        <?php if ($pedido['impreso']): ?>
+                                            <div class="flex flex-col space-y-1">
+                                                <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                                                    <i class="fas fa-check-circle mr-1"></i>Impresa
+                                                </span>
+                                                <button onclick="reimprimir(<?= $pedido['id'] ?>)" 
+                                                        class="bg-gray-400 hover:bg-gray-500 text-white px-2 py-1 rounded text-xs">
+                                                    <i class="fas fa-redo mr-1"></i>Reimprimir
+                                                </button>
+                                            </div>
+                                        <?php else: ?>
+                                            <div class="flex flex-col space-y-1">
+                                                <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">
+                                                    <i class="fas fa-exclamation-circle mr-1"></i>Sin imprimir
+                                                </span>
+                                                <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
+                                                        class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">
+                                                    <i class="fas fa-print mr-1"></i>Imprimir
+                                                </button>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="px-6 py-4 text-sm font-medium">
                                         <div class="flex space-x-2">
                                             <button onclick="verDetalles(<?= $pedido['id'] ?>)" 
@@ -385,22 +436,29 @@ $stats = $pdo->query($stats_sql)->fetch();
         </div>
     </main>
 
-    <!-- Modal para ver detalles (placeholder) -->
-    <div id="detallesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <!-- Modal para impresión -->
+    <div id="impresionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">Detalles del Pedido</h3>
-            <div id="detallesContent">
-                <!-- Contenido dinámico -->
+            <h3 class="text-xl font-bold mb-4">
+                <i class="fas fa-print text-blue-500 mr-2"></i>Imprimir Comanda
+            </h3>
+            <div id="impresionContent">
+                <p>Preparando impresión...</p>
             </div>
-            <div class="flex justify-end mt-6">
-                <button onclick="cerrarDetalles()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
-                    Cerrar
+            <div class="flex justify-end space-x-2 mt-6">
+                <button onclick="cerrarModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+                    Cancelar
+                </button>
+                <button onclick="confirmarImpresion()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-print mr-1"></i>Confirmar Impresión
                 </button>
             </div>
         </div>
     </div>
 
     <script>
+        let pedidoAImprimir = null;
+
         function cambiarEstado(id, nuevoEstado) {
             const form = document.createElement('form');
             form.method = 'POST';
@@ -426,20 +484,68 @@ $stats = $pdo->query($stats_sql)->fetch();
             }
         }
 
+        function imprimirComanda(pedidoId) {
+            pedidoAImprimir = pedidoId;
+            
+            document.getElementById('impresionContent').innerHTML = `
+                <div class="text-center">
+                    <i class="fas fa-print text-4xl text-blue-500 mb-3"></i>
+                    <p class="mb-2">Se enviará la comanda del pedido <strong>#${pedidoId}</strong> a la impresora.</p>
+                    <p class="text-sm text-gray-600">Asegúrate de que la impresora esté encendida y conectada.</p>
+                </div>
+            `;
+            
+            document.getElementById('impresionModal').classList.remove('hidden');
+        }
+
+        function confirmarImpresion() {
+            if (pedidoAImprimir) {
+                fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `accion=marcar_impreso&id=${pedidoAImprimir}`
+                }).then(() => {
+                    location.reload();
+                });
+            }
+            cerrarModal();
+        }
+
+        function reimprimir(pedidoId) {
+            if (confirm('¿Reimprimir la comanda del pedido #' + pedidoId + '?')) {
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.innerHTML = `
+                    <input type="hidden" name="accion" value="reimprimir">
+                    <input type="hidden" name="id" value="${pedidoId}">
+                `;
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+
         function verDetalles(id) {
-            // Implementar después si es necesario
             alert('Funcionalidad de detalles en desarrollo');
         }
 
-        function cerrarDetalles() {
-            document.getElementById('detallesModal').classList.add('hidden');
+        function cerrarModal() {
+            document.getElementById('impresionModal').classList.add('hidden');
+            pedidoAImprimir = null;
         }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('impresionModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarModal();
+            }
+        });
 
         // Establecer fecha de hoy por defecto si no hay fecha seleccionada
         document.addEventListener('DOMContentLoaded', function() {
             const fechaInput = document.querySelector('input[name="fecha"]');
             if (fechaInput && !fechaInput.value) {
-                // Solo establecer hoy si no hay otros filtros activos
                 const urlParams = new URLSearchParams(window.location.search);
                 if (!urlParams.has('buscar') && !urlParams.has('estado') && !urlParams.has('modalidad')) {
                     const hoy = new Date().toISOString().split('T')[0];

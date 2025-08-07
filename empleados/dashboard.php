@@ -20,7 +20,7 @@ $stats = [
 
 // Pedidos del día por estado
 $pedidos_hoy = $pdo->query("
-    SELECT id, nombre, apellido, producto, precio, estado, modalidad, observaciones, impreso,
+    SELECT id, nombre, apellido, producto, precio, estado, modalidad, observaciones,
            created_at, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
     FROM pedidos 
     WHERE DATE(created_at) = CURDATE()
@@ -169,15 +169,6 @@ $pedidos_hoy = $pdo->query("
                                         <i class="fas fa-clock mr-1"></i>
                                         Hace <?= $pedido['minutos_transcurridos'] ?> min
                                         (<?= date('H:i', strtotime($pedido['created_at'])) ?>)
-                                        <?php if ($pedido['impreso']): ?>
-                                            <span class="ml-3 text-green-600">
-                                                <i class="fas fa-print mr-1"></i>Comanda impresa
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="ml-3 text-red-600">
-                                                <i class="fas fa-exclamation-circle mr-1"></i>Sin imprimir
-                                            </span>
-                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 
@@ -207,6 +198,10 @@ $pedidos_hoy = $pdo->query("
             </p>
             <p class="text-sm">
                 🔴 Más de 1 hora = Urgente | 🟠 Más de 30 min = Prioridad
+            </p>
+            <p class="text-xs mt-2 text-blue-600">
+                <i class="fas fa-print mr-1"></i>
+                Para impresión de comandas, contactar al administrador
             </p>
         </div>
     </main>

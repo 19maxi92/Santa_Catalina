@@ -10,53 +10,26 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 
 $pdo = getConnection();
 
-// Manejar acciones
+// Manejar acciones (solo cambio de estado)
 $mensaje = '';
 $error = '';
 
 if ($_POST) {
-    if (isset($_POST['accion'])) {
-        switch ($_POST['accion']) {
-            case 'cambiar_estado':
-                $id = (int)$_POST['id'];
-                $estado = $_POST['estado'];
-                $estados_validos = ['Pendiente', 'Preparando', 'Listo', 'Entregado'];
-                
-                if (in_array($estado, $estados_validos)) {
-                    try {
-                        $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
-                        $stmt->execute([$estado, $id]);
-                        $mensaje = 'Estado actualizado correctamente';
-                    } catch (Exception $e) {
-                        $error = 'Error al actualizar estado';
-                    }
-                } else {
-                    $error = 'Estado no válido';
-                }
-                break;
-                
-            case 'marcar_impreso':
-                $id = (int)$_POST['id'];
-                try {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $mensaje = 'Comanda marcada como impresa';
-                } catch (Exception $e) {
-                    $error = 'Error al marcar como impreso';
-                }
-                break;
-                
-            case 'reimprimir':
-                $id = (int)$_POST['id'];
-                try {
-                    // Registrar reimpresión (podrías crear una tabla de log si quieres)
-                    $stmt = $pdo->prepare("UPDATE pedidos SET updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $mensaje = 'Comanda reimpresa - Verificar impresora';
-                } catch (Exception $e) {
-                    $error = 'Error al reimprimir';
-                }
-                break;
+    if (isset($_POST['accion']) && $_POST['accion'] === 'cambiar_estado') {
+        $id = (int)$_POST['id'];
+        $estado = $_POST['estado'];
+        $estados_validos = ['Pendiente', 'Preparando', 'Listo', 'Entregado'];
+        
+        if (in_array($estado, $estados_validos)) {
+            try {
+                $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$estado, $id]);
+                $mensaje = 'Estado actualizado correctamente';
+            } catch (Exception $e) {
+                $error = 'Error al actualizar estado';
+            }
+        } else {
+            $error = 'Estado no válido';
         }
     }
 }
@@ -104,7 +77,6 @@ $stats_sql = "SELECT
     SUM(CASE WHEN estado = 'Preparando' THEN 1 ELSE 0 END) as preparando,
     SUM(CASE WHEN estado = 'Listo' THEN 1 ELSE 0 END) as listos,
     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
-    SUM(CASE WHEN impreso = 1 THEN 1 ELSE 0 END) as impresos,
     SUM(precio) as total_ventas
     FROM pedidos WHERE DATE(created_at) = ?";
 
@@ -155,7 +127,7 @@ $stats = $stats->fetch();
         <?php endif; ?>
 
         <!-- Estadísticas -->
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-gray-800"><?= $stats['total'] ?></div>
                 <div class="text-sm text-gray-600">Total</div>
@@ -175,10 +147,6 @@ $stats = $stats->fetch();
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-gray-600"><?= $stats['entregados'] ?></div>
                 <div class="text-sm text-gray-600">Entregados</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-purple-600"><?= $stats['impresos'] ?></div>
-                <div class="text-sm text-gray-600">Impresos</div>
             </div>
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-green-600"><?= formatPrice($stats['total_ventas']) ?></div>
@@ -342,25 +310,17 @@ $stats = $stats->fetch();
                                 </div>
                             </div>
                             
-                            <!-- Acciones e impresión -->
+                            <!-- Acciones simplificadas -->
                             <div class="flex justify-between items-center">
                                 <div class="flex items-center space-x-3">
                                     <?php if ($pedido['impreso']): ?>
                                         <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
                                             <i class="fas fa-check-circle mr-1"></i>Comanda Impresa
                                         </span>
-                                        <button onclick="reimprimir(<?= $pedido['id'] ?>)" 
-                                                class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm">
-                                            <i class="fas fa-print mr-1"></i>Reimprimir
-                                        </button>
                                     <?php else: ?>
                                         <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">
-                                            <i class="fas fa-exclamation-circle mr-1"></i>Sin Imprimir
+                                            <i class="fas fa-exclamation-circle mr-1"></i>Comanda Sin Imprimir
                                         </span>
-                                        <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
-                                                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded font-medium">
-                                            <i class="fas fa-print mr-1"></i>Imprimir Comanda
-                                        </button>
                                     <?php endif; ?>
                                 </div>
                                 
@@ -388,95 +348,18 @@ $stats = $stats->fetch();
                 Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?> 
                 para el día <?= date('d/m/Y', strtotime($filtro_fecha)) ?>
             </p>
+            <p class="text-xs mt-2 text-blue-600">
+                <i class="fas fa-info-circle mr-1"></i>
+                Para imprimir comandas, contactar al administrador
+            </p>
         </div>
     </main>
 
-    <!-- Modal para impresión -->
-    <div id="impresionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-print text-blue-500 mr-2"></i>Imprimir Comanda
-            </h3>
-            <div id="impresionContent">
-                <p>Preparando impresión...</p>
-            </div>
-            <div class="flex justify-end space-x-2 mt-6">
-                <button onclick="cerrarModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                    Cancelar
-                </button>
-                <button onclick="confirmarImpresion()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-print mr-1"></i>Confirmar Impresión
-                </button>
-            </div>
-        </div>
-    </div>
-
     <script>
-        let pedidoAImprimir = null;
-
         // Auto refresh cada 30 segundos
         setInterval(function() {
             location.reload();
         }, 30000);
-
-        function imprimirComanda(pedidoId) {
-            pedidoAImprimir = pedidoId;
-            
-            // Mostrar modal con vista previa
-            document.getElementById('impresionContent').innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-print text-4xl text-blue-500 mb-3"></i>
-                    <p class="mb-2">Se enviará la comanda del pedido <strong>#${pedidoId}</strong> a la impresora.</p>
-                    <p class="text-sm text-gray-600">Asegúrate de que la impresora esté encendida y conectada.</p>
-                </div>
-            `;
-            
-            document.getElementById('impresionModal').classList.remove('hidden');
-        }
-
-        function confirmarImpresion() {
-            if (pedidoAImprimir) {
-                // Aquí iría la lógica de impresión real
-                // Por ahora simulamos con una llamada que marca como impreso
-                
-                fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `accion=marcar_impreso&id=${pedidoAImprimir}`
-                }).then(() => {
-                    // Recargar página para ver cambios
-                    location.reload();
-                });
-            }
-            cerrarModal();
-        }
-
-        function reimprimir(pedidoId) {
-            if (confirm('¿Reimprimir la comanda del pedido #' + pedidoId + '?')) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="reimprimir">
-                    <input type="hidden" name="id" value="${pedidoId}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        function cerrarModal() {
-            document.getElementById('impresionModal').classList.add('hidden');
-            pedidoAImprimir = null;
-        }
-
-        // Cerrar modal al hacer clic fuera
-        document.getElementById('impresionModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                cerrarModal();
-            }
-        });
 
         // Efectos visuales al cargar
         document.addEventListener('DOMContentLoaded', function() {
@@ -485,9 +368,6 @@ $stats = $stats->fetch();
             urgentes.forEach(el => {
                 el.style.animation = 'pulse 2s infinite';
             });
-            
-            // Sonido de notificación para pedidos nuevos (opcional)
-            // Podrías implementar WebSocket o polling para detectar nuevos pedidos
         });
     </script>
 
