@@ -11,7 +11,10 @@
 <!-- Header -->
 <header class="hero-pattern bg-gray-900 text-white py-16 md:py-24 relative">
         <div class="absolute inset-0 bg-black bg-opacity-50"></div>
-        <div class="absolute top-4 right-4 z-20">
+        <div class="absolute top-4 right-4 z-20 space-x-2">
+            <a href="empleados/login.php" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm">
+                <i class="fas fa-users mr-1"></i> Empleados
+            </a>
             <a href="admin/" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full text-sm">
                 <i class="fas fa-lock mr-1"></i> Admin
             </a>
@@ -241,30 +244,36 @@ const adminModal = document.getElementById('adminModal');
 const loginForm = document.getElementById('loginForm');
 
 // Toggle login modal
-adminLoginBtn.addEventListener('click', () => {
-    adminModal.classList.toggle('hidden');
-});
+if (adminLoginBtn) {
+    adminLoginBtn.addEventListener('click', () => {
+        adminModal.classList.toggle('hidden');
+    });
+}
 
 // Close modal when clicking outside
-adminModal.addEventListener('click', (e) => {
-    if (e.target === adminModal) {
-        adminModal.classList.add('hidden');
-    }
-});
+if (adminModal) {
+    adminModal.addEventListener('click', (e) => {
+        if (e.target === adminModal) {
+            adminModal.classList.add('hidden');
+        }
+    });
+}
 
 // Handle login form submission
-loginForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const username = e.target.username.value;
-    const password = e.target.password.value;
+if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = e.target.username.value;
+        const password = e.target.password.value;
 
-    if(username === 'admin' && password === 'Sangu2186') {
-        // Redirect to admin panel
-        window.location.href = 'admin/';
-    } else {
-        alert('Credenciales incorrectas');
-    }
-});
+        if(username === 'admin' && password === 'Sangu2186') {
+            // Redirect to admin panel
+            window.location.href = 'admin/';
+        } else {
+            alert('Credenciales incorrectas');
+        }
+    });
+}
 
 // Add hover effects to sandwich cards
 document.querySelectorAll('.sandwich-card').forEach(card => {
