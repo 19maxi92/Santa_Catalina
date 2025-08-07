@@ -126,7 +126,7 @@ $stats = $stats->fetch();
     <header class="bg-blue-600 text-white shadow-md">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center">
-                <a href="index.php" class="text-blue-100 hover:text-white mr-4">
+                <a href="dashboard.php" class="text-blue-100 hover:text-white mr-4">
                     <i class="fas fa-arrow-left"></i>
                 </a>
                 <h1 class="text-xl font-bold">
