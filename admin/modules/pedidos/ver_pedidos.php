@@ -72,7 +72,7 @@ $filtro_modalidad = isset($_GET['modalidad']) ? sanitize($_GET['modalidad']) : '
 $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
 $orden = isset($_GET['orden']) ? sanitize($_GET['orden']) : 'created_at DESC';
 
-// Construir consulta
+// Construir consulta - INCLUIR TODOS LOS CAMPOS NECESARIOS
 $sql = "SELECT p.*, cf.nombre as cliente_nombre, cf.apellido as cliente_apellido 
         FROM pedidos p 
         LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
@@ -326,7 +326,29 @@ $stats = $pdo->query($stats_sql)->fetch();
                                         </div>
                                         <?php if ($pedido['direccion']): ?>
                                         <div class="text-sm text-gray-500">
-                                            <i class="fas fa-map-marker-alt text-xs mr-1"></i><?= htmlspecialchars($pedido['direccion']) ?>
+                                            <i class="fas fa-map-marker-alt text-xs mr-1 text-red-500"></i>
+                                            <span class="font-medium"><?= htmlspecialchars($pedido['direccion']) ?></span>
+                                        </div>
+                                        <?php else: ?>
+                                        <div class="text-sm text-red-500">
+                                            <i class="fas fa-exclamation-triangle text-xs mr-1"></i>
+                                            <span class="font-medium">Sin dirección</span>
+                                        </div>
+                                        <?php endif; ?>
+                                        
+                                        <!-- Información adicional de fecha/hora de entrega -->
+                                        <?php if ($pedido['fecha_entrega'] || $pedido['hora_entrega'] || $pedido['notas_horario']): ?>
+                                        <div class="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mt-1">
+                                            <i class="fas fa-clock mr-1"></i>
+                                            <?php if ($pedido['fecha_entrega']): ?>
+                                                Para: <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
+                                            <?php endif; ?>
+                                            <?php if ($pedido['hora_entrega']): ?>
+                                                <?= substr($pedido['hora_entrega'], 0, 5) ?>
+                                            <?php endif; ?>
+                                            <?php if ($pedido['notas_horario']): ?>
+                                                (<?= htmlspecialchars($pedido['notas_horario']) ?>)
+                                            <?php endif; ?>
                                         </div>
                                         <?php endif; ?>
                                     </td>
@@ -404,7 +426,8 @@ $stats = $pdo->query($stats_sql)->fetch();
                                     <td class="px-6 py-4 text-sm font-medium">
                                         <div class="flex space-x-2">
                                             <button onclick="verDetalles(<?= $pedido['id'] ?>)" 
-                                                    class="text-blue-600 hover:text-blue-900" title="Ver detalles">
+                                                    class="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded" 
+                                                    title="Ver detalles completos (Comandera)">
                                                 <i class="fas fa-eye"></i>
                                             </button>
                                             <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
@@ -436,6 +459,167 @@ $stats = $pdo->query($stats_sql)->fetch();
         </div>
     </main>
 
+    <!-- Modal Detalles del Pedido (Comandera) -->
+    <div id="detallesModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <!-- Header del modal -->
+            <div class="bg-orange-500 text-white p-4 rounded-t-lg">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xl font-bold">
+                        <i class="fas fa-receipt mr-2"></i>Comanda - Pedido #<span id="modal-pedido-id"></span>
+                    </h3>
+                    <button onclick="cerrarDetallesModal()" class="text-white hover:text-gray-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Contenido del modal -->
+            <div class="p-6">
+                
+                <!-- INFO PRINCIPAL DEL CLIENTE -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <h4 class="font-bold text-lg text-blue-800 mb-3">
+                        <i class="fas fa-user mr-2"></i>INFORMACIÓN DEL CLIENTE
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Cliente:</p>
+                            <p class="font-semibold text-lg" id="modal-cliente-nombre"></p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Teléfono:</p>
+                            <p class="font-semibold text-lg text-blue-600" id="modal-cliente-telefono"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- DIRECCIÓN - MUY IMPORTANTE -->
+                    <div class="mt-4 bg-yellow-50 border border-yellow-300 rounded-lg p-3" id="modal-direccion-container">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-map-marker-alt text-red-500 mr-2"></i>
+                            <p class="font-bold text-red-700">DIRECCIÓN DE ENTREGA:</p>
+                        </div>
+                        <p class="font-semibold text-lg text-gray-800" id="modal-cliente-direccion"></p>
+                    </div>
+                    
+                    <!-- MODALIDAD -->
+                    <div class="mt-4">
+                        <p class="text-sm text-gray-600">Modalidad:</p>
+                        <p class="font-semibold text-lg" id="modal-modalidad">
+                            <span id="modal-modalidad-icono"></span>
+                            <span id="modal-modalidad-texto"></span>
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- PRODUCTO PEDIDO -->
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                    <h4 class="font-bold text-lg text-green-800 mb-3">
+                        <i class="fas fa-sandwich mr-2"></i>PRODUCTO PEDIDO
+                    </h4>
+                    <div class="space-y-3">
+                        <div>
+                            <p class="font-bold text-xl text-gray-800" id="modal-producto-nombre"></p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                            <div class="bg-white rounded-lg p-3 border">
+                                <p class="text-sm text-gray-600">Cantidad:</p>
+                                <p class="font-bold text-2xl text-green-600" id="modal-producto-cantidad"></p>
+                            </div>
+                            <div class="bg-white rounded-lg p-3 border">
+                                <p class="text-sm text-gray-600">Precio:</p>
+                                <p class="font-bold text-2xl text-green-600" id="modal-producto-precio"></p>
+                            </div>
+                            <div class="bg-white rounded-lg p-3 border">
+                                <p class="text-sm text-gray-600">Forma de Pago:</p>
+                                <p class="font-semibold text-lg" id="modal-forma-pago"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- FECHAS Y HORARIOS -->
+                <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+                    <h4 class="font-bold text-lg text-purple-800 mb-3">
+                        <i class="fas fa-clock mr-2"></i>TIEMPOS
+                    </h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-600">Pedido tomado:</p>
+                            <p class="font-semibold" id="modal-fecha-pedido"></p>
+                        </div>
+                        <div id="modal-entrega-info" class="hidden">
+                            <p class="text-sm text-gray-600">Para cuándo es:</p>
+                            <p class="font-semibold text-orange-600" id="modal-fecha-entrega"></p>
+                        </div>
+                    </div>
+                    <div id="modal-notas-horario-container" class="mt-3 hidden">
+                        <p class="text-sm text-gray-600">Notas de horario:</p>
+                        <p class="font-semibold bg-yellow-100 p-2 rounded" id="modal-notas-horario"></p>
+                    </div>
+                </div>
+                
+                <!-- OBSERVACIONES -->
+                <div id="modal-observaciones-container" class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6 hidden">
+                    <h4 class="font-bold text-lg text-orange-800 mb-3">
+                        <i class="fas fa-comment mr-2"></i>OBSERVACIONES ESPECIALES
+                    </h4>
+                    <div class="bg-white p-3 rounded border">
+                        <p class="font-semibold text-gray-800" id="modal-observaciones"></p>
+                    </div>
+                </div>
+                
+                <!-- ESTADO ACTUAL -->
+                <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                    <h4 class="font-bold text-lg text-gray-800 mb-3">
+                        <i class="fas fa-tasks mr-2"></i>ESTADO ACTUAL
+                    </h4>
+                    <div class="text-center">
+                        <span class="px-4 py-2 rounded-full text-lg font-bold" id="modal-estado-badge"></span>
+                        <p class="text-sm text-gray-600 mt-2" id="modal-tiempo-transcurrido"></p>
+                    </div>
+                </div>
+                
+                <!-- DATOS ADICIONALES -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center text-sm">
+                    <div>
+                        <p class="text-gray-600">Pedido ID:</p>
+                        <p class="font-bold" id="modal-pedido-id-footer"></p>
+                    </div>
+                    <div id="modal-cliente-fijo-info" class="hidden">
+                        <p class="text-gray-600">Tipo Cliente:</p>
+                        <p class="font-bold text-blue-600">Cliente Fijo</p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Impresión:</p>
+                        <p class="font-bold" id="modal-impreso-estado"></p>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Última Actualización:</p>
+                        <p class="font-bold" id="modal-ultima-actualizacion"></p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer con acciones -->
+            <div class="bg-gray-50 p-4 rounded-b-lg border-t">
+                <div class="flex justify-between items-center">
+                    <button onclick="cerrarDetallesModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+                        <i class="fas fa-times mr-2"></i>Cerrar
+                    </button>
+                    <div class="flex space-x-2">
+                        <button onclick="imprimirComandaDesdeModal()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                            <i class="fas fa-print mr-2"></i>Imprimir Comanda
+                        </button>
+                        <button onclick="contactarClienteDesdeModal()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                            <i class="fab fa-whatsapp mr-2"></i>Contactar Cliente
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal para impresión -->
     <div id="impresionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
@@ -458,6 +642,7 @@ $stats = $pdo->query($stats_sql)->fetch();
 
     <script>
         let pedidoAImprimir = null;
+        let pedidoActualModal = null;
 
         function cambiarEstado(id, nuevoEstado) {
             const form = document.createElement('form');
@@ -526,19 +711,292 @@ $stats = $pdo->query($stats_sql)->fetch();
             }
         }
 
-        function verDetalles(id) {
-            alert('Funcionalidad de detalles en desarrollo');
-        }
-
         function cerrarModal() {
             document.getElementById('impresionModal').classList.add('hidden');
             pedidoAImprimir = null;
         }
 
-        // Cerrar modal al hacer clic fuera
-        document.getElementById('impresionModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                cerrarModal();
+        // ========================
+        // FUNCIONES DEL MODAL DE DETALLES
+        // ========================
+
+        // Función para mostrar detalles del pedido (reemplaza la función verDetalles actual)
+        function verDetalles(pedidoId) {
+            // Buscar la fila del pedido en la tabla
+            const filas = document.querySelectorAll('tbody tr');
+            let pedidoData = null;
+            
+            filas.forEach(fila => {
+                const idCell = fila.querySelector('td:first-child');
+                if (idCell && idCell.textContent.includes('#' + pedidoId)) {
+                    pedidoData = extraerDatosDeFila(fila, pedidoId);
+                }
+            });
+            
+            if (pedidoData) {
+                mostrarModalDetalles(pedidoData);
+            } else {
+                alert('No se pudieron cargar los detalles del pedido');
+            }
+        }
+
+        // Función para extraer datos de la fila de la tabla
+        function extraerDatosDeFila(fila, pedidoId) {
+            const celdas = fila.querySelectorAll('td');
+            
+            // Extraer información del cliente (segunda celda)
+            const clienteInfo = celdas[1];
+            const clienteNombre = clienteInfo.querySelector('.text-sm.font-medium').textContent.trim();
+            const telefonoElement = clienteInfo.querySelector('i.fa-phone').parentNode;
+            const telefono = telefonoElement.textContent.trim();
+            
+            // Buscar dirección
+            const direccionElement = clienteInfo.querySelector('i.fa-map-marker-alt');
+            let direccion = 'Sin dirección especificada';
+            if (direccionElement) {
+                direccion = direccionElement.parentNode.textContent.trim();
+            }
+            
+            // Extraer información del producto (tercera celda)
+            const productoInfo = celdas[2];
+            const productoNombre = productoInfo.querySelector('.text-sm.font-medium').textContent.trim();
+            const productoDetalles = productoInfo.querySelectorAll('.text-sm.text-gray-500');
+            let cantidad = 'N/A';
+            let formaPago = 'N/A';
+            
+            productoDetalles.forEach(detalle => {
+                const texto = detalle.textContent;
+                if (texto.includes('Cantidad:')) {
+                    cantidad = texto.split('|')[0].replace('Cantidad:', '').trim();
+                    formaPago = texto.split('|')[1].trim();
+                }
+            });
+            
+            // Observaciones
+            let observaciones = '';
+            const obsElement = productoInfo.querySelector('i.fa-comment');
+            if (obsElement) {
+                observaciones = obsElement.parentNode.textContent.trim();
+            }
+            
+            // Precio (cuarta celda)
+            const precio = celdas[3].textContent.trim();
+            
+            // Estado (quinta celda)
+            const estadoSelect = celdas[4].querySelector('select');
+            const estado = estadoSelect.value;
+            
+            // Modalidad (sexta celda)
+            const modalidadInfo = celdas[5];
+            const modalidad = modalidadInfo.textContent.includes('Delivery') ? 'Delivery' : 'Retira';
+            
+            // Fecha (séptima celda)
+            const fechaInfo = celdas[6];
+            const fechas = fechaInfo.textContent.split('\n').map(f => f.trim()).filter(f => f);
+            const fechaPedido = fechas.length >= 2 ? `${fechas[0]} ${fechas[1]}` : fechas[0] || 'N/A';
+            
+            // Estado de impresión (octava celda)
+            const impresionInfo = celdas[7];
+            const impreso = impresionInfo.textContent.includes('Impresa');
+
+            // Información de entrega (buscar en cliente info)
+            let fechaEntrega = '';
+            let horaEntrega = '';
+            let notasHorario = '';
+            
+            const entregaInfo = clienteInfo.querySelector('.text-xs.text-orange-600');
+            if (entregaInfo) {
+                const textoEntrega = entregaInfo.textContent;
+                if (textoEntrega.includes('Para:')) {
+                    fechaEntrega = textoEntrega;
+                }
+            }
+            
+            return {
+                id: pedidoId,
+                cliente: {
+                    nombre: clienteNombre,
+                    telefono: telefono,
+                    direccion: direccion,
+                    esClienteFijo: clienteNombre.includes('(Cliente fijo)')
+                },
+                producto: {
+                    nombre: productoNombre,
+                    cantidad: cantidad,
+                    precio: precio,
+                    formaPago: formaPago
+                },
+                modalidad: modalidad,
+                estado: estado,
+                fechaPedido: fechaPedido,
+                fechaEntrega: fechaEntrega,
+                observaciones: observaciones,
+                impreso: impreso
+            };
+        }
+
+        // Función para mostrar el modal con los datos
+        function mostrarModalDetalles(data) {
+            pedidoActualModal = data;
+            
+            // Llenar información básica
+            document.getElementById('modal-pedido-id').textContent = data.id;
+            document.getElementById('modal-pedido-id-footer').textContent = data.id;
+            
+            // Información del cliente
+            document.getElementById('modal-cliente-nombre').textContent = data.cliente.nombre;
+            document.getElementById('modal-cliente-telefono').textContent = data.cliente.telefono;
+            
+            // DIRECCIÓN - MUY IMPORTANTE
+            const direccionContainer = document.getElementById('modal-direccion-container');
+            const direccionElement = document.getElementById('modal-cliente-direccion');
+            
+            if (data.cliente.direccion && data.cliente.direccion !== 'Sin dirección especificada' && !data.cliente.direccion.includes('Sin dirección')) {
+                direccionElement.textContent = data.cliente.direccion;
+                direccionContainer.classList.remove('hidden');
+                direccionContainer.classList.remove('bg-red-50', 'border-red-300');
+                direccionContainer.classList.add('bg-yellow-50', 'border-yellow-300');
+                direccionElement.classList.remove('text-red-700');
+                direccionElement.classList.add('text-gray-800');
+            } else {
+                direccionElement.textContent = '⚠️ SIN DIRECCIÓN ESPECIFICADA - CONTACTAR CLIENTE';
+                direccionContainer.classList.remove('hidden');
+                direccionContainer.classList.remove('bg-yellow-50', 'border-yellow-300');
+                direccionContainer.classList.add('bg-red-50', 'border-red-300');
+                direccionElement.classList.add('text-red-700', 'font-bold');
+            }
+            
+            // Modalidad
+            const modalidadIcono = document.getElementById('modal-modalidad-icono');
+            const modalidadTexto = document.getElementById('modal-modalidad-texto');
+            
+            if (data.modalidad === 'Delivery') {
+                modalidadIcono.innerHTML = '<i class="fas fa-truck text-green-500 mr-2"></i>';
+                modalidadTexto.textContent = 'DELIVERY';
+                modalidadTexto.className = 'font-bold text-green-600';
+            } else {
+                modalidadIcono.innerHTML = '<i class="fas fa-store text-blue-500 mr-2"></i>';
+                modalidadTexto.textContent = 'RETIRA EN LOCAL';
+                modalidadTexto.className = 'font-bold text-blue-600';
+            }
+            
+            // Información del producto
+            document.getElementById('modal-producto-nombre').textContent = data.producto.nombre;
+            document.getElementById('modal-producto-cantidad').textContent = data.producto.cantidad;
+            document.getElementById('modal-producto-precio').textContent = data.producto.precio;
+            document.getElementById('modal-forma-pago').textContent = data.producto.formaPago;
+            
+            // Fechas
+            document.getElementById('modal-fecha-pedido').textContent = data.fechaPedido;
+            
+            // Información de entrega
+            const entregaInfo = document.getElementById('modal-entrega-info');
+            const fechaEntregaElement = document.getElementById('modal-fecha-entrega');
+            
+            if (data.fechaEntrega && data.fechaEntrega.length > 0) {
+                fechaEntregaElement.textContent = data.fechaEntrega;
+                entregaInfo.classList.remove('hidden');
+            } else {
+                entregaInfo.classList.add('hidden');
+            }
+            
+            // Estado
+            const estadoBadge = document.getElementById('modal-estado-badge');
+            const estadoColors = {
+                'Pendiente': 'bg-yellow-100 text-yellow-800',
+                'Preparando': 'bg-blue-100 text-blue-800',
+                'Listo': 'bg-green-100 text-green-800',
+                'Entregado': 'bg-gray-100 text-gray-800'
+            };
+            
+            estadoBadge.textContent = data.estado.toUpperCase();
+            estadoBadge.className = `px-4 py-2 rounded-full text-lg font-bold ${estadoColors[data.estado] || 'bg-gray-100 text-gray-800'}`;
+            
+            // Observaciones
+            const obsContainer = document.getElementById('modal-observaciones-container');
+            const obsElement = document.getElementById('modal-observaciones');
+            
+            if (data.observaciones && data.observaciones.length > 0) {
+                obsElement.textContent = data.observaciones;
+                obsContainer.classList.remove('hidden');
+            } else {
+                obsContainer.classList.add('hidden');
+            }
+            
+            // Cliente fijo
+            const clienteFijoInfo = document.getElementById('modal-cliente-fijo-info');
+            if (data.cliente.esClienteFijo) {
+                clienteFijoInfo.classList.remove('hidden');
+            } else {
+                clienteFijoInfo.classList.add('hidden');
+            }
+            
+            // Estado de impresión
+            const impresoEstado = document.getElementById('modal-impreso-estado');
+            if (data.impreso) {
+                impresoEstado.textContent = '✅ Impresa';
+                impresoEstado.className = 'font-bold text-green-600';
+            } else {
+                impresoEstado.textContent = '❌ Sin imprimir';
+                impresoEstado.className = 'font-bold text-red-600';
+            }
+            
+            // Tiempo transcurrido
+            const tiempoElement = document.getElementById('modal-tiempo-transcurrido');
+            tiempoElement.textContent = 'Ver información completa en la comandera';
+            
+            // Última actualización
+            document.getElementById('modal-ultima-actualizacion').textContent = new Date().toLocaleString('es-AR');
+            
+            // Mostrar modal
+            document.getElementById('detallesModal').classList.remove('hidden');
+        }
+
+        // Función para cerrar el modal de detalles
+        function cerrarDetallesModal() {
+            document.getElementById('detallesModal').classList.add('hidden');
+            pedidoActualModal = null;
+        }
+
+        // Función para imprimir comanda desde el modal
+        function imprimirComandaDesdeModal() {
+            if (pedidoActualModal) {
+                imprimirComanda(pedidoActualModal.id);
+                cerrarDetallesModal();
+            }
+        }
+
+        // Función para contactar cliente desde el modal
+        function contactarClienteDesdeModal() {
+            if (pedidoActualModal) {
+                const telefono = pedidoActualModal.cliente.telefono.replace(/[^0-9]/g, '');
+                const nombre = pedidoActualModal.cliente.nombre.split('(')[0].trim();
+                const estado = pedidoActualModal.estado.toLowerCase();
+                
+                const url = `https://wa.me/${telefono}?text=Hola%20${encodeURIComponent(nombre)},%20tu%20pedido%20#${pedidoActualModal.id}%20está%20${encodeURIComponent(estado)}`;
+                window.open(url, '_blank');
+            }
+        }
+
+        // Cerrar modales al hacer clic fuera
+        document.addEventListener('DOMContentLoaded', function() {
+            const impresionModal = document.getElementById('impresionModal');
+            const detallesModal = document.getElementById('detallesModal');
+            
+            if (impresionModal) {
+                impresionModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        cerrarModal();
+                    }
+                });
+            }
+            
+            if (detallesModal) {
+                detallesModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        cerrarDetallesModal();
+                    }
+                });
             }
         });
 

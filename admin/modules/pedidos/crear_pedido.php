@@ -321,7 +321,7 @@ if ($_POST) {
                     </div>
                 </div>
 
-                <!-- Columna 2: Selección de Producto (igual que antes) -->
+                <!-- Columna 2: Selección de Producto -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">
                         <i class="fas fa-shopping-cart text-orange-500 mr-2"></i>Seleccionar Producto
@@ -411,7 +411,7 @@ if ($_POST) {
                         </div>
                     </div>
                     
-                    <!-- Tab Personalizado MEJORADO -->
+                    <!-- Tab Personalizado ARREGLADO -->
                     <div id="content-personalizado" class="tab-content hidden">
                         <div class="space-y-4">
                             <!-- Cantidad total -->
@@ -424,21 +424,39 @@ if ($_POST) {
                                 </div>
                             </div>
                             
-                            <!-- Lista de planchas -->
+                            <!-- Campos ocultos para compatibilidad con backend -->
+                            <input type="hidden" name="tipo_personalizado" id="tipo_personalizado_hidden" value="comun">
+                            
+                            <!-- Lista de planchas dinámicas -->
                             <div id="planchas-container" class="space-y-3">
-                                <!-- Las planchas se generan dinámicamente -->
+                                <!-- Las planchas se generan dinámicamente con JavaScript -->
                             </div>
                             
                             <!-- Resumen de precios -->
                             <div class="bg-blue-50 p-4 rounded-lg">
-                                <h4 class="font-medium mb-2">Resumen de Facturación:</h4>
+                                <h4 class="font-medium mb-2">
+                                    <i class="fas fa-calculator mr-1"></i>Resumen de Facturación:
+                                </h4>
                                 <div id="resumen-planchas" class="space-y-1 text-sm">
-                                    <!-- Se llena dinámicamente -->
+                                    <div class="text-gray-500">Configurando planchas...</div>
                                 </div>
                                 <hr class="my-2">
                                 <div class="font-bold text-lg">
                                     Total: <span id="total-personalizado-complejo">$0</span>
                                 </div>
+                            </div>
+                            
+                            <!-- Información adicional -->
+                            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                <h4 class="font-medium text-yellow-800 mb-2">
+                                    <i class="fas fa-info-circle mr-1"></i>Información:
+                                </h4>
+                                <ul class="text-sm text-yellow-700 space-y-1">
+                                    <li>• Cada plancha contiene 8 sándwiches</li>
+                                    <li>• Común: $3,500 por plancha ($7,000 premium)</li>
+                                    <li>• Podés mezclar sabores comunes y premium</li>
+                                    <li>• El descuento por efectivo se aplica automáticamente</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -481,7 +499,7 @@ if ($_POST) {
         let currentProduct = null;
         let paymentMethod = 'Efectivo';
         
-        // NUEVAS FUNCIONES PARA FECHA/HORA
+        // FUNCIONES PARA FECHA/HORA
         function setHoyAhora() {
             document.querySelector('input[name="fecha_entrega"]').value = new Date().toISOString().split('T')[0];
             document.querySelector('select[name="hora_entrega"]').value = '';
@@ -581,7 +599,7 @@ if ($_POST) {
             
             // Mostrar sabores premium si es necesario
             const saboresDiv = document.getElementById('sabores-premium');
-            if (name.includes('Premium')) {
+            if (saboresDiv && name.includes('Premium')) {
                 saboresDiv.classList.remove('hidden');
                 const cantidad = name.includes('48') ? 6 : 3;
                 document.getElementById('sabores-cantidad').textContent = cantidad;
@@ -592,7 +610,7 @@ if ($_POST) {
                     input.value = 0;
                 });
                 updateSaboresPremium();
-            } else {
+            } else if (saboresDiv) {
                 saboresDiv.classList.add('hidden');
             }
             
@@ -609,16 +627,19 @@ if ($_POST) {
             }
         }
         
-        // NUEVAS FUNCIONES PARA SABORES PREMIUM CON CANTIDADES
+        // FUNCIONES PARA SABORES PREMIUM CON CANTIDADES
         function cambiarCantidadSabor(sabor, cambio) {
             const inputId = 'sabor_' + sabor.replace(/ /g, '_').replace(/ó/g, 'o');
             const input = document.getElementById(inputId);
+            if (!input) return;
+            
             let nuevaCantidad = parseInt(input.value) + cambio;
             
             if (nuevaCantidad < 0) nuevaCantidad = 0;
             
             // Verificar límite máximo
-            const maxPermitido = parseInt(document.getElementById('sabores-maximo').textContent);
+            const maximoSpan = document.getElementById('sabores-maximo');
+            const maxPermitido = maximoSpan ? parseInt(maximoSpan.textContent) : 6;
             const totalActual = calcularTotalSabores() - parseInt(input.value); // Restar el valor actual
             
             if (totalActual + nuevaCantidad > maxPermitido) {
@@ -641,61 +662,202 @@ if ($_POST) {
         // Actualizar sabores premium MEJORADA
         function updateSaboresPremium() {
             const totalSeleccionado = calcularTotalSabores();
-            const maxPermitido = parseInt(document.getElementById('sabores-maximo').textContent);
+            const maximoSpan = document.getElementById('sabores-maximo');
+            const maxPermitido = maximoSpan ? parseInt(maximoSpan.textContent) : 6;
             
-            document.getElementById('sabores-seleccionados-total').textContent = totalSeleccionado;
-            
-            // Cambiar color según el estado
             const totalSpan = document.getElementById('sabores-seleccionados-total');
-            if (totalSeleccionado === maxPermitido) {
-                totalSpan.className = 'font-bold text-green-600';
-            } else if (totalSeleccionado > maxPermitido) {
-                totalSpan.className = 'font-bold text-red-600';
-            } else {
-                totalSpan.className = 'font-bold text-blue-800';
+            if (totalSpan) {
+                totalSpan.textContent = totalSeleccionado;
+                
+                // Cambiar color según el estado
+                if (totalSeleccionado === maxPermitido) {
+                    totalSpan.className = 'font-bold text-green-600';
+                } else if (totalSeleccionado > maxPermitido) {
+                    totalSpan.className = 'font-bold text-red-600';
+                } else {
+                    totalSpan.className = 'font-bold text-blue-800';
+                }
             }
             
             updateResumen();
         }
         
-        // Actualizar personalizado
-        function updatePersonalizado() {
-            const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value) || 8;
-            const tipo = document.querySelector('input[name="tipo_personalizado"]:checked').value;
+        // Función para manejar pedidos personalizados complejos
+        function updatePersonalizadoComplejo() {
+            console.log('Actualizando personalizado complejo...');
+            
+            const cantidadInput = document.querySelector('input[name="cantidad_personalizada"]');
+            if (!cantidadInput) {
+                console.log('No se encontró input de cantidad personalizada');
+                return;
+            }
+            
+            const cantidad = parseInt(cantidadInput.value) || 8;
             const planchas = Math.ceil(cantidad / 8);
-            const saboresPermitidos = planchas; // 1 sabor por plancha
             
-            // Precios base por plancha
-            const preciosBase = {
-                'comun': 3500,
-                'premium': 7000
-            };
+            // Actualizar display de planchas totales
+            const planchasTotalesSpan = document.getElementById('planchas-totales');
+            if (planchasTotalesSpan) {
+                planchasTotalesSpan.textContent = planchas;
+            }
             
-            const precioBase = preciosBase[tipo];
-            const descuento = paymentMethod === 'Efectivo' ? 0.9 : 1; // 10% desc efectivo
-            const precioPlancha = Math.round(precioBase * descuento);
-            const total = planchas * precioPlancha;
+            // Generar contenido dinámico para las planchas
+            const planchasContainer = document.getElementById('planchas-container');
+            const resumenPlanchas = document.getElementById('resumen-planchas');
+            const totalPersonalizadoComplejo = document.getElementById('total-personalizado-complejo');
             
-            // Actualizar interfaz
-            document.getElementById('planchas-necesarias').textContent = planchas;
-            document.getElementById('sabores-permitidos').textContent = saboresPermitidos;
-            document.getElementById('tipo-mostrar').textContent = tipo.charAt(0).toUpperCase() + tipo.slice(1);
-            document.getElementById('precio-plancha').textContent = `${precioPlancha.toLocaleString()}`;
-            document.getElementById('planchas-mostrar').textContent = planchas;
-            document.getElementById('total-personalizado').textContent = `${total.toLocaleString()}`;
+            if (!planchasContainer || !resumenPlanchas || !totalPersonalizadoComplejo) {
+                console.log('Elementos de personalizado complejo no encontrados');
+                return;
+            }
             
-            // Limit sabores selection
-            const selectedSabores = document.querySelectorAll('.sabor-personalizado:checked').length;
-            document.querySelectorAll('.sabor-personalizado:not(:checked)').forEach(cb => {
-                cb.disabled = selectedSabores >= saboresPermitidos;
-            });
+            // Lista de sabores disponibles
+            const saboresComunes = ['Jamón y Queso', 'Lechuga y Tomate', 'Huevo', 'Choclo', 'Aceitunas'];
+            const saboresPremium = ['Jamón y Queso', 'Ananá', 'Atún', 'Berenjena', 'Durazno', 'Jamón Crudo', 'Morrón', 'Palmito', 'Panceta', 'Pollo', 'Roquefort', 'Salame'];
             
+            // Generar HTML para cada plancha
+            let planchasHTML = '';
+            
+            for (let i = 1; i <= planchas; i++) {
+                const sandwichesEnPlancha = (i === planchas && cantidad % 8 !== 0) ? cantidad % 8 : 8;
+                
+                planchasHTML += `
+                    <div class="border rounded-lg p-4 bg-gray-50">
+                        <h4 class="font-medium mb-3">Plancha ${i} (${sandwichesEnPlancha} sándwiches)</h4>
+                        
+                        <div class="space-y-3">
+                            <!-- Tipo de plancha -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tipo:</label>
+                                <div class="space-y-2">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="tipo_plancha_${i}" value="comun" class="mr-2" onchange="calcularPreciosPlancha()" checked>
+                                        <span>Común ($3,500)</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="tipo_plancha_${i}" value="premium" class="mr-2" onchange="calcularPreciosPlancha()">
+                                        <span>Premium ($7,000)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Sabor -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Sabor:</label>
+                                <select name="sabor_plancha_${i}" class="w-full px-3 py-2 border rounded-lg text-sm" id="sabor_select_${i}">
+                                    ${saboresComunes.map(sabor => `<option value="${sabor}">${sabor}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            planchasContainer.innerHTML = planchasHTML;
+            
+            // Agregar event listeners a los radios de tipo
+            for (let i = 1; i <= planchas; i++) {
+                const radiosComun = document.querySelectorAll(`input[name="tipo_plancha_${i}"]`);
+                radiosComun.forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        updateSaboresDisponibles(i, this.value);
+                        calcularPreciosPlancha();
+                    });
+                });
+            }
+            
+            // Calcular precios iniciales
+            calcularPreciosPlancha();
+        }
+        
+        // Función para actualizar sabores disponibles según el tipo
+        function updateSaboresDisponibles(planchaNum, tipo) {
+            const saborSelect = document.getElementById(`sabor_select_${planchaNum}`);
+            if (!saborSelect) return;
+            
+            const saboresComunes = ['Jamón y Queso', 'Lechuga y Tomate', 'Huevo', 'Choclo', 'Aceitunas'];
+            const saboresPremium = ['Jamón y Queso', 'Ananá', 'Atún', 'Berenjena', 'Durazno', 'Jamón Crudo', 'Morrón', 'Palmito', 'Panceta', 'Pollo', 'Roquefort', 'Salame'];
+            
+            const sabores = tipo === 'premium' ? saboresPremium : saboresComunes;
+            saborSelect.innerHTML = sabores.map(sabor => `<option value="${sabor}">${sabor}</option>`).join('');
+        }
+        
+        // Función para calcular precios de las planchas
+        function calcularPreciosPlancha() {
+            const cantidadInput = document.querySelector('input[name="cantidad_personalizada"]');
+            if (!cantidadInput) return;
+            
+            const cantidad = parseInt(cantidadInput.value) || 8;
+            const planchas = Math.ceil(cantidad / 8);
+            const formaPago = document.querySelector('input[name="forma_pago"]:checked')?.value || 'Efectivo';
+            const descuento = formaPago === 'Efectivo' ? 0.9 : 1;
+            
+            let totalPrecio = 0;
+            let resumenHTML = '';
+            let saboresPersonalizados = [];
+            
+            for (let i = 1; i <= planchas; i++) {
+                const tipoRadio = document.querySelector(`input[name="tipo_plancha_${i}"]:checked`);
+                if (!tipoRadio) continue;
+                
+                const tipo = tipoRadio.value;
+                const precioBase = tipo === 'premium' ? 7000 : 3500;
+                const precioFinal = Math.round(precioBase * descuento);
+                
+                const sandwichesEnPlancha = (i === planchas && cantidad % 8 !== 0) ? cantidad % 8 : 8;
+                const saborSelect = document.getElementById(`sabor_select_${i}`);
+                const sabor = saborSelect ? saborSelect.value : 'Sin definir';
+                
+                totalPrecio += precioFinal;
+                saboresPersonalizados.push(sabor);
+                
+                resumenHTML += `
+                    <div class="flex justify-between text-sm">
+                        <span>Plancha ${i} (${tipo}): ${sabor}</span>
+                        <span>${precioFinal.toLocaleString()}</span>
+                    </div>
+                `;
+            }
+            
+            // Actualizar tipo general (usar el más común)
+            const tiposSeleccionados = [];
+            for (let i = 1; i <= planchas; i++) {
+                const tipoRadio = document.querySelector(`input[name="tipo_plancha_${i}"]:checked`);
+                if (tipoRadio) tiposSeleccionados.push(tipoRadio.value);
+            }
+            
+            const tipoGeneral = tiposSeleccionados.filter(tipo => tipo === 'premium').length > tiposSeleccionados.length / 2 ? 'premium' : 'comun';
+            const tipoHidden = document.getElementById('tipo_personalizado_hidden');
+            if (tipoHidden) {
+                tipoHidden.value = tipoGeneral;
+            }
+            
+            // Actualizar resumen
+            const resumenPlanchas = document.getElementById('resumen-planchas');
+            const totalPersonalizadoComplejo = document.getElementById('total-personalizado-complejo');
+            
+            if (resumenPlanchas) {
+                resumenPlanchas.innerHTML = resumenHTML;
+            }
+            
+            if (totalPersonalizadoComplejo) {
+                totalPersonalizadoComplejo.textContent = `${totalPrecio.toLocaleString()}`;
+            }
+            
+            // Actualizar resumen general
             updateResumen();
+        }
+        
+        // Actualizar personalizado (mantenido para compatibilidad)
+        function updatePersonalizado() {
+            updatePersonalizadoComplejo();
         }
         
         // Actualizar resumen
         function updateResumen() {
             const resumenDiv = document.getElementById('resumen-pedido');
+            if (!resumenDiv) return;
+            
             const activeTab = document.getElementById('tipo_pedido_hidden').value;
             
             let html = '';
@@ -734,38 +896,42 @@ if ($_POST) {
                     }
                 }
             } else if (activeTab === 'personalizado') {
-                const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value) || 8;
-                const tipo = document.querySelector('input[name="tipo_personalizado"]:checked').value;
+                const cantidadInput = document.querySelector('input[name="cantidad_personalizada"]');
+                const cantidad = cantidadInput ? parseInt(cantidadInput.value) || 8 : 8;
                 const planchas = Math.ceil(cantidad / 8);
                 
-                // Calcular precio
-                const preciosBase = { 'comun': 3500, 'premium': 7000 };
-                const precioBase = preciosBase[tipo];
-                const descuento = paymentMethod === 'Efectivo' ? 0.9 : 1;
-                const precioPlancha = Math.round(precioBase * descuento);
-                const total = planchas * precioPlancha;
+                // Calcular precio promedio
+                const totalSpan = document.getElementById('total-personalizado-complejo');
+                const totalTexto = totalSpan ? totalSpan.textContent : '$0';
                 
                 const descuentoText = paymentMethod === 'Efectivo' ? ' (con descuento)' : '';
                 
                 html = `
                     <div class="border-b pb-3">
-                        <div class="font-medium">Personalizado ${tipo.charAt(0).toUpperCase() + tipo.slice(1)} x${cantidad}</div>
+                        <div class="font-medium">Personalizado x${cantidad}</div>
                         <div class="text-sm text-gray-600">${planchas} plancha${planchas > 1 ? 's' : ''} - Pago: ${paymentMethod}${descuentoText}</div>
-                        <div class="text-sm text-gray-600">${precioPlancha.toLocaleString()} por plancha</div>
                     </div>
                     <div class="flex justify-between items-center font-bold text-lg">
                         <span>Total:</span>
-                        <span class="text-green-600">${total.toLocaleString()}</span>
+                        <span class="text-green-600">${totalTexto}</span>
                     </div>
                 `;
                 
-                const saboresSeleccionados = Array.from(document.querySelectorAll('.sabor-personalizado:checked'))
-                    .map(cb => cb.value);
-                if (saboresSeleccionados.length > 0) {
+                // Mostrar sabores seleccionados
+                let sabores = [];
+                const planchasCount = Math.ceil(cantidad / 8);
+                for (let i = 1; i <= planchasCount; i++) {
+                    const saborSelect = document.getElementById(`sabor_select_${i}`);
+                    if (saborSelect) {
+                        sabores.push(saborSelect.value);
+                    }
+                }
+                
+                if (sabores.length > 0) {
                     html += `
                         <div class="mt-3 text-sm">
                             <div class="font-medium">Sabores:</div>
-                            <div class="text-gray-600">${saboresSeleccionados.join(', ')}</div>
+                            <div class="text-gray-600">${sabores.join(', ')}</div>
                         </div>
                     `;
                 }
@@ -786,19 +952,9 @@ if ($_POST) {
             // Initialize tabs
             showTab('predefinido');
             
-            // Event listeners
+            // Event listeners para sabores premium
             document.querySelectorAll('input[name^="sabores_premium"]').forEach(input => {
                 input.addEventListener('change', updateSaboresPremium);
-            });
-            
-            // Sabores personalizados checkboxes
-            document.querySelectorAll('.sabor-personalizado').forEach(cb => {
-                cb.addEventListener('change', updatePersonalizado);
-            });
-            
-            // Tipo personalizado radio buttons
-            document.querySelectorAll('input[name="tipo_personalizado"]').forEach(radio => {
-                radio.addEventListener('change', updatePersonalizado);
             });
             
             // Cantidad personalizada input
@@ -813,10 +969,14 @@ if ($_POST) {
                 radio.addEventListener('change', updatePrecios);
             });
             
-            // NUEVOS EVENT LISTENERS PARA FECHA/HORA
-            document.querySelector('input[name="fecha_entrega"]').addEventListener('change', updateInfoEntrega);
-            document.querySelector('select[name="hora_entrega"]').addEventListener('change', updateInfoEntrega);
-            document.querySelector('input[name="notas_horario"]').addEventListener('input', updateInfoEntrega);
+            // Event listeners para fecha/hora
+            const fechaInput = document.querySelector('input[name="fecha_entrega"]');
+            const horaSelect = document.querySelector('select[name="hora_entrega"]');
+            const notasInput = document.querySelector('input[name="notas_horario"]');
+            
+            if (fechaInput) fechaInput.addEventListener('change', updateInfoEntrega);
+            if (horaSelect) horaSelect.addEventListener('change', updateInfoEntrega);
+            if (notasInput) notasInput.addEventListener('input', updateInfoEntrega);
             
             // Initialize payment method
             const selectedPayment = document.querySelector('input[name="forma_pago"]:checked');
@@ -833,18 +993,17 @@ if ($_POST) {
         
         // Validación antes de enviar
         document.getElementById('pedidoForm').addEventListener('submit', function(e) {
-            const tipePedido = document.getElementById('tipo_pedido_hidden').value;
+            const tipoPedido = document.getElementById('tipo_pedido_hidden').value;
             
-            if (tipePedido === 'predefinido') {
+            if (tipoPedido === 'predefinido') {
                 const productoSeleccionado = document.querySelector('input[name="producto_id"]:checked');
                 if (!productoSeleccionado) {
                     e.preventDefault();
                     alert('Por favor selecciona un producto.');
                     return false;
                 }
-            } else if (tipePedido === 'personalizado') {
+            } else if (tipoPedido === 'personalizado') {
                 const cantidad = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value);
-                const saboresSeleccionados = document.querySelectorAll('.sabor-personalizado:checked').length;
                 
                 if (cantidad <= 0) {
                     e.preventDefault();
@@ -852,10 +1011,34 @@ if ($_POST) {
                     return false;
                 }
                 
-                if (saboresSeleccionados === 0) {
+                // Verificar que hay al menos una plancha configurada
+                const primerTipo = document.querySelector('input[name="tipo_plancha_1"]:checked');
+                if (!primerTipo) {
                     e.preventDefault();
-                    alert('Debes seleccionar al menos un sabor.');
+                    alert('Error en la configuración de planchas.');
                     return false;
+                }
+                
+                // Crear elementos ocultos para los sabores (compatibilidad con backend)
+                const form = document.getElementById('pedidoForm');
+                
+                // Limpiar sabores anteriores
+                const oldSabores = form.querySelectorAll('input[name="sabores_personalizados[]"]');
+                oldSabores.forEach(el => el.remove());
+                
+                // Agregar nuevos sabores
+                const cantidadTotal = parseInt(document.querySelector('input[name="cantidad_personalizada"]').value) || 8;
+                const planchas = Math.ceil(cantidadTotal / 8);
+                
+                for (let i = 1; i <= planchas; i++) {
+                    const saborSelect = document.getElementById(`sabor_select_${i}`);
+                    if (saborSelect) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'sabores_personalizados[]';
+                        input.value = saborSelect.value;
+                        form.appendChild(input);
+                    }
                 }
             }
             

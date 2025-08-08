@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 07-08-2025 a las 19:29:38
+-- Tiempo de generación: 08-08-2025 a las 14:28:58
 -- Versión del servidor: 10.11.10-MariaDB-log
 -- Versión de PHP: 7.2.34
 
@@ -85,8 +85,9 @@ CREATE TABLE `pedidos` (
 
 INSERT INTO `pedidos` (`id`, `nombre`, `apellido`, `telefono`, `direccion`, `producto`, `cantidad`, `precio`, `forma_pago`, `modalidad`, `estado`, `observaciones`, `cliente_fijo_id`, `impreso`, `created_at`, `updated_at`, `fecha_entrega`, `hora_entrega`, `notas_horario`, `fecha_pedido`, `prioridad`, `prioridad_notas`, `es_personalizado_complejo`) VALUES
 (1, 's', 'd', 'f', 'f', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Listo', '', NULL, 1, '2025-08-07 12:04:11', '2025-08-07 14:44:09', NULL, NULL, NULL, '2025-08-07 18:50:22', 'normal', NULL, 0),
-(2, 'maxi', 's', 'd', 'f', '48 Surtidos Clásicos', 48, 22000.00, 'Transferencia', 'Retira', 'Pendiente', '', NULL, 1, '2025-08-07 12:14:06', '2025-08-07 19:13:44', NULL, NULL, NULL, '2025-08-07 18:50:22', 'normal', NULL, 0),
-(4, 'pedido nuevo', 'jasdj', 's1231', '', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Pendiente', '', NULL, 0, '2025-08-07 13:09:46', '2025-08-07 19:17:17', NULL, NULL, NULL, '2025-08-07 18:50:22', 'normal', NULL, 0);
+(2, 'maxi', 's', 'd', 'f', '48 Surtidos Clásicos', 48, 22000.00, 'Transferencia', 'Retira', 'Preparando', '', NULL, 1, '2025-08-07 12:14:06', '2025-08-07 19:51:21', NULL, NULL, NULL, '2025-08-07 18:50:22', 'normal', NULL, 0),
+(4, 'pedido nuevo', 'jasdj', 's1231', '', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Pendiente', '', NULL, 0, '2025-08-07 13:09:46', '2025-08-07 19:17:17', NULL, NULL, NULL, '2025-08-07 18:50:22', 'normal', NULL, 0),
+(5, 'ejemplo', '1', '22123', '123123', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Pendiente', '', NULL, 0, '2025-08-07 19:45:03', '2025-08-07 19:45:03', '2025-08-14', '15:00:00', 'asd', '2025-08-07 19:45:03', 'normal', NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -206,7 +207,7 @@ ALTER TABLE `clientes_fijos`
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `pedido_detalles`
