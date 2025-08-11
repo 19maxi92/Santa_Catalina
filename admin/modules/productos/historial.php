@@ -1,5 +1,5 @@
 <?php
-// admin/modules/productos/historial.php - Versión corregida para evitar error 500
+// admin/modules/productos/historial.php - Versión corregida COMPLETAMENTE
 
 // Error handling mejorado
 ini_set('display_errors', 1);
@@ -40,17 +40,36 @@ try {
     die("Error de conexión a base de datos: " . $e->getMessage());
 }
 
-// Obtener historial de cambios con manejo de errores
+// ARREGLAR TABLA HISTORIAL_PRECIOS - Agregar campos faltantes
+try {
+    // Verificar si existen las columnas necesarias
+    $columnas = $pdo->query("SHOW COLUMNS FROM historial_precios")->fetchAll(PDO::FETCH_COLUMN);
+    
+    $columnas_requeridas = [
+        'tipo' => "varchar(50) NOT NULL DEFAULT 'producto'",
+        'promo_id' => "int(11) DEFAULT NULL"
+    ];
+    
+    foreach ($columnas_requeridas as $columna => $definicion) {
+        if (!in_array($columna, $columnas)) {
+            $pdo->exec("ALTER TABLE historial_precios ADD COLUMN $columna $definicion");
+        }
+    }
+} catch (Exception $e) {
+    // Si falla, continuar pero mostrar warning
+    $error_estructura = "Advertencia: No se pudieron verificar/crear las columnas necesarias";
+}
+
+// Obtener historial de cambios con manejo de errores MEJORADO
 try {
     $filtro_tipo = isset($_GET['tipo']) ? sanitize($_GET['tipo']) : '';
     $filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
     $filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
     $filtro_producto_id = isset($_GET['producto_id']) ? (int)$_GET['producto_id'] : 0;
 
-    $sql = "SELECT h.*, p.nombre as producto_nombre, pr.nombre as promo_nombre
+    $sql = "SELECT h.*, p.nombre as producto_nombre
             FROM historial_precios h
             LEFT JOIN productos p ON h.producto_id = p.id
-            LEFT JOIN promos pr ON h.promo_id = pr.id
             WHERE 1=1";
     $params = [];
 
@@ -125,6 +144,12 @@ try {
         <?php if (isset($error)): ?>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             <i class="fas fa-exclamation-circle mr-2"></i><?= htmlspecialchars($error) ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if (isset($error_estructura)): ?>
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+            <i class="fas fa-exclamation-triangle mr-2"></i><?= htmlspecialchars($error_estructura) ?>
         </div>
         <?php endif; ?>
         
@@ -220,6 +245,7 @@ try {
                                     </td>
                                     <td class="px-6 py-4">
                                         <?php
+                                        $tipo = $cambio['tipo'] ?? 'producto';
                                         $tipo_colors = [
                                             'producto' => 'bg-blue-100 text-blue-800',
                                             'promo' => 'bg-purple-100 text-purple-800',
@@ -231,18 +257,18 @@ try {
                                             'ajuste_masivo' => 'fas fa-calculator'
                                         ];
                                         ?>
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full <?= $tipo_colors[$cambio['tipo']] ?? 'bg-gray-100 text-gray-800' ?>">
-                                            <i class="<?= $tipo_icons[$cambio['tipo']] ?? 'fas fa-edit' ?> mr-1"></i>
-                                            <?= ucfirst($cambio['tipo']) ?>
+                                        <span class="px-2 py-1 text-xs font-medium rounded-full <?= $tipo_colors[$tipo] ?? 'bg-gray-100 text-gray-800' ?>">
+                                            <i class="<?= $tipo_icons[$tipo] ?? 'fas fa-edit' ?> mr-1"></i>
+                                            <?= ucfirst($tipo) ?>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 text-sm text-gray-900">
                                         <div class="font-medium">
-                                            <?= htmlspecialchars($cambio['producto_nombre'] ?: $cambio['promo_nombre'] ?: 'Item eliminado') ?>
+                                            <?= htmlspecialchars($cambio['producto_nombre'] ?: 'Item eliminado') ?>
                                         </div>
                                         <?php if ($cambio['producto_id']): ?>
                                             <div class="text-xs text-gray-500">
-                                                Producto ID: <?= $cambio['producto_id'] ?>
+                                                ID: <?= $cambio['producto_id'] ?>
                                             </div>
                                         <?php endif; ?>
                                     </td>

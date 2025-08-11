@@ -31,6 +31,14 @@ if ($_POST) {
             throw new Exception('El precio en efectivo debe ser menor al precio por transferencia (descuento)');
         }
 
+        // Si es categoría nueva
+        if ($categoria === 'nueva') {
+            $categoria = sanitize($_POST['categoria_nueva']);
+            if (empty($categoria)) {
+                throw new Exception('Debe especificar el nombre de la nueva categoría');
+            }
+        }
+
         // Verificar que no existe otro producto con el mismo nombre
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM productos WHERE nombre = ?");
         $stmt->execute([$nombre]);
@@ -58,7 +66,7 @@ if ($_POST) {
 
         $mensaje = 'Producto creado correctamente';
         
-        // Limpiar formulario
+        // Limpiar formulario DESPUÉS del éxito
         $_POST = [];
 
     } catch (Exception $e) {
@@ -76,7 +84,7 @@ $categorias_existentes = $pdo->query("
 ")->fetchAll();
 
 // Obtener último orden usado
-$ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchColumn() + 10;
+$ultimo_orden = $pdo->query("SELECT COALESCE(MAX(orden_mostrar), 0) + 10 FROM productos")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -141,7 +149,7 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                                 Nombre del Producto <span class="text-red-500">*</span>
                             </label>
                             <input type="text" name="nombre" value="<?= htmlspecialchars($_POST['nombre'] ?? '') ?>" 
-                                   required maxlength="100"
+                                   required maxlength="100" id="producto_nombre"
                                    class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
                                    placeholder="Ej: 24 Especial Verano">
                             <div class="text-xs text-gray-500 mt-1">
@@ -151,7 +159,7 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
 
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Descripción</label>
-                            <textarea name="descripcion" rows="3" maxlength="500"
+                            <textarea name="descripcion" rows="3" maxlength="500" id="producto_descripcion"
                                       class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
                                       placeholder="Describe los ingredientes, sabores o características especiales..."><?= htmlspecialchars($_POST['descripcion'] ?? '') ?></textarea>
                             <div class="text-xs text-gray-500 mt-1">
@@ -196,7 +204,7 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                             <label class="flex items-center">
                                 <input type="checkbox" name="activo" value="1" 
                                        <?= (isset($_POST['activo']) || !isset($_POST['nombre'])) ? 'checked' : '' ?>
-                                       class="mr-2">
+                                       class="mr-2" id="producto_activo">
                                 <span class="text-gray-700">Producto activo (disponible para pedidos)</span>
                             </label>
                         </div>
@@ -399,7 +407,7 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
             }
         });
 
-        // Calcular descuentos automáticamente
+        // Calcular descuentos automáticamente - FUNCIÓN CORREGIDA
         function calcularDescuentos() {
             const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
             const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
@@ -408,43 +416,74 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                 const descuentoPesos = transferencia - efectivo;
                 const descuentoPorcentaje = (descuentoPesos / transferencia * 100).toFixed(1);
                 
-                document.getElementById('descuento_pesos').textContent = ' + descuentoPesos.toLocaleString();
+                document.getElementById('descuento_pesos').textContent = '$' + descuentoPesos.toLocaleString();
                 document.getElementById('descuento_porcentaje').textContent = descuentoPorcentaje + '%';
                 
                 // Actualizar preview
                 document.getElementById('preview_precios').innerHTML = `
-                    <div class="line-through text-gray-500">Precio normal: ${transferencia.toLocaleString()}</div>
-                    <div class="text-green-600 font-bold">Efectivo: ${efectivo.toLocaleString()}</div>
-                    <div class="text-xs text-green-600">¡Ahorrás ${descuentoPesos.toLocaleString()}!</div>
+                    <div class="line-through text-gray-500">Precio normal: $${transferencia.toLocaleString()}</div>
+                    <div class="text-green-600 font-bold">Efectivo: $${efectivo.toLocaleString()}</div>
+                    <div class="text-xs text-green-600">¡Ahorrás $${descuentoPesos.toLocaleString()}!</div>
+                `;
+            } else {
+                document.getElementById('descuento_pesos').textContent = '$0';
+                document.getElementById('descuento_porcentaje').textContent = '0%';
+                document.getElementById('preview_precios').innerHTML = `
+                    <div class="line-through text-gray-500">Precio normal: $0</div>
+                    <div class="text-green-600 font-bold">Efectivo: $0</div>
+                    <div class="text-xs text-green-600">¡Ahorrás $0!</div>
                 `;
             }
         }
 
-        // Aplicar descuentos comunes
+        // Aplicar descuentos comunes - FUNCIÓN CORREGIDA
         function aplicarDescuentoComun(porcentaje) {
             const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
             if (transferencia > 0) {
                 const efectivo = Math.round(transferencia * (1 - porcentaje / 100) / 100) * 100;
                 document.getElementById('precio_efectivo').value = efectivo;
                 calcularDescuentos();
+                previsualizarProducto();
+            } else {
+                alert('Ingrese primero el precio de transferencia');
+                document.getElementById('precio_transferencia').focus();
             }
         }
 
         // Event listeners para precios
-        document.getElementById('precio_efectivo').addEventListener('input', calcularDescuentos);
-        document.getElementById('precio_transferencia').addEventListener('input', calcularDescuentos);
+        document.getElementById('precio_efectivo').addEventListener('input', function() {
+            calcularDescuentos();
+            previsualizarProducto();
+        });
+        
+        document.getElementById('precio_transferencia').addEventListener('input', function() {
+            calcularDescuentos();
+            previsualizarProducto();
+        });
 
-        // Previsualizar producto
+        // Previsualizar producto - FUNCIÓN CORREGIDA
         function previsualizarProducto() {
-            const nombre = document.querySelector('input[name="nombre"]').value;
-            const descripcion = document.querySelector('textarea[name="descripcion"]').value;
-            const categoria = document.querySelector('select[name="categoria"]').value;
+            const nombre = document.getElementById('producto_nombre').value;
+            const descripcion = document.getElementById('producto_descripcion').value;
+            const categoriaSelect = document.getElementById('categoria_select');
+            const categoriaNueva = document.getElementById('categoria_nueva');
+            
+            let categoria = categoriaSelect.value;
+            if (categoria === 'nueva' && categoriaNueva.value) {
+                categoria = categoriaNueva.value;
+            }
+            
             const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
             const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
-            const activo = document.querySelector('input[name="activo"]').checked;
+            const activo = document.getElementById('producto_activo').checked;
 
             if (!nombre) {
-                alert('Ingrese un nombre para el producto');
+                document.getElementById('producto_preview').innerHTML = `
+                    <div class="text-center text-gray-400">
+                        <i class="fas fa-image text-4xl mb-2"></i>
+                        <div class="text-sm">Ingresa un nombre para ver la vista previa</div>
+                    </div>
+                `;
                 return;
             }
 
@@ -476,13 +515,13 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                     <div class="flex justify-between items-center">
                         <div>
                             ${transferencia > efectivo && efectivo > 0 ? 
-                                `<div class="text-sm text-gray-400 line-through">${transferencia.toLocaleString()}</div>` : ''
+                                `<div class="text-sm text-gray-400 line-through">$${transferencia.toLocaleString()}</div>` : ''
                             }
                             <div class="text-lg font-bold text-green-600">
-                                Efectivo: ${efectivo.toLocaleString()}
+                                Efectivo: $${efectivo.toLocaleString()}
                             </div>
                             <div class="text-sm text-gray-600">
-                                Transfer: ${transferencia.toLocaleString()}
+                                Transfer: $${transferencia.toLocaleString()}
                             </div>
                         </div>
                         <div class="${estadoColor} font-medium text-sm">
@@ -495,8 +534,8 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
 
         // Copiar datos de producto existente
         function copiarProducto(nombre, categoria, efectivo, transferencia) {
-            document.querySelector('input[name="nombre"]').value = nombre;
-            document.querySelector('select[name="categoria"]').value = categoria;
+            document.getElementById('producto_nombre').value = nombre;
+            document.getElementById('categoria_select').value = categoria;
             document.getElementById('precio_efectivo').value = efectivo;
             document.getElementById('precio_transferencia').value = transferencia;
             
@@ -506,18 +545,28 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
 
         // Auto-previsualizar cuando cambian los campos
         document.addEventListener('DOMContentLoaded', function() {
-            const campos = ['input[name="nombre"]', 'textarea[name="descripcion"]', 'select[name="categoria"]', 'input[name="activo"]'];
-            campos.forEach(selector => {
-                const elemento = document.querySelector(selector);
+            const campos = [
+                'producto_nombre', 
+                'producto_descripcion', 
+                'categoria_select', 
+                'producto_activo'
+            ];
+            
+            campos.forEach(id => {
+                const elemento = document.getElementById(id);
                 if (elemento) {
                     elemento.addEventListener('input', previsualizarProducto);
                     elemento.addEventListener('change', previsualizarProducto);
                 }
             });
             
+            // Event listener especial para categoría nueva
+            document.getElementById('categoria_nueva').addEventListener('input', previsualizarProducto);
+            
             // Previsualizar inicial si hay datos
-            if (document.querySelector('input[name="nombre"]').value) {
+            if (document.getElementById('producto_nombre').value) {
                 previsualizarProducto();
+                calcularDescuentos();
             }
         });
 
@@ -525,6 +574,20 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
         document.getElementById('productoForm').addEventListener('submit', function(e) {
             const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
             const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
+            const nombre = document.getElementById('producto_nombre').value.trim();
+            
+            if (!nombre) {
+                e.preventDefault();
+                alert('El nombre del producto es obligatorio.');
+                document.getElementById('producto_nombre').focus();
+                return;
+            }
+            
+            if (efectivo <= 0 || transferencia <= 0) {
+                e.preventDefault();
+                alert('Los precios deben ser mayores a 0.');
+                return;
+            }
             
             if (efectivo >= transferencia) {
                 e.preventDefault();
@@ -532,7 +595,7 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                 return;
             }
 
-            const categoria = document.querySelector('select[name="categoria"]').value;
+            const categoria = document.getElementById('categoria_select').value;
             const categoriaNueva = document.getElementById('categoria_nueva').value;
             
             if (categoria === 'nueva' && !categoriaNueva.trim()) {
@@ -542,9 +605,11 @@ $ultimo_orden = $pdo->query("SELECT MAX(orden_mostrar) FROM productos")->fetchCo
                 return;
             }
 
-            // Si es categoría nueva, usar ese valor
-            if (categoria === 'nueva' && categoriaNueva.trim()) {
-                document.querySelector('select[name="categoria"]').value = categoriaNueva.trim();
+            // Confirmación final
+            const confirmacion = confirm(`¿Crear el producto "${nombre}"?\n\nEfectivo: ${efectivo.toLocaleString()}\nTransferencia: ${transferencia.toLocaleString()}`);
+            if (!confirmacion) {
+                e.preventDefault();
+                return;
             }
         });
     </script>
