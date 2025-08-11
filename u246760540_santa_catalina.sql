@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 10-08-2025 a las 23:23:42
+-- Tiempo de generación: 11-08-2025 a las 00:51:49
 -- Versión del servidor: 10.11.10-MariaDB-log
 -- Versión de PHP: 7.2.34
 
@@ -60,6 +60,24 @@ INSERT INTO `clientes_fijos` (`id`, `nombre`, `apellido`, `telefono`, `direccion
 -- --------------------------------------------------------
 
 --
+-- Estructura de tabla para la tabla `historial_precios`
+--
+
+CREATE TABLE `historial_precios` (
+  `id` int(11) NOT NULL,
+  `producto_id` int(11) DEFAULT NULL,
+  `precio_anterior_efectivo` decimal(10,2) DEFAULT NULL,
+  `precio_anterior_transferencia` decimal(10,2) DEFAULT NULL,
+  `precio_nuevo_efectivo` decimal(10,2) DEFAULT NULL,
+  `precio_nuevo_transferencia` decimal(10,2) DEFAULT NULL,
+  `motivo` varchar(255) DEFAULT NULL,
+  `usuario` varchar(100) DEFAULT NULL,
+  `fecha_cambio` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Estructura de tabla para la tabla `pedidos`
 --
 
@@ -112,7 +130,10 @@ INSERT INTO `pedidos` (`id`, `nombre`, `apellido`, `telefono`, `direccion`, `pro
 (17, 'Fernando', 'Ruiz', '+5492214567801', 'Calle 25 N° 345, La Plata', '48 Surtidos Clásicos', 48, 20000.00, 'Efectivo', 'Delivery', 'Entregado', 'Sin paquete, descuento efectivo', NULL, 1, '2025-08-05 17:28:10', '2025-08-05 17:28:10', NULL, NULL, NULL, '2025-08-08 17:28:10', 'normal', NULL, 0),
 (18, 'Agustina', 'Torres', '+5492214567802', 'Av. 32 N° 912, La Plata', '48 Surtidos Especiales', 48, 22000.00, '', 'Delivery', 'Entregado', 'Para cumpleaños, sin paquete', NULL, 1, '2025-08-01 17:28:10', '2025-08-01 17:28:10', NULL, NULL, NULL, '2025-08-08 17:28:10', 'normal', NULL, 0),
 (19, 'Sebastián', 'Díaz', '+5492214567803', '', '24 Surtidos Premium (Palmito, Durazno, Morrón) + Paquete', 24, 22000.00, 'Efectivo', 'Retira', 'Entregado', 'Descuento efectivo', NULL, 1, '2025-08-01 17:28:10', '2025-08-01 17:28:10', NULL, NULL, NULL, '2025-08-08 17:28:10', 'normal', NULL, 0),
-(20, 'Patricia', 'Mendoza', '+5492214567804', 'Calle 8 N° 567, La Plata', '48 Surtidos Premium (Anana, Atún, Jamón Crudo, Panceta, Pollo, Salame) + Paquete', 48, 44000.00, 'Transferencia', 'Delivery', 'Entregado', 'Evento familiar, 6 sabores premium', NULL, 1, '2025-07-24 17:28:10', '2025-07-24 17:28:10', NULL, NULL, NULL, '2025-08-08 17:28:10', 'normal', NULL, 0);
+(20, 'Patricia', 'Mendoza', '+5492214567804', 'Calle 8 N° 567, La Plata', '48 Surtidos Premium (Anana, Atún, Jamón Crudo, Panceta, Pollo, Salame) + Paquete', 48, 44000.00, 'Transferencia', 'Delivery', 'Entregado', 'Evento familiar, 6 sabores premium', NULL, 1, '2025-07-24 17:28:10', '2025-07-24 17:28:10', NULL, NULL, NULL, '2025-08-08 17:28:10', 'normal', NULL, 0),
+(21, 'Claudia', 'Martinez', '11-8765-4321', 'Calle 12 de Octubre 987, Adrogué', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Pendiente', 'Familia de 6 personas. Pide 48 surtidos clásicos cada 15 días. Mezcla: mitad jamón y queso, mitad con huevo y lechuga. Efectivo. Sábados a la mañana.', 5, 0, '2025-08-10 23:39:02', '2025-08-10 23:39:02', '2025-08-10', '00:00:00', '', '2025-08-10 23:39:02', 'normal', NULL, 0),
+(22, 'a', 'fsdf', 'df', 'sdf', '24 Surtidos', 24, 12000.00, 'Transferencia', 'Retira', 'Pendiente', '', NULL, 0, '2025-08-11 00:19:27', '2025-08-11 00:19:27', '2025-08-11', '00:00:00', '', '2025-08-11 00:19:27', 'normal', NULL, 0),
+(23, 'Clínica Médica', 'San Rafael', '11-4000-3333', 'Alsina 1800, Temperley', '24 Surtidos', 24, 11000.00, 'Efectivo', 'Retira', 'Pendiente', 'CLÍNICA - Turnos rotativos. Pedidos variables: martes y jueves 48 premium (médicos), sábados 24 clásicos (enfermería). Coordinan con Dra. Pérez. Transfer.', 10, 0, '2025-08-11 00:19:50', '2025-08-11 00:19:50', '2025-08-11', '00:00:00', '', '2025-08-11 00:19:50', 'normal', NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -157,13 +178,46 @@ CREATE TABLE `productos` (
 --
 
 INSERT INTO `productos` (`id`, `nombre`, `precio_efectivo`, `precio_transferencia`, `activo`, `categoria`, `descripcion`, `imagen_url`, `orden_mostrar`, `updated_by`, `created_at`, `updated_at`) VALUES
-(1, '24 Jamón y Queso', 11000.00, 12000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(2, '24 Surtidos', 11000.00, 12000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(3, '24 Surtidos Premium', 21000.00, 22000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(4, '48 Jamón y Queso', 22000.00, 24000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(5, '48 Surtidos Clásicos', 20000.00, 22000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(6, '48 Surtidos Especiales', 22000.00, 24000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43'),
-(7, '48 Surtidos Premium', 42000.00, 44000.00, 1, 'Standard', NULL, NULL, 0, NULL, '2025-08-10 23:20:43', '2025-08-10 23:20:43');
+(1, '24 Jamón y Queso', 11000.00, 12000.00, 1, 'Clásicos', 'Clásicos sándwiches de jamón y queso. Perfectos para cualquier ocasión.', NULL, 1, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(2, '24 Surtidos', 11000.00, 12000.00, 1, 'Surtidos', 'Variedad de sabores: jamón y queso, lechuga, tomate, huevo, choclo, aceitunas.', NULL, 1, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(3, '24 Surtidos Premium', 21000.00, 22000.00, 1, 'Premium', 'Sabores gourmet: ananá, atún, berenjena, durazno, jamón crudo, morrón, palmito, panceta, pollo, roquefort, salame.', NULL, 1, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(4, '48 Jamón y Queso', 22000.00, 24000.00, 1, 'Clásicos', 'Pack grande de clásicos jamón y queso. Ideal para eventos y reuniones.', NULL, 2, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(5, '48 Surtidos Clásicos', 20000.00, 22000.00, 1, 'Surtidos', 'Variedad clásica en pack grande: jamón y queso, lechuga, tomate, huevo.', NULL, 2, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(6, '48 Surtidos Especiales', 22000.00, 24000.00, 1, 'Surtidos', 'Pack grande con todos los sabores clásicos: incluye choclo y aceitunas.', NULL, 2, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22'),
+(7, '48 Surtidos Premium', 42000.00, 44000.00, 1, 'Premium', 'Pack grande gourmet con 6 sabores premium a elección.', NULL, 2, NULL, '2025-08-10 23:20:43', '2025-08-10 23:26:22');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `promos`
+--
+
+CREATE TABLE `promos` (
+  `id` int(11) NOT NULL,
+  `nombre` varchar(100) NOT NULL,
+  `descripcion` text DEFAULT NULL,
+  `precio_efectivo` decimal(10,2) DEFAULT NULL,
+  `precio_transferencia` decimal(10,2) DEFAULT NULL,
+  `fecha_inicio` date DEFAULT NULL,
+  `fecha_fin` date DEFAULT NULL,
+  `dias_semana` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`dias_semana`)),
+  `condiciones` text DEFAULT NULL,
+  `activa` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `hora_inicio` time DEFAULT NULL,
+  `hora_fin` time DEFAULT NULL,
+  `orden_mostrar` int(11) DEFAULT 100,
+  `created_by` varchar(100) DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `promos`
+--
+
+INSERT INTO `promos` (`id`, `nombre`, `descripcion`, `precio_efectivo`, `precio_transferencia`, `fecha_inicio`, `fecha_fin`, `dias_semana`, `condiciones`, `activa`, `created_at`, `hora_inicio`, `hora_fin`, `orden_mostrar`, `created_by`, `updated_at`) VALUES
+(1, 'Promo Fin de Semana', '24 Surtidos Premium a precio especial', 19000.00, 20000.00, NULL, NULL, NULL, NULL, 1, '2025-08-11 00:25:58', NULL, NULL, 100, NULL, '2025-08-11 00:25:58'),
+(2, 'Combo Oficina', '48 Jamón y Queso + 24 Surtidos', 32000.00, 34000.00, NULL, NULL, NULL, NULL, 1, '2025-08-11 00:25:58', NULL, NULL, 100, NULL, '2025-08-11 00:25:58');
 
 -- --------------------------------------------------------
 
@@ -199,6 +253,12 @@ ALTER TABLE `clientes_fijos`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indices de la tabla `historial_precios`
+--
+ALTER TABLE `historial_precios`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indices de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
@@ -219,6 +279,12 @@ ALTER TABLE `productos`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indices de la tabla `promos`
+--
+ALTER TABLE `promos`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indices de la tabla `usuarios`
 --
 ALTER TABLE `usuarios`
@@ -236,10 +302,16 @@ ALTER TABLE `clientes_fijos`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
+-- AUTO_INCREMENT de la tabla `historial_precios`
+--
+ALTER TABLE `historial_precios`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT de la tabla `pedidos`
 --
 ALTER TABLE `pedidos`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT de la tabla `pedido_detalles`
@@ -252,6 +324,12 @@ ALTER TABLE `pedido_detalles`
 --
 ALTER TABLE `productos`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+
+--
+-- AUTO_INCREMENT de la tabla `promos`
+--
+ALTER TABLE `promos`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios`
