@@ -10,7 +10,7 @@ $stats = [
     'pedidos_pendientes' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE estado = 'Pendiente'")->fetchColumn(),
     'clientes_fijos' => $pdo->query("SELECT COUNT(*) FROM clientes_fijos WHERE activo = 1")->fetchColumn(),
     'ventas_hoy' => $pdo->query("SELECT COALESCE(SUM(precio), 0) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn(),
-    // NUEVAS ESTADÍSTICAS PARA PRODUCTOS
+    // ESTADÍSTICAS PARA PRODUCTOS
     'productos_activos' => $pdo->query("SELECT COUNT(*) FROM productos WHERE activo = 1")->fetchColumn(),
     'promos_activas' => 0 // Default por si no existe la tabla aún
 ];
@@ -121,8 +121,8 @@ $ultimos_pedidos = $pdo->query("
                 <p class="text-gray-600">Gestionar clientes</p>
             </a>
             
-            <!-- NUEVO MÓDULO PRODUCTOS -->
-            <a href="modules/productos/" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition block text-center group">
+            <!-- MÓDULO PRODUCTOS CORREGIDO -->
+            <a href="modules/productos/index.php" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition block text-center group">
                 <i class="fas fa-boxes text-3xl text-purple-500 mb-3 group-hover:scale-110 transition-transform"></i>
                 <h3 class="text-lg font-semibold text-gray-800">Productos</h3>
                 <p class="text-gray-600">Precios y promos</p>
@@ -141,12 +141,13 @@ $ultimos_pedidos = $pdo->query("
             </a>
         </div>
 
-        <!-- NUEVA SECCIÓN: Accesos Rápidos a Productos -->
+        <!-- SECCIÓN DE GESTIÓN DE PRODUCTOS CORREGIDA -->
         <div class="bg-white rounded-lg shadow mb-8 p-6">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">
                 <i class="fas fa-boxes text-purple-500 mr-2"></i>Gestión de Productos
             </h2>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <!-- ENLACES CORREGIDOS -->
                 <a href="modules/productos/crear_producto.php" class="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg text-center transition">
                     <i class="fas fa-plus text-purple-500 text-xl mb-2"></i>
                     <div class="text-sm font-medium text-purple-700">Nuevo Producto</div>
@@ -238,7 +239,7 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
 
-        <!-- NUEVO: Footer con información del sistema -->
+        <!-- Footer con información del sistema -->
         <div class="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -246,8 +247,12 @@ $ultimos_pedidos = $pdo->query("
                     <p class="text-sm text-gray-600">Ahora podés gestionar productos, precios y promos desde el panel de administración.</p>
                 </div>
                 <div class="flex space-x-2">
-                    <a href="modules/productos/" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm">
+                    <a href="modules/productos/index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm">
                         <i class="fas fa-rocket mr-1"></i>Explorar Productos
+                    </a>
+                    <!-- BOTÓN DE TEST PARA VERIFICAR INSTALACIÓN -->
+                    <a href="modules/productos/test.php" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-wrench mr-1"></i>Test Módulo
                     </a>
                 </div>
             </div>
@@ -257,7 +262,7 @@ $ultimos_pedidos = $pdo->query("
     <script>
         // Animación sutil para las cards nuevas
         document.addEventListener('DOMContentLoaded', function() {
-            const productCard = document.querySelector('a[href="modules/productos/"]');
+            const productCard = document.querySelector('a[href="modules/productos/index.php"]');
             if (productCard) {
                 // Efecto de "nueva funcionalidad"
                 productCard.classList.add('ring-2', 'ring-purple-200', 'ring-opacity-50');
@@ -289,6 +294,17 @@ $ultimos_pedidos = $pdo->query("
                     }, 4000);
                 }, 2000);
             }
+
+            // Verificar si el módulo de productos está funcionando
+            setTimeout(() => {
+                console.log('🔍 Verificando módulo de productos...');
+                console.log('📊 Productos activos:', <?= $stats['productos_activos'] ?>);
+                console.log('🏷️ Promos activas:', <?= $stats['promos_activas'] ?>);
+                
+                if (<?= $stats['productos_activos'] ?> === 0) {
+                    console.warn('⚠️ No hay productos activos - considera crear algunos productos');
+                }
+            }, 1000);
         });
     </script>
 </body>

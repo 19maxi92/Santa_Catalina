@@ -2,11 +2,11 @@
 // Configuración de base de datos para Hostinger
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'u246760540_santa_catalina'); 
-define('DB_USER', 'u246760540_admin_sc'); // ← Este es el usuario correcto
-define('DB_PASS', "Sangu2025!"); // ← Con comillas dobles
+define('DB_USER', 'u246760540_admin_sc');
+define('DB_PASS', "Sangu2025!");
 
 // Configuración general
-define('APP_NAME', 'Santa Catalina Admin');
+define('APP_NAME', 'Santa Catalina');
 define('APP_VERSION', '1.0');
 
 // Conexión a la base de datos
@@ -39,7 +39,9 @@ function formatPrice($price) {
 
 // Verificar login ADMIN
 function isLoggedIn() {
-    session_start();
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
     return isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true;
 }
 
@@ -53,7 +55,9 @@ function requireLogin() {
 
 // Verificar login EMPLEADO
 function isEmpleadoLoggedIn() {
-    session_start();
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
     return isset($_SESSION['empleado_logged']) && $_SESSION['empleado_logged'] === true;
 }
 
