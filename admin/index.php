@@ -9,8 +9,24 @@ $stats = [
     'pedidos_hoy' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn(),
     'pedidos_pendientes' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE estado = 'Pendiente'")->fetchColumn(),
     'clientes_fijos' => $pdo->query("SELECT COUNT(*) FROM clientes_fijos WHERE activo = 1")->fetchColumn(),
-    'ventas_hoy' => $pdo->query("SELECT COALESCE(SUM(precio), 0) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn()
+    'ventas_hoy' => $pdo->query("SELECT COALESCE(SUM(precio), 0) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn(),
+    // NUEVAS ESTADÍSTICAS PARA PRODUCTOS
+    'productos_activos' => $pdo->query("SELECT COUNT(*) FROM productos WHERE activo = 1")->fetchColumn(),
+    'promos_activas' => 0 // Default por si no existe la tabla aún
 ];
+
+// Verificar si existe tabla promos (para compatibilidad)
+try {
+    $stats['promos_activas'] = $pdo->query("
+        SELECT COUNT(*) FROM promos 
+        WHERE activa = 1 
+        AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio)
+        AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)
+    ")->fetchColumn();
+} catch (Exception $e) {
+    // Tabla promos no existe aún
+    $stats['promos_activas'] = 0;
+}
 
 // Últimos pedidos
 $ultimos_pedidos = $pdo->query("
@@ -92,7 +108,7 @@ $ultimos_pedidos = $pdo->query("
         </div>
 
         <!-- Quick Actions -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <a href="modules/pedidos/crear_pedido.php" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition block text-center">
                 <i class="fas fa-plus-circle text-3xl text-blue-500 mb-3"></i>
                 <h3 class="text-lg font-semibold text-gray-800">Nuevo Pedido</h3>
@@ -105,11 +121,56 @@ $ultimos_pedidos = $pdo->query("
                 <p class="text-gray-600">Gestionar clientes</p>
             </a>
             
+            <!-- NUEVO MÓDULO PRODUCTOS -->
+            <a href="modules/productos/" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition block text-center group">
+                <i class="fas fa-boxes text-3xl text-purple-500 mb-3 group-hover:scale-110 transition-transform"></i>
+                <h3 class="text-lg font-semibold text-gray-800">Productos</h3>
+                <p class="text-gray-600">Precios y promos</p>
+                <div class="mt-2 text-xs text-purple-600">
+                    <?= $stats['productos_activos'] ?> productos
+                    <?php if ($stats['promos_activas'] > 0): ?>
+                        | <?= $stats['promos_activas'] ?> promos activas
+                    <?php endif; ?>
+                </div>
+            </a>
+            
             <a href="modules/pedidos/ver_pedidos.php" class="bg-white p-6 rounded-lg shadow hover:shadow-lg transition block text-center">
                 <i class="fas fa-list text-3xl text-orange-500 mb-3"></i>
                 <h3 class="text-lg font-semibold text-gray-800">Ver Pedidos</h3>
                 <p class="text-gray-600">Listado completo</p>
             </a>
+        </div>
+
+        <!-- NUEVA SECCIÓN: Accesos Rápidos a Productos -->
+        <div class="bg-white rounded-lg shadow mb-8 p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-boxes text-purple-500 mr-2"></i>Gestión de Productos
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <a href="modules/productos/crear_producto.php" class="bg-purple-50 hover:bg-purple-100 p-4 rounded-lg text-center transition">
+                    <i class="fas fa-plus text-purple-500 text-xl mb-2"></i>
+                    <div class="text-sm font-medium text-purple-700">Nuevo Producto</div>
+                </a>
+                
+                <a href="modules/productos/promos.php" class="bg-orange-50 hover:bg-orange-100 p-4 rounded-lg text-center transition">
+                    <i class="fas fa-tags text-orange-500 text-xl mb-2"></i>
+                    <div class="text-sm font-medium text-orange-700">Gestionar Promos</div>
+                    <?php if ($stats['promos_activas'] > 0): ?>
+                        <div class="text-xs text-orange-600"><?= $stats['promos_activas'] ?> activas</div>
+                    <?php endif; ?>
+                </a>
+                
+                <a href="modules/productos/index.php?estado=1" class="bg-green-50 hover:bg-green-100 p-4 rounded-lg text-center transition">
+                    <i class="fas fa-check-circle text-green-500 text-xl mb-2"></i>
+                    <div class="text-sm font-medium text-green-700">Productos Activos</div>
+                    <div class="text-xs text-green-600"><?= $stats['productos_activos'] ?> productos</div>
+                </a>
+                
+                <a href="modules/productos/historial.php" class="bg-blue-50 hover:bg-blue-100 p-4 rounded-lg text-center transition">
+                    <i class="fas fa-history text-blue-500 text-xl mb-2"></i>
+                    <div class="text-sm font-medium text-blue-700">Historial Precios</div>
+                </a>
+            </div>
         </div>
 
         <!-- Recent Orders -->
@@ -176,6 +237,59 @@ $ultimos_pedidos = $pdo->query("
                 </table>
             </div>
         </div>
+
+        <!-- NUEVO: Footer con información del sistema -->
+        <div class="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-gray-800">¡Sistema actualizado!</h3>
+                    <p class="text-sm text-gray-600">Ahora podés gestionar productos, precios y promos desde el panel de administración.</p>
+                </div>
+                <div class="flex space-x-2">
+                    <a href="modules/productos/" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-rocket mr-1"></i>Explorar Productos
+                    </a>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <script>
+        // Animación sutil para las cards nuevas
+        document.addEventListener('DOMContentLoaded', function() {
+            const productCard = document.querySelector('a[href="modules/productos/"]');
+            if (productCard) {
+                // Efecto de "nueva funcionalidad"
+                productCard.classList.add('ring-2', 'ring-purple-200', 'ring-opacity-50');
+                
+                // Animación de pulso sutil
+                setInterval(() => {
+                    productCard.classList.add('ring-purple-300');
+                    setTimeout(() => {
+                        productCard.classList.remove('ring-purple-300');
+                    }, 1000);
+                }, 5000);
+            }
+
+            // Mostrar notificación si hay promos activas
+            const promosActivas = <?= $stats['promos_activas'] ?>;
+            if (promosActivas > 0) {
+                setTimeout(() => {
+                    const notification = document.createElement('div');
+                    notification.className = 'fixed top-4 right-4 bg-orange-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                    notification.innerHTML = `
+                        <i class="fas fa-tags mr-2"></i>
+                        ${promosActivas} promo${promosActivas > 1 ? 's' : ''} activa${promosActivas > 1 ? 's' : ''}
+                    `;
+                    document.body.appendChild(notification);
+                    
+                    // Auto-remove después de 4 segundos
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 4000);
+                }, 2000);
+            }
+        });
+    </script>
 </body>
 </html>

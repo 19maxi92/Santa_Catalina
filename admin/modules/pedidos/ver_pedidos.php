@@ -4,6 +4,12 @@ requireLogin();
 
 $pdo = getConnection();
 
+// NUEVA FUNCIONALIDAD: Exportar a Excel
+if (isset($_GET['exportar']) && $_GET['exportar'] === 'excel') {
+    exportarAExcel($pdo);
+    exit;
+}
+
 // Manejar acciones (cambiar estado, eliminar, impresión)
 $mensaje = '';
 $error = '';
@@ -65,12 +71,19 @@ if ($_POST) {
     }
 }
 
-// Filtros
+// FILTROS MEJORADOS - NUEVO: Rango de fechas
 $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
-$filtro_fecha = isset($_GET['fecha']) ? sanitize($_GET['fecha']) : '';
+$filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
+$filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
 $filtro_modalidad = isset($_GET['modalidad']) ? sanitize($_GET['modalidad']) : '';
 $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
 $orden = isset($_GET['orden']) ? sanitize($_GET['orden']) : 'created_at DESC';
+
+// Si no hay rango específico, mostrar solo hoy por defecto
+if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad) {
+    $filtro_fecha_desde = date('Y-m-d');
+    $filtro_fecha_hasta = date('Y-m-d');
+}
 
 // Construir consulta - INCLUIR TODOS LOS CAMPOS NECESARIOS
 $sql = "SELECT p.*, cf.nombre as cliente_nombre, cf.apellido as cliente_apellido 
@@ -84,9 +97,17 @@ if ($filtro_estado) {
     $params[] = $filtro_estado;
 }
 
-if ($filtro_fecha) {
-    $sql .= " AND DATE(p.created_at) = ?";
-    $params[] = $filtro_fecha;
+// NUEVO: Filtro por rango de fechas
+if ($filtro_fecha_desde && $filtro_fecha_hasta) {
+    $sql .= " AND DATE(p.created_at) BETWEEN ? AND ?";
+    $params[] = $filtro_fecha_desde;
+    $params[] = $filtro_fecha_hasta;
+} elseif ($filtro_fecha_desde) {
+    $sql .= " AND DATE(p.created_at) >= ?";
+    $params[] = $filtro_fecha_desde;
+} elseif ($filtro_fecha_hasta) {
+    $sql .= " AND DATE(p.created_at) <= ?";
+    $params[] = $filtro_fecha_hasta;
 }
 
 if ($filtro_modalidad) {
@@ -120,7 +141,7 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $pedidos = $stmt->fetchAll();
 
-// Estadísticas rápidas
+// Estadísticas para el rango seleccionado
 $stats_sql = "SELECT 
     COUNT(*) as total,
     SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes,
@@ -129,15 +150,145 @@ $stats_sql = "SELECT
     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
     SUM(CASE WHEN impreso = 1 THEN 1 ELSE 0 END) as impresos,
     SUM(precio) as total_ventas
-    FROM pedidos";
+    FROM pedidos WHERE 1=1";
 
-if ($filtro_fecha) {
-    $stats_sql .= " WHERE DATE(created_at) = '$filtro_fecha'";
+$stats_params = [];
+if ($filtro_fecha_desde && $filtro_fecha_hasta) {
+    $stats_sql .= " AND DATE(created_at) BETWEEN ? AND ?";
+    $stats_params[] = $filtro_fecha_desde;
+    $stats_params[] = $filtro_fecha_hasta;
+} elseif ($filtro_fecha_desde) {
+    $stats_sql .= " AND DATE(created_at) >= ?";
+    $stats_params[] = $filtro_fecha_desde;
+} elseif ($filtro_fecha_hasta) {
+    $stats_sql .= " AND DATE(created_at) <= ?";
+    $stats_params[] = $filtro_fecha_hasta;
 } else {
-    $stats_sql .= " WHERE DATE(created_at) = CURDATE()";
+    $stats_sql .= " AND DATE(created_at) = CURDATE()";
 }
 
-$stats = $pdo->query($stats_sql)->fetch();
+$stats_stmt = $pdo->prepare($stats_sql);
+$stats_stmt->execute($stats_params);
+$stats = $stats_stmt->fetch();
+
+// FUNCIÓN PARA EXPORTAR A EXCEL
+function exportarAExcel($pdo) {
+    // Usar los mismos filtros que la consulta principal
+    $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
+    $filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
+    $filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
+    $filtro_modalidad = isset($_GET['modalidad']) ? sanitize($_GET['modalidad']) : '';
+    $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
+    
+    // Si no hay rango específico, mostrar solo hoy
+    if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad) {
+        $filtro_fecha_desde = date('Y-m-d');
+        $filtro_fecha_hasta = date('Y-m-d');
+    }
+    
+    // Construir la misma consulta
+    $sql = "SELECT p.*, cf.nombre as cliente_nombre, cf.apellido as cliente_apellido 
+            FROM pedidos p 
+            LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
+            WHERE 1=1";
+    $params = [];
+    
+    if ($filtro_estado) {
+        $sql .= " AND p.estado = ?";
+        $params[] = $filtro_estado;
+    }
+    
+    if ($filtro_fecha_desde && $filtro_fecha_hasta) {
+        $sql .= " AND DATE(p.created_at) BETWEEN ? AND ?";
+        $params[] = $filtro_fecha_desde;
+        $params[] = $filtro_fecha_hasta;
+    } elseif ($filtro_fecha_desde) {
+        $sql .= " AND DATE(p.created_at) >= ?";
+        $params[] = $filtro_fecha_desde;
+    } elseif ($filtro_fecha_hasta) {
+        $sql .= " AND DATE(p.created_at) <= ?";
+        $params[] = $filtro_fecha_hasta;
+    }
+    
+    if ($filtro_modalidad) {
+        $sql .= " AND p.modalidad = ?";
+        $params[] = $filtro_modalidad;
+    }
+    
+    if ($buscar) {
+        $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ?)";
+        $buscarParam = "%$buscar%";
+        $params = array_merge($params, [$buscarParam, $buscarParam, $buscarParam, $buscarParam]);
+    }
+    
+    $sql .= " ORDER BY p.created_at DESC";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $pedidos = $stmt->fetchAll();
+    
+    // Configurar headers para descarga
+    $filename = 'Pedidos_Santa_Catalina_' . date('Y-m-d_H-i-s') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=' . $filename);
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
+    // Crear el archivo CSV
+    $output = fopen('php://output', 'w');
+    
+    // BOM para UTF-8 (para que Excel muestre bien los acentos)
+    fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
+    
+    // Encabezados
+    fputcsv($output, [
+        'ID Pedido',
+        'Fecha y Hora',
+        'Cliente',
+        'Teléfono',
+        'Dirección',
+        'Producto',
+        'Cantidad',
+        'Precio',
+        'Forma de Pago',
+        'Modalidad',
+        'Estado',
+        'Observaciones',
+        'Cliente Fijo',
+        'Impreso',
+        'Fecha Entrega',
+        'Hora Entrega',
+        'Notas Horario'
+    ], ';');
+    
+    // Datos
+    foreach ($pedidos as $pedido) {
+        $cliente_fijo = $pedido['cliente_nombre'] ? 'Sí (' . $pedido['cliente_nombre'] . ' ' . $pedido['cliente_apellido'] . ')' : 'No';
+        $impreso = $pedido['impreso'] ? 'Sí' : 'No';
+        
+        fputcsv($output, [
+            $pedido['id'],
+            date('d/m/Y H:i', strtotime($pedido['created_at'])),
+            $pedido['nombre'] . ' ' . $pedido['apellido'],
+            $pedido['telefono'],
+            $pedido['direccion'] ?: 'Sin dirección',
+            $pedido['producto'],
+            $pedido['cantidad'],
+            number_format($pedido['precio'], 0, ',', '.'),
+            $pedido['forma_pago'],
+            $pedido['modalidad'],
+            $pedido['estado'],
+            $pedido['observaciones'] ?: '',
+            $cliente_fijo,
+            $impreso,
+            $pedido['fecha_entrega'] ?: '',
+            $pedido['hora_entrega'] ?: '',
+            $pedido['notas_horario'] ?: ''
+        ], ';');
+    }
+    
+    fclose($output);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -182,6 +333,36 @@ $stats = $pdo->query($stats_sql)->fetch();
         </div>
         <?php endif; ?>
 
+        <!-- NUEVA SECCIÓN: Info del rango seleccionado -->
+        <?php if ($filtro_fecha_desde || $filtro_fecha_hasta): ?>
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="font-semibold text-blue-800">
+                        <i class="fas fa-calendar-alt mr-2"></i>Período seleccionado:
+                    </h3>
+                    <p class="text-blue-700">
+                        <?php if ($filtro_fecha_desde && $filtro_fecha_hasta): ?>
+                            <?php if ($filtro_fecha_desde === $filtro_fecha_hasta): ?>
+                                <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?>
+                            <?php else: ?>
+                                Desde <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?> hasta <?= date('d/m/Y', strtotime($filtro_fecha_hasta)) ?>
+                            <?php endif; ?>
+                        <?php elseif ($filtro_fecha_desde): ?>
+                            Desde <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?>
+                        <?php else: ?>
+                            Hasta <?= date('d/m/Y', strtotime($filtro_fecha_hasta)) ?>
+                        <?php endif; ?>
+                    </p>
+                </div>
+                <a href="?exportar=excel<?= $_SERVER['QUERY_STRING'] ? '&' . $_SERVER['QUERY_STRING'] : '' ?>" 
+                   class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
+                    <i class="fas fa-file-excel mr-2"></i>Exportar Excel
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Estadísticas rápidas -->
         <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
@@ -214,74 +395,114 @@ $stats = $pdo->query($stats_sql)->fetch();
             </div>
         </div>
 
-        <!-- Filtros -->
-        <div class="bg-white rounded-lg shadow mb-6 p-4">
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-4">
-                <!-- Buscador -->
-                <div class="md:col-span-2">
-                    <input type="text" name="buscar" value="<?= htmlspecialchars($buscar) ?>" 
-                           placeholder="Buscar cliente, producto, teléfono..." 
-                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+        <!-- FILTROS MEJORADOS -->
+        <div class="bg-white rounded-lg shadow mb-6 p-6">
+            <form method="GET" id="filtrosForm">
+                
+                <!-- NUEVA SECCIÓN: Filtros rápidos de fecha -->
+                <div class="mb-4">
+                    <h4 class="font-semibold text-gray-700 mb-3">
+                        <i class="fas fa-calendar-week mr-2"></i>Filtros rápidos:
+                    </h4>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="setFiltroRapido('hoy')" 
+                                class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm">
+                            <i class="fas fa-calendar-day mr-1"></i>Hoy
+                        </button>
+                        <button type="button" onclick="setFiltroRapido('ayer')" 
+                                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">
+                            <i class="fas fa-calendar-minus mr-1"></i>Ayer
+                        </button>
+                        <button type="button" onclick="setFiltroRapido('semana')" 
+                                class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm">
+                            <i class="fas fa-calendar-week mr-1"></i>Esta semana
+                        </button>
+                        <button type="button" onclick="setFiltroRapido('mes')" 
+                                class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded text-sm">
+                            <i class="fas fa-calendar mr-1"></i>Este mes
+                        </button>
+                        <button type="button" onclick="setFiltroRapido('todo')" 
+                                class="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded text-sm">
+                            <i class="fas fa-calendar-alt mr-1"></i>Todo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros principales -->
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+                    <!-- Buscador -->
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Buscar:</label>
+                        <input type="text" name="buscar" value="<?= htmlspecialchars($buscar) ?>" 
+                               placeholder="Cliente, producto, teléfono..." 
+                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <!-- Estado -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Estado:</label>
+                        <select name="estado" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">Todos</option>
+                            <option value="Pendiente" <?= $filtro_estado === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
+                            <option value="Preparando" <?= $filtro_estado === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
+                            <option value="Listo" <?= $filtro_estado === 'Listo' ? 'selected' : '' ?>>Listo</option>
+                            <option value="Entregado" <?= $filtro_estado === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
+                        </select>
+                    </div>
+                    
+                    <!-- NUEVO: Fecha desde -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Desde:</label>
+                        <input type="date" name="fecha_desde" value="<?= htmlspecialchars($filtro_fecha_desde) ?>" 
+                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <!-- NUEVO: Fecha hasta -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Hasta:</label>
+                        <input type="date" name="fecha_hasta" value="<?= htmlspecialchars($filtro_fecha_hasta) ?>" 
+                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    
+                    <!-- Modalidad -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Modalidad:</label>
+                        <select name="modalidad" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <option value="">Todas</option>
+                            <option value="Retira" <?= $filtro_modalidad === 'Retira' ? 'selected' : '' ?>>Retira</option>
+                            <option value="Delivery" <?= $filtro_modalidad === 'Delivery' ? 'selected' : '' ?>>Delivery</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <!-- Estado -->
-                <div>
-                    <select name="estado" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <option value="">Todos los estados</option>
-                        <option value="Pendiente" <?= $filtro_estado === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                        <option value="Preparando" <?= $filtro_estado === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
-                        <option value="Listo" <?= $filtro_estado === 'Listo' ? 'selected' : '' ?>>Listo</option>
-                        <option value="Entregado" <?= $filtro_estado === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
-                    </select>
-                </div>
-                
-                <!-- Fecha -->
-                <div>
-                    <input type="date" name="fecha" value="<?= htmlspecialchars($filtro_fecha) ?>" 
-                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                </div>
-                
-                <!-- Modalidad -->
-                <div>
-                    <select name="modalidad" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                        <option value="">Todas</option>
-                        <option value="Retira" <?= $filtro_modalidad === 'Retira' ? 'selected' : '' ?>>Retira</option>
-                        <option value="Delivery" <?= $filtro_modalidad === 'Delivery' ? 'selected' : '' ?>>Delivery</option>
-                    </select>
-                </div>
-                
-                <!-- Botón buscar -->
-                <div>
-                    <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg">
-                        <i class="fas fa-search mr-1"></i>Filtrar
-                    </button>
+                <!-- Botones de acción -->
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-2">
+                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-search mr-2"></i>Filtrar
+                        </button>
+                        <a href="?" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
+                            <i class="fas fa-eraser mr-2"></i>Limpiar
+                        </a>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4">
+                        <!-- Ordenamiento -->
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600">Ordenar por:</span>
+                            <select name="orden" onchange="this.form.submit()" class="px-3 py-1 border rounded text-sm">
+                                <?php foreach ($ordenes_validos as $val => $label): ?>
+                                    <option value="<?= $val ?>" <?= $orden === $val ? 'selected' : '' ?>><?= $label ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        
+                        <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
+                            <i class="fas fa-plus mr-1"></i>Nuevo Pedido
+                        </a>
+                    </div>
                 </div>
             </form>
-            
-            <!-- Ordenamiento -->
-            <div class="mt-4 flex justify-between items-center">
-                <div class="flex items-center space-x-2">
-                    <span class="text-sm text-gray-600">Ordenar por:</span>
-                    <form method="GET" class="inline">
-                        <!-- Mantener filtros actuales -->
-                        <?php foreach ($_GET as $key => $value): ?>
-                            <?php if ($key !== 'orden'): ?>
-                                <input type="hidden" name="<?= htmlspecialchars($key) ?>" value="<?= htmlspecialchars($value) ?>">
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                        
-                        <select name="orden" onchange="this.form.submit()" class="px-3 py-1 border rounded text-sm">
-                            <?php foreach ($ordenes_validos as $val => $label): ?>
-                                <option value="<?= $val ?>" <?= $orden === $val ? 'selected' : '' ?>><?= $label ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
-                </div>
-                
-                <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
-                    <i class="fas fa-plus mr-1"></i>Nuevo Pedido
-                </a>
-            </div>
         </div>
 
         <!-- Lista de pedidos -->
@@ -449,13 +670,21 @@ $stats = $pdo->query($stats_sql)->fetch();
         </div>
 
         <!-- Footer con totales -->
-        <div class="mt-6 text-center text-gray-500">
+        <div class="mt-6 flex justify-between items-center text-gray-500">
             <p>
                 Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?>
-                <?php if ($buscar || $filtro_estado || $filtro_fecha || $filtro_modalidad): ?>
+                <?php if ($buscar || $filtro_estado || $filtro_fecha_desde || $filtro_fecha_hasta || $filtro_modalidad): ?>
                     | <a href="?" class="text-blue-600 hover:underline">Limpiar filtros</a>
                 <?php endif; ?>
             </p>
+            
+            <!-- NUEVO: Botón exportar Excel -->
+            <?php if (!empty($pedidos)): ?>
+            <a href="?exportar=excel&<?= $_SERVER['QUERY_STRING'] ?>" 
+               class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
+                <i class="fas fa-file-excel mr-2"></i>Exportar a Excel
+            </a>
+            <?php endif; ?>
         </div>
     </main>
 
@@ -644,6 +873,84 @@ $stats = $pdo->query($stats_sql)->fetch();
         let pedidoAImprimir = null;
         let pedidoActualModal = null;
 
+        // FILTROS RÁPIDOS ARREGLADOS
+        function setFiltroRapido(tipo) {
+            const hoy = new Date();
+            let desde, hasta;
+            
+            console.log(`Aplicando filtro: ${tipo}`);
+            
+            switch(tipo) {
+                case 'hoy':
+                    desde = hasta = formatDate(hoy);
+                    break;
+                    
+                case 'ayer':
+                    const ayer = new Date(hoy);
+                    ayer.setDate(ayer.getDate() - 1);
+                    desde = hasta = formatDate(ayer);
+                    break;
+                    
+                case 'semana':
+                    // Esta semana desde el lunes
+                    const inicioSemana = new Date(hoy);
+                    const diaSemana = inicioSemana.getDay();
+                    const diasAtras = diaSemana === 0 ? 6 : diaSemana - 1; // Si es domingo (0), retroceder 6 días
+                    inicioSemana.setDate(hoy.getDate() - diasAtras);
+                    desde = formatDate(inicioSemana);
+                    hasta = formatDate(hoy);
+                    break;
+                    
+                case 'mes':
+                    // Este mes desde el día 1
+                    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                    desde = formatDate(inicioMes);
+                    hasta = formatDate(hoy);
+                    break;
+                    
+                case 'todo':
+                    desde = '';
+                    hasta = '';
+                    break;
+            }
+            
+            // Verificar que los campos existen antes de asignar valores
+            const fechaDesdeInput = document.querySelector('input[name="fecha_desde"]');
+            const fechaHastaInput = document.querySelector('input[name="fecha_hasta"]');
+            
+            if (fechaDesdeInput) {
+                fechaDesdeInput.value = desde;
+                console.log(`Fecha desde: ${desde}`);
+            } else {
+                console.error('Campo fecha_desde no encontrado');
+                return;
+            }
+            
+            if (fechaHastaInput) {
+                fechaHastaInput.value = hasta;
+                console.log(`Fecha hasta: ${hasta}`);
+            } else {
+                console.error('Campo fecha_hasta no encontrado');
+                return;
+            }
+            
+            // Auto-submit form
+            const form = document.getElementById('filtrosForm');
+            if (form) {
+                console.log('Enviando formulario...');
+                form.submit();
+            } else {
+                console.error('Formulario filtrosForm no encontrado');
+            }
+        }
+        
+        function formatDate(date) {
+            const año = date.getFullYear();
+            const mes = String(date.getMonth() + 1).padStart(2, '0');
+            const dia = String(date.getDate()).padStart(2, '0');
+            return `${año}-${mes}-${dia}`;
+        }
+
         function cambiarEstado(id, nuevoEstado) {
             const form = document.createElement('form');
             form.method = 'POST';
@@ -716,13 +1023,8 @@ $stats = $pdo->query($stats_sql)->fetch();
             pedidoAImprimir = null;
         }
 
-        // ========================
         // FUNCIONES DEL MODAL DE DETALLES
-        // ========================
-
-        // Función para mostrar detalles del pedido (reemplaza la función verDetalles actual)
         function verDetalles(pedidoId) {
-            // Buscar la fila del pedido en la tabla
             const filas = document.querySelectorAll('tbody tr');
             let pedidoData = null;
             
@@ -740,24 +1042,20 @@ $stats = $pdo->query($stats_sql)->fetch();
             }
         }
 
-        // Función para extraer datos de la fila de la tabla
         function extraerDatosDeFila(fila, pedidoId) {
             const celdas = fila.querySelectorAll('td');
             
-            // Extraer información del cliente (segunda celda)
             const clienteInfo = celdas[1];
             const clienteNombre = clienteInfo.querySelector('.text-sm.font-medium').textContent.trim();
             const telefonoElement = clienteInfo.querySelector('i.fa-phone').parentNode;
             const telefono = telefonoElement.textContent.trim();
             
-            // Buscar dirección
             const direccionElement = clienteInfo.querySelector('i.fa-map-marker-alt');
             let direccion = 'Sin dirección especificada';
             if (direccionElement) {
                 direccion = direccionElement.parentNode.textContent.trim();
             }
             
-            // Extraer información del producto (tercera celda)
             const productoInfo = celdas[2];
             const productoNombre = productoInfo.querySelector('.text-sm.font-medium').textContent.trim();
             const productoDetalles = productoInfo.querySelectorAll('.text-sm.text-gray-500');
@@ -772,38 +1070,24 @@ $stats = $pdo->query($stats_sql)->fetch();
                 }
             });
             
-            // Observaciones
             let observaciones = '';
             const obsElement = productoInfo.querySelector('i.fa-comment');
             if (obsElement) {
                 observaciones = obsElement.parentNode.textContent.trim();
             }
             
-            // Precio (cuarta celda)
             const precio = celdas[3].textContent.trim();
-            
-            // Estado (quinta celda)
             const estadoSelect = celdas[4].querySelector('select');
             const estado = estadoSelect.value;
-            
-            // Modalidad (sexta celda)
             const modalidadInfo = celdas[5];
             const modalidad = modalidadInfo.textContent.includes('Delivery') ? 'Delivery' : 'Retira';
-            
-            // Fecha (séptima celda)
             const fechaInfo = celdas[6];
             const fechas = fechaInfo.textContent.split('\n').map(f => f.trim()).filter(f => f);
             const fechaPedido = fechas.length >= 2 ? `${fechas[0]} ${fechas[1]}` : fechas[0] || 'N/A';
-            
-            // Estado de impresión (octava celda)
             const impresionInfo = celdas[7];
             const impreso = impresionInfo.textContent.includes('Impresa');
 
-            // Información de entrega (buscar en cliente info)
             let fechaEntrega = '';
-            let horaEntrega = '';
-            let notasHorario = '';
-            
             const entregaInfo = clienteInfo.querySelector('.text-xs.text-orange-600');
             if (entregaInfo) {
                 const textoEntrega = entregaInfo.textContent;
@@ -835,11 +1119,9 @@ $stats = $pdo->query($stats_sql)->fetch();
             };
         }
 
-        // Función para mostrar el modal con los datos
         function mostrarModalDetalles(data) {
             pedidoActualModal = data;
             
-            // Llenar información básica
             document.getElementById('modal-pedido-id').textContent = data.id;
             document.getElementById('modal-pedido-id-footer').textContent = data.id;
             
@@ -952,13 +1234,11 @@ $stats = $pdo->query($stats_sql)->fetch();
             document.getElementById('detallesModal').classList.remove('hidden');
         }
 
-        // Función para cerrar el modal de detalles
         function cerrarDetallesModal() {
             document.getElementById('detallesModal').classList.add('hidden');
             pedidoActualModal = null;
         }
 
-        // Función para imprimir comanda desde el modal
         function imprimirComandaDesdeModal() {
             if (pedidoActualModal) {
                 imprimirComanda(pedidoActualModal.id);
@@ -966,7 +1246,6 @@ $stats = $pdo->query($stats_sql)->fetch();
             }
         }
 
-        // Función para contactar cliente desde el modal
         function contactarClienteDesdeModal() {
             if (pedidoActualModal) {
                 const telefono = pedidoActualModal.cliente.telefono.replace(/[^0-9]/g, '');
@@ -997,18 +1276,6 @@ $stats = $pdo->query($stats_sql)->fetch();
                         cerrarDetallesModal();
                     }
                 });
-            }
-        });
-
-        // Establecer fecha de hoy por defecto si no hay fecha seleccionada
-        document.addEventListener('DOMContentLoaded', function() {
-            const fechaInput = document.querySelector('input[name="fecha"]');
-            if (fechaInput && !fechaInput.value) {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (!urlParams.has('buscar') && !urlParams.has('estado') && !urlParams.has('modalidad')) {
-                    const hoy = new Date().toISOString().split('T')[0];
-                    fechaInput.value = hoy;
-                }
             }
         });
     </script>
