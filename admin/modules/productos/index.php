@@ -1,30 +1,64 @@
 <?php
-require_once '../../config.php';
-requireLogin();
+// admin/modules/productos/index.php - Versión corregida para evitar error 500
 
-$pdo = getConnection();
+// Error handling mejorado
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Verificar que el archivo existe antes de incluir
+$config_path = '../../config.php';
+if (!file_exists($config_path)) {
+    die("Error: No se puede encontrar config.php en la ruta: $config_path");
+}
+
+try {
+    require_once $config_path;
+} catch (Exception $e) {
+    die("Error cargando configuración: " . $e->getMessage());
+}
+
+// Verificar que las funciones necesarias existen
+if (!function_exists('getConnection')) {
+    die("Error: Función getConnection no está disponible");
+}
+
+if (!function_exists('requireLogin')) {
+    die("Error: Función requireLogin no está disponible");
+}
+
+// Iniciar sesión y verificar login
+try {
+    requireLogin();
+} catch (Exception $e) {
+    die("Error en verificación de login: " . $e->getMessage());
+}
+
+// Obtener conexión a BD
+try {
+    $pdo = getConnection();
+} catch (Exception $e) {
+    die("Error de conexión a base de datos: " . $e->getMessage());
+}
 
 // Manejar acciones
 $mensaje = '';
 $error = '';
 
 if ($_POST) {
-    switch ($_POST['accion']) {
-        case 'toggle_estado':
-            $id = (int)$_POST['id'];
-            $estado = $_POST['estado'] === '1' ? 0 : 1;
-            try {
+    try {
+        switch ($_POST['accion']) {
+            case 'toggle_estado':
+                $id = (int)$_POST['id'];
+                $estado = $_POST['estado'] === '1' ? 0 : 1;
+                
                 $stmt = $pdo->prepare("UPDATE productos SET activo = ?, updated_by = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$estado, $_SESSION['admin_user'], $id]);
+                $stmt->execute([$estado, $_SESSION['admin_user'] ?? 'admin', $id]);
                 $mensaje = $estado ? 'Producto activado' : 'Producto desactivado';
-            } catch (Exception $e) {
-                $error = 'Error al cambiar estado del producto';
-            }
-            break;
+                break;
 
-        case 'eliminar':
-            $id = (int)$_POST['id'];
-            try {
+            case 'eliminar':
+                $id = (int)$_POST['id'];
+                
                 // Verificar si tiene pedidos asociados
                 $stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE producto = (SELECT nombre FROM productos WHERE id = ?)");
                 $stmt->execute([$id]);
@@ -37,25 +71,25 @@ if ($_POST) {
                     $stmt->execute([$id]);
                     $mensaje = 'Producto eliminado correctamente';
                 }
-            } catch (Exception $e) {
-                $error = 'Error al eliminar producto';
-            }
-            break;
+                break;
 
-        case 'cambio_rapido_precio':
-            $id = (int)$_POST['id'];
-            $nuevo_efectivo = (float)$_POST['precio_efectivo'];
-            $nuevo_transferencia = (float)$_POST['precio_transferencia'];
-            $motivo = sanitize($_POST['motivo']);
+            case 'cambio_rapido_precio':
+                $id = (int)$_POST['id'];
+                $nuevo_efectivo = (float)$_POST['precio_efectivo'];
+                $nuevo_transferencia = (float)$_POST['precio_transferencia'];
+                $motivo = sanitize($_POST['motivo'] ?? '');
 
-            try {
+                if ($nuevo_efectivo <= 0 || $nuevo_transferencia <= 0) {
+                    throw new Exception('Los precios deben ser mayores a 0');
+                }
+
                 $stmt = $pdo->prepare("UPDATE productos SET precio_efectivo = ?, precio_transferencia = ?, updated_by = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$nuevo_efectivo, $nuevo_transferencia, $_SESSION['admin_user'], $id]);
+                $stmt->execute([$nuevo_efectivo, $nuevo_transferencia, $_SESSION['admin_user'] ?? 'admin', $id]);
                 $mensaje = 'Precios actualizados correctamente';
-            } catch (Exception $e) {
-                $error = 'Error al actualizar precios';
-            }
-            break;
+                break;
+        }
+    } catch (Exception $e) {
+        $error = 'Error procesando la acción: ' . $e->getMessage();
     }
 }
 
@@ -65,57 +99,72 @@ $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
 $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
 
 // Construir consulta de productos
-$sql = "SELECT p.*, 
-               COUNT(pe.id) as total_pedidos,
-               SUM(pe.cantidad) as unidades_vendidas,
-               SUM(pe.precio) as total_facturado,
-               MAX(pe.created_at) as ultima_venta
-        FROM productos p
-        LEFT JOIN pedidos pe ON pe.producto = p.nombre
-        WHERE 1=1";
-$params = [];
+try {
+    $sql = "SELECT p.*, 
+                   COUNT(pe.id) as total_pedidos,
+                   SUM(pe.cantidad) as unidades_vendidas,
+                   SUM(pe.precio) as total_facturado,
+                   MAX(pe.created_at) as ultima_venta
+            FROM productos p
+            LEFT JOIN pedidos pe ON pe.producto = p.nombre
+            WHERE 1=1";
+    $params = [];
 
-if ($filtro_categoria) {
-    $sql .= " AND p.categoria = ?";
-    $params[] = $filtro_categoria;
+    if ($filtro_categoria) {
+        $sql .= " AND p.categoria = ?";
+        $params[] = $filtro_categoria;
+    }
+
+    if ($filtro_estado !== '') {
+        $sql .= " AND p.activo = ?";
+        $params[] = $filtro_estado;
+    }
+
+    if ($buscar) {
+        $sql .= " AND (p.nombre LIKE ? OR p.descripcion LIKE ?)";
+        $buscarParam = "%$buscar%";
+        $params[] = $buscarParam;
+        $params[] = $buscarParam;
+    }
+
+    $sql .= " GROUP BY p.id ORDER BY p.orden_mostrar, p.nombre";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $productos = $stmt->fetchAll();
+
+} catch (Exception $e) {
+    $error = 'Error obteniendo productos: ' . $e->getMessage();
+    $productos = [];
 }
-
-if ($filtro_estado !== '') {
-    $sql .= " AND p.activo = ?";
-    $params[] = $filtro_estado;
-}
-
-if ($buscar) {
-    $sql .= " AND (p.nombre LIKE ? OR p.descripcion LIKE ?)";
-    $buscarParam = "%$buscar%";
-    $params[] = $buscarParam;
-    $params[] = $buscarParam;
-}
-
-$sql .= " GROUP BY p.id ORDER BY p.orden_mostrar, p.nombre";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$productos = $stmt->fetchAll();
 
 // Obtener categorías para filtro
-$categorias = $pdo->query("SELECT DISTINCT categoria FROM productos WHERE categoria IS NOT NULL ORDER BY categoria")->fetchAll();
+try {
+    $categorias = $pdo->query("SELECT DISTINCT categoria FROM productos WHERE categoria IS NOT NULL ORDER BY categoria")->fetchAll();
+} catch (Exception $e) {
+    $categorias = [];
+}
 
 // Estadísticas generales
-$stats = $pdo->query("
-    SELECT 
-        COUNT(*) as total_productos,
-        SUM(CASE WHEN activo = 1 THEN 1 ELSE 0 END) as productos_activos,
-        SUM(CASE WHEN activo = 0 THEN 1 ELSE 0 END) as productos_inactivos
-    FROM productos
-")->fetch();
+try {
+    $stats = $pdo->query("
+        SELECT 
+            COUNT(*) as total_productos,
+            SUM(CASE WHEN activo = 1 THEN 1 ELSE 0 END) as productos_activos,
+            SUM(CASE WHEN activo = 0 THEN 1 ELSE 0 END) as productos_inactivos
+        FROM productos
+    ")->fetch();
 
-$promos_activas = $pdo->query("
-    SELECT COUNT(*) FROM promos 
-    WHERE activa = 1 
-    AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio)
-    AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)
-")->fetchColumn();
+    $promos_activas = $pdo->query("
+        SELECT COUNT(*) FROM promos 
+        WHERE activa = 1 
+        AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio)
+        AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)
+    ")->fetchColumn();
+} catch (Exception $e) {
+    $stats = ['total_productos' => 0, 'productos_activos' => 0, 'productos_inactivos' => 0];
+    $promos_activas = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -150,13 +199,13 @@ $promos_activas = $pdo->query("
         <!-- Mensajes -->
         <?php if ($mensaje): ?>
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-check-circle mr-2"></i><?= $mensaje ?>
+            <i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($mensaje) ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-exclamation-circle mr-2"></i><?= $error ?>
+            <i class="fas fa-exclamation-circle mr-2"></i><?= htmlspecialchars($error) ?>
         </div>
         <?php endif; ?>
 
@@ -217,7 +266,7 @@ $promos_activas = $pdo->query("
                     <select name="categoria" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
                         <option value="">Todas las categorías</option>
                         <?php foreach ($categorias as $cat): ?>
-                            <option value="<?= $cat['categoria'] ?>" <?= $filtro_categoria === $cat['categoria'] ? 'selected' : '' ?>>
+                            <option value="<?= htmlspecialchars($cat['categoria']) ?>" <?= $filtro_categoria === $cat['categoria'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($cat['categoria']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -275,7 +324,28 @@ $promos_activas = $pdo->query("
                                         <div class="flex items-center">
                                             <div>
                                                 <div class="text-sm font-medium text-gray-900">
-                                                    <?= htmlspecialchars($producto['categoria'] ?: 'Standard') ?>
+                                                    <?= htmlspecialchars($producto['nombre']) ?>
+                                                </div>
+                                                <div class="text-sm text-gray-500 max-w-xs truncate">
+                                                    <?= htmlspecialchars($producto['descripcion'] ?: 'Sin descripción') ?>
+                                                </div>
+                                                <?php if ($producto['orden_mostrar'] > 0): ?>
+                                                    <div class="text-xs text-blue-600">Orden: <?= $producto['orden_mostrar'] ?></div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2 py-1 text-xs font-medium rounded-full 
+                                            <?php
+                                            switch($producto['categoria']) {
+                                                case 'Premium': echo 'bg-purple-100 text-purple-800'; break;
+                                                case 'Surtidos': echo 'bg-blue-100 text-blue-800'; break;
+                                                case 'Clásicos': echo 'bg-green-100 text-green-800'; break;
+                                                default: echo 'bg-gray-100 text-gray-800';
+                                            }
+                                            ?>">
+                                            <?= htmlspecialchars($producto['categoria'] ?: 'Standard') ?>
                                         </span>
                                     </td>
                                     <td class="px-6 py-4">
@@ -424,81 +494,6 @@ $promos_activas = $pdo->query("
         </div>
     </div>
 
-    <!-- Modal Ajuste Masivo -->
-    <div id="ajusteMasivoModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-calculator text-orange-500 mr-2"></i>Ajuste Masivo de Precios
-            </h3>
-            
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <div class="flex items-center">
-                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
-                    <div class="text-sm text-yellow-800">
-                        Esta acción aplicará el ajuste a TODOS los productos activos.
-                        <br><strong>Use con precaución.</strong>
-                    </div>
-                </div>
-            </div>
-            
-            <form id="ajusteMasivoForm">
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-gray-700 mb-2">Tipo de ajuste</label>
-                        <select id="tipo_ajuste" class="w-full px-3 py-2 border rounded-lg">
-                            <option value="porcentaje">Porcentaje (%)</option>
-                            <option value="monto_fijo">Monto fijo ($)</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-gray-700 mb-2">Valor del ajuste</label>
-                        <input type="number" id="valor_ajuste" step="0.1" 
-                               class="w-full px-3 py-2 border rounded-lg" 
-                               placeholder="Ej: 15 para 15% o 1500 para $1500">
-                    </div>
-
-                    <div>
-                        <label class="block text-gray-700 mb-2">Aplicar a</label>
-                        <div class="space-y-2">
-                            <label class="flex items-center">
-                                <input type="checkbox" id="aplicar_efectivo" checked class="mr-2">
-                                Precios en efectivo
-                            </label>
-                            <label class="flex items-center">
-                                <input type="checkbox" id="aplicar_transferencia" checked class="mr-2">
-                                Precios transferencia
-                            </label>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-gray-700 mb-2">Motivo</label>
-                        <input type="text" id="motivo_masivo" 
-                               class="w-full px-3 py-2 border rounded-lg"
-                               placeholder="Ej: Ajuste inflación enero 2025"
-                               value="Ajuste masivo por inflación">
-                    </div>
-                </div>
-                
-                <div class="flex justify-end space-x-2 mt-6">
-                    <button type="button" onclick="cerrarAjusteMasivoModal()" 
-                            class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                        Cancelar
-                    </button>
-                    <button type="button" onclick="previsualizarAjuste()"
-                            class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                        <i class="fas fa-eye mr-1"></i>Previsualizar
-                    </button>
-                    <button type="button" onclick="aplicarAjusteMasivo()" 
-                            class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
-                        <i class="fas fa-calculator mr-1"></i>Aplicar Ajuste
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
     <script>
         // Edición rápida de precios
         function editarPrecioRapido(id, nombre, precioEfectivo, precioTransferencia) {
@@ -529,109 +524,17 @@ $promos_activas = $pdo->query("
 
         // Ajuste masivo de precios
         function actualizarTodosPrecios() {
-            document.getElementById('ajusteMasivoModal').classList.remove('hidden');
+            window.location.href = 'ajuste_masivo.php';
         }
 
-        function cerrarAjusteMasivoModal() {
-            document.getElementById('ajusteMasivoModal').classList.add('hidden');
-        }
-
-        function previsualizarAjuste() {
-            const tipo = document.getElementById('tipo_ajuste').value;
-            const valor = parseFloat(document.getElementById('valor_ajuste').value);
-            const aplicarEfectivo = document.getElementById('aplicar_efectivo').checked;
-            const aplicarTransferencia = document.getElementById('aplicar_transferencia').checked;
-
-            if (!valor) {
-                alert('Ingrese un valor válido para el ajuste');
-                return;
-            }
-
-            // Aquí podrías hacer una llamada AJAX para mostrar preview
-            // Por ahora, mostrar confirmación
-            let mensaje = `Ajuste ${tipo}: ${valor}`;
-            if (tipo === 'porcentaje') {
-                mensaje += '%';
-            } else {
-                mensaje += ' pesos';
-            }
-            
-            mensaje += '\nSe aplicará a:';
-            if (aplicarEfectivo) mensaje += '\n- Precios efectivo';
-            if (aplicarTransferencia) mensaje += '\n- Precios transferencia';
-
-            alert('Preview del ajuste:\n' + mensaje + '\n\nEsto afectará a todos los productos activos.');
-        }
-
-        function aplicarAjusteMasivo() {
-            const tipo = document.getElementById('tipo_ajuste').value;
-            const valor = parseFloat(document.getElementById('valor_ajuste').value);
-            const motivo = document.getElementById('motivo_masivo').value;
-
-            if (!valor) {
-                alert('Ingrese un valor válido para el ajuste');
-                return;
-            }
-
-            if (!motivo.trim()) {
-                alert('Ingrese un motivo para el ajuste');
-                return;
-            }
-
-            if (!confirm('¿Está seguro de aplicar este ajuste a TODOS los productos?\n\nEsta acción no se puede deshacer fácilmente.')) {
-                return;
-            }
-
-            // Crear formulario para envío
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = 'ajuste_masivo.php';
-            form.innerHTML = `
-                <input type="hidden" name="tipo_ajuste" value="${tipo}">
-                <input type="hidden" name="valor_ajuste" value="${valor}">
-                <input type="hidden" name="aplicar_efectivo" value="${document.getElementById('aplicar_efectivo').checked ? '1' : '0'}">
-                <input type="hidden" name="aplicar_transferencia" value="${document.getElementById('aplicar_transferencia').checked ? '1' : '0'}">
-                <input type="hidden" name="motivo" value="${motivo}">
-            `;
-            document.body.appendChild(form);
-            form.submit();
-        }
-
-        // Cerrar modales al hacer clic fuera
+        // Cerrar modal al hacer clic fuera
         document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('precioModal').addEventListener('click', function(e) {
                 if (e.target === this) {
                     cerrarPrecioModal();
                 }
             });
-
-            document.getElementById('ajusteMasivoModal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    cerrarAjusteMasivoModal();
-                }
-            });
         });
     </script>
 </body>
-</html>($producto['nombre']) ?>
-                                                </div>
-                                                <div class="text-sm text-gray-500 max-w-xs truncate">
-                                                    <?= htmlspecialchars($producto['descripcion'] ?: 'Sin descripción') ?>
-                                                </div>
-                                                <?php if ($producto['orden_mostrar'] > 0): ?>
-                                                    <div class="text-xs text-blue-600">Orden: <?= $producto['orden_mostrar'] ?></div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full 
-                                            <?php
-                                            switch($producto['categoria']) {
-                                                case 'Premium': echo 'bg-purple-100 text-purple-800'; break;
-                                                case 'Surtidos': echo 'bg-blue-100 text-blue-800'; break;
-                                                case 'Clásicos': echo 'bg-green-100 text-green-800'; break;
-                                                default: echo 'bg-gray-100 text-gray-800';
-                                            }
-                                            ?>">
-                                            <?= htmlspecialchars
+</html>

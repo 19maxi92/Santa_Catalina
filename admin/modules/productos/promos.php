@@ -1,17 +1,53 @@
 <?php
-require_once '../../config.php';
-requireLogin();
+// admin/modules/productos/promos.php - Versión corregida para evitar error 500
 
-$pdo = getConnection();
+// Error handling mejorado
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+// Verificar que el archivo existe antes de incluir
+$config_path = '../../config.php';
+if (!file_exists($config_path)) {
+    die("Error: No se puede encontrar config.php en la ruta: $config_path");
+}
+
+try {
+    require_once $config_path;
+} catch (Exception $e) {
+    die("Error cargando configuración: " . $e->getMessage());
+}
+
+// Verificar que las funciones necesarias existen
+if (!function_exists('getConnection')) {
+    die("Error: Función getConnection no está disponible");
+}
+
+if (!function_exists('requireLogin')) {
+    die("Error: Función requireLogin no está disponible");
+}
+
+// Iniciar sesión y verificar login
+try {
+    requireLogin();
+} catch (Exception $e) {
+    die("Error en verificación de login: " . $e->getMessage());
+}
+
+// Obtener conexión a BD
+try {
+    $pdo = getConnection();
+} catch (Exception $e) {
+    die("Error de conexión a base de datos: " . $e->getMessage());
+}
 
 $mensaje = '';
 $error = '';
 
 // Procesar acciones
 if ($_POST) {
-    switch ($_POST['accion']) {
-        case 'crear_promo':
-            try {
+    try {
+        switch ($_POST['accion']) {
+            case 'crear_promo':
                 $nombre = sanitize($_POST['nombre']);
                 $descripcion = sanitize($_POST['descripcion']);
                 $precio_efectivo = (float)$_POST['precio_efectivo'];
@@ -47,85 +83,87 @@ if ($_POST) {
                 $stmt->execute([
                     $nombre, $descripcion, $precio_efectivo, $precio_transferencia,
                     $fecha_inicio, $fecha_fin, $dias_semana, $hora_inicio, $hora_fin,
-                    $condiciones, $orden_mostrar, $activa, $_SESSION['admin_user']
+                    $condiciones, $orden_mostrar, $activa, $_SESSION['admin_user'] ?? 'admin'
                 ]);
 
                 $mensaje = 'Promo creada correctamente';
+                break;
 
-            } catch (Exception $e) {
-                $error = $e->getMessage();
-            }
-            break;
-
-        case 'toggle_promo':
-            $id = (int)$_POST['id'];
-            $estado = $_POST['estado'] === '1' ? 0 : 1;
-            try {
+            case 'toggle_promo':
+                $id = (int)$_POST['id'];
+                $estado = $_POST['estado'] === '1' ? 0 : 1;
+                
                 $stmt = $pdo->prepare("UPDATE promos SET activa = ?, updated_at = NOW() WHERE id = ?");
                 $stmt->execute([$estado, $id]);
                 $mensaje = $estado ? 'Promo activada' : 'Promo desactivada';
-            } catch (Exception $e) {
-                $error = 'Error al cambiar estado de la promo';
-            }
-            break;
+                break;
 
-        case 'eliminar_promo':
-            $id = (int)$_POST['id'];
-            try {
+            case 'eliminar_promo':
+                $id = (int)$_POST['id'];
+                
                 $stmt = $pdo->prepare("DELETE FROM promos WHERE id = ?");
                 $stmt->execute([$id]);
                 $mensaje = 'Promo eliminada correctamente';
-            } catch (Exception $e) {
-                $error = 'Error al eliminar promo';
-            }
-            break;
+                break;
+        }
+    } catch (Exception $e) {
+        $error = 'Error procesando la acción: ' . $e->getMessage();
     }
 }
 
-// Obtener promos
-$filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
-$filtro_vigencia = isset($_GET['vigencia']) ? sanitize($_GET['vigencia']) : '';
+// Obtener promos con manejo de errores
+try {
+    $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
+    $filtro_vigencia = isset($_GET['vigencia']) ? sanitize($_GET['vigencia']) : '';
 
-$sql = "SELECT * FROM promos WHERE 1=1";
-$params = [];
+    $sql = "SELECT * FROM promos WHERE 1=1";
+    $params = [];
 
-if ($filtro_estado !== '') {
-    $sql .= " AND activa = ?";
-    $params[] = $filtro_estado;
-}
-
-if ($filtro_vigencia) {
-    switch ($filtro_vigencia) {
-        case 'vigente':
-            $sql .= " AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio) 
-                      AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)";
-            break;
-        case 'proxima':
-            $sql .= " AND fecha_inicio > CURDATE()";
-            break;
-        case 'vencida':
-            $sql .= " AND fecha_fin < CURDATE()";
-            break;
+    if ($filtro_estado !== '') {
+        $sql .= " AND activa = ?";
+        $params[] = $filtro_estado;
     }
+
+    if ($filtro_vigencia) {
+        switch ($filtro_vigencia) {
+            case 'vigente':
+                $sql .= " AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio) 
+                          AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)";
+                break;
+            case 'proxima':
+                $sql .= " AND fecha_inicio > CURDATE()";
+                break;
+            case 'vencida':
+                $sql .= " AND fecha_fin < CURDATE()";
+                break;
+        }
+    }
+
+    $sql .= " ORDER BY orden_mostrar, created_at DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $promos = $stmt->fetchAll();
+} catch (Exception $e) {
+    $error = 'Error obteniendo promos: ' . $e->getMessage();
+    $promos = [];
 }
 
-$sql .= " ORDER BY orden_mostrar, created_at DESC";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$promos = $stmt->fetchAll();
-
-// Estadísticas
-$stats = $pdo->query("
-    SELECT 
-        COUNT(*) as total_promos,
-        SUM(CASE WHEN activa = 1 THEN 1 ELSE 0 END) as promos_activas,
-        SUM(CASE WHEN activa = 1 
-                 AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio) 
-                 AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin) 
-            THEN 1 ELSE 0 END) as promos_vigentes
-    FROM promos
-")->fetch();
+// Estadísticas con manejo de errores
+try {
+    $stats = $pdo->query("
+        SELECT 
+            COUNT(*) as total_promos,
+            SUM(CASE WHEN activa = 1 THEN 1 ELSE 0 END) as promos_activas,
+            SUM(CASE WHEN activa = 1 
+                     AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio) 
+                     AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin) 
+                THEN 1 ELSE 0 END) as promos_vigentes
+        FROM promos
+    ")->fetch();
+} catch (Exception $e) {
+    $stats = ['total_promos' => 0, 'promos_activas' => 0, 'promos_vigentes' => 0];
+}
 
 $dias_semana_nombres = [
     'lunes' => 'Lunes',
@@ -169,13 +207,13 @@ $dias_semana_nombres = [
         <!-- Mensajes -->
         <?php if ($mensaje): ?>
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-check-circle mr-2"></i><?= $mensaje ?>
+            <i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($mensaje) ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-exclamation-circle mr-2"></i><?= $error ?>
+            <i class="fas fa-exclamation-circle mr-2"></i><?= htmlspecialchars($error) ?>
         </div>
         <?php endif; ?>
 
@@ -268,10 +306,11 @@ $dias_semana_nombres = [
                             $vigencia_color = 'bg-blue-100 text-blue-800';
                         } elseif ($hoy > $promo['fecha_fin']) {
                             $vigencia = 'Vencida';
-                        $vigencia_color = 'bg-red-100 text-red-800';
-                    } else {
-                        $vigencia = 'Vigente';
-                        $vigencia_color = 'bg-green-100 text-green-800';
+                            $vigencia_color = 'bg-red-100 text-red-800';
+                        } else {
+                            $vigencia = 'Vigente';
+                            $vigencia_color = 'bg-green-100 text-green-800';
+                        }
                     }
 
                     // Días de la semana
@@ -395,7 +434,7 @@ $dias_semana_nombres = [
                                                     <?= $promo['activa'] 
                                                         ? 'bg-green-100 text-green-800 hover:bg-green-200' 
                                                         : 'bg-red-100 text-red-800 hover:bg-red-200' ?>">
-                                                <?= $promo['activa'] ? '✅ Activar' : '❌ Desactivar' ?>
+                                                <?= $promo['activa'] ? '✅ Activa' : '❌ Inactiva' ?>
                                             </button>
                                         </form>
                                         
@@ -432,11 +471,16 @@ $dias_semana_nombres = [
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
+
+        <!-- Footer -->
+        <div class="mt-6 text-center text-gray-500">
+            <p>Mostrando <?= count($promos) ?> promo<?= count($promos) !== 1 ? 's' : '' ?></p>
+        </div>
     </main>
 
     <!-- Modal Crear/Editar Promo -->
     <div id="promoModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg w-full max-w-4xl mx-4 max-h-screen overflow-y-auto">
+        <div class="bg-white rounded-lg w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
             <div class="p-6">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xl font-bold">
@@ -576,25 +620,6 @@ $dias_semana_nombres = [
                                     </label>
                                 </div>
                             </div>
-                            
-                            <!-- Botones rápidos -->
-                            <div class="bg-gray-50 p-3 rounded-lg">
-                                <div class="text-sm font-medium text-gray-700 mb-2">Configuraciones Rápidas:</div>
-                                <div class="space-y-1">
-                                    <button type="button" onclick="configFinDeSemana()" 
-                                            class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs mr-2">
-                                        Fin de Semana
-                                    </button>
-                                    <button type="button" onclick="configSemanaLaboral()" 
-                                            class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs mr-2">
-                                        Lun-Vie
-                                    </button>
-                                    <button type="button" onclick="configTodoElMes()" 
-                                            class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">
-                                        Todo el Mes
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     
@@ -643,61 +668,6 @@ $dias_semana_nombres = [
             }
         }
 
-        // Configuraciones rápidas
-        function configFinDeSemana() {
-            // Desmarcar todos
-            document.querySelectorAll('.dia-semana').forEach(cb => cb.checked = false);
-            // Marcar sábado y domingo
-            document.querySelector('input[value="sabado"]').checked = true;
-            document.querySelector('input[value="domingo"]').checked = true;
-        }
-
-        function configSemanaLaboral() {
-            // Desmarcar todos
-            document.querySelectorAll('.dia-semana').forEach(cb => cb.checked = false);
-            // Marcar lunes a viernes
-            ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'].forEach(dia => {
-                document.querySelector(`input[value="${dia}"]`).checked = true;
-            });
-        }
-
-        function configTodoElMes() {
-            const hoy = new Date();
-            const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-            const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-            
-            document.getElementById('promo_fecha_inicio').value = primerDia.toISOString().split('T')[0];
-            document.getElementById('promo_fecha_fin').value = ultimoDia.toISOString().split('T')[0];
-        }
-
-        // Cerrar modal al hacer clic fuera
-        document.getElementById('promoModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                cerrarPromoModal();
-            }
-        });
-
-        // Validaciones del formulario
-        document.getElementById('promoForm').addEventListener('submit', function(e) {
-            const fechaInicio = document.getElementById('promo_fecha_inicio').value;
-            const fechaFin = document.getElementById('promo_fecha_fin').value;
-            
-            if (fechaInicio && fechaFin && fechaInicio > fechaFin) {
-                e.preventDefault();
-                alert('La fecha de inicio no puede ser posterior a la fecha de fin.');
-                return;
-            }
-
-            const horaInicio = document.getElementById('promo_hora_inicio').value;
-            const horaFin = document.getElementById('promo_hora_fin').value;
-            
-            if (horaInicio && horaFin && horaInicio >= horaFin) {
-                e.preventDefault();
-                alert('La hora de inicio debe ser anterior a la hora de fin.');
-                return;
-            }
-        });
-
         // Placeholder para funciones futuras
         function editarPromo(id) {
             alert('Función de edición en desarrollo. Por ahora, cree una nueva promo.');
@@ -706,16 +676,13 @@ $dias_semana_nombres = [
         function duplicarPromo(id) {
             alert('Función de duplicación en desarrollo. Por ahora, cree una nueva promo basada en esta.');
         }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('promoModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                cerrarPromoModal();
+            }
+        });
     </script>
 </body>
-</html>encida';
-                            $vigencia_color = 'bg-red-100 text-red-800';
-                        } else {
-                            $vigencia = 'Vigente';
-                            $vigencia_color = 'bg-green-100 text-green-800';
-                        }
-                    } elseif ($promo['fecha_inicio'] && $hoy < $promo['fecha_inicio']) {
-                        $vigencia = 'Próxima';
-                        $vigencia_color = 'bg-blue-100 text-blue-800';
-                    } elseif ($promo['fecha_fin'] && $hoy > $promo['fecha_fin']) {
-                        $vigencia = 'V
+</html>
