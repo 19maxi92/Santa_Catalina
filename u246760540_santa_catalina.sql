@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1:3306
--- Tiempo de generación: 16-09-2025 a las 17:48:03
+-- Tiempo de generación: 16-09-2025 a las 22:24:09
 -- Versión del servidor: 10.11.10-MariaDB-log
 -- Versión de PHP: 7.2.34
 
@@ -137,8 +137,8 @@ INSERT INTO `pedidos` (`id`, `nombre`, `apellido`, `telefono`, `direccion`, `pro
 (21, 'Claudia', 'Martinez', '11-8765-4321', 'Calle 12 de Octubre 987, Adrogué', '24 Jamón y Queso', 24, 11000.00, 'Efectivo', 'Retira', 'Fábrica', 'Pendiente', 'Familia de 6 personas. Pide 48 surtidos clásicos cada 15 días. Mezcla: mitad jamón y queso, mitad con huevo y lechuga. Efectivo. Sábados a la mañana.', 5, 0, '2025-08-10 23:39:02', '2025-08-10 23:39:02', '2025-08-10', '00:00:00', '', '2025-08-10 23:39:02', 'normal', NULL, 0),
 (22, 'a', 'fsdf', 'df', 'sdf', '24 Surtidos', 24, 12000.00, 'Transferencia', 'Retira', 'Fábrica', 'Pendiente', '', NULL, 0, '2025-08-11 00:19:27', '2025-08-11 00:19:27', '2025-08-11', '00:00:00', '', '2025-08-11 00:19:27', 'normal', NULL, 0),
 (23, 'Clínica Médica', 'San Rafael', '11-4000-3333', 'Alsina 1800, Temperley', '24 Surtidos', 24, 11000.00, 'Efectivo', 'Retira', 'Fábrica', 'Pendiente', 'CLÍNICA - Turnos rotativos. Pedidos variables: martes y jueves 48 premium (médicos), sábados 24 clásicos (enfermería). Coordinan con Dra. Pérez. Transfer.', 10, 1, '2025-08-11 00:19:50', '2025-08-12 12:44:12', '2025-08-11', '00:00:00', '', '2025-08-11 00:19:50', 'normal', NULL, 0),
-(25, 'maxi', 'AUTOSIGLO', '2216267575', 'av 44 2186', '48 Jamón y Queso', 48, 22000.00, 'Efectivo', 'Retira', 'Local 1', 'Pendiente', '', NULL, 0, '2025-09-16 12:31:19', '2025-09-16 12:31:19', '2025-09-16', '00:00:00', '', '2025-09-16 12:31:19', 'normal', NULL, 0),
-(26, 'a', 'AUTOSIGLO', '212312', 'av 44 2186', '24 Surtidos Premium', 24, 22000.00, 'Transferencia', 'Delivery', 'Fábrica', 'Listo', '\nSabores: Berenjena, Durazno, Morrón, Palmito', NULL, 1, '2025-09-16 12:31:35', '2025-09-16 12:36:15', '2025-09-16', '00:00:00', '', '2025-09-16 12:31:35', 'normal', NULL, 0);
+(25, 'maxi', 'AUTOSIGLO', '2216267575', 'av 44 2186', '48 Jamón y Queso', 48, 22000.00, 'Efectivo', 'Retira', 'Local 1', 'Pendiente', '', NULL, 1, '2025-09-16 12:31:19', '2025-09-16 22:17:37', '2025-09-16', '00:00:00', '', '2025-09-16 12:31:19', 'normal', NULL, 0),
+(26, 'a', 'AUTOSIGLO', '212312', 'av 44 2186', '24 Surtidos Premium', 24, 22000.00, 'Transferencia', 'Delivery', 'Fábrica', 'Listo', '\nSabores: Berenjena, Durazno, Morrón, Palmito', NULL, 1, '2025-09-16 12:31:35', '2025-09-16 22:17:20', '2025-09-16', '00:00:00', '', '2025-09-16 12:31:35', 'normal', NULL, 0);
 
 -- --------------------------------------------------------
 
