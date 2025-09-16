@@ -71,16 +71,17 @@ if ($_POST) {
     }
 }
 
-// FILTROS MEJORADOS - NUEVO: Rango de fechas
+// FILTROS MEJORADOS - INCLUIR UBICACIÓN
 $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
 $filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
 $filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
 $filtro_modalidad = isset($_GET['modalidad']) ? sanitize($_GET['modalidad']) : '';
+$filtro_ubicacion = isset($_GET['ubicacion']) ? sanitize($_GET['ubicacion']) : '';
 $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
 $orden = isset($_GET['orden']) ? sanitize($_GET['orden']) : 'created_at DESC';
 
 // Si no hay rango específico, mostrar solo hoy por defecto
-if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad) {
+if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
     $filtro_fecha_desde = date('Y-m-d');
     $filtro_fecha_hasta = date('Y-m-d');
 }
@@ -113,6 +114,12 @@ if ($filtro_fecha_desde && $filtro_fecha_hasta) {
 if ($filtro_modalidad) {
     $sql .= " AND p.modalidad = ?";
     $params[] = $filtro_modalidad;
+}
+
+// NUEVO: Filtro por ubicación
+if ($filtro_ubicacion) {
+    $sql .= " AND p.ubicacion = ?";
+    $params[] = $filtro_ubicacion;
 }
 
 if ($buscar) {
@@ -171,6 +178,19 @@ $stats_stmt = $pdo->prepare($stats_sql);
 $stats_stmt->execute($stats_params);
 $stats = $stats_stmt->fetch();
 
+// NUEVO: Estadísticas por ubicación
+$stats_ubicacion = $pdo->query("
+    SELECT 
+        ubicacion,
+        COUNT(*) as total,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes,
+        SUM(CASE WHEN estado = 'Preparando' THEN 1 ELSE 0 END) as preparando,
+        SUM(CASE WHEN estado = 'Listo' THEN 1 ELSE 0 END) as listos
+    FROM pedidos 
+    WHERE DATE(created_at) = CURDATE()
+    GROUP BY ubicacion
+")->fetchAll();
+
 // FUNCIÓN PARA EXPORTAR A EXCEL
 function exportarAExcel($pdo) {
     // Usar los mismos filtros que la consulta principal
@@ -178,10 +198,11 @@ function exportarAExcel($pdo) {
     $filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
     $filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
     $filtro_modalidad = isset($_GET['modalidad']) ? sanitize($_GET['modalidad']) : '';
+    $filtro_ubicacion = isset($_GET['ubicacion']) ? sanitize($_GET['ubicacion']) : '';
     $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
     
     // Si no hay rango específico, mostrar solo hoy
-    if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad) {
+    if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
         $filtro_fecha_desde = date('Y-m-d');
         $filtro_fecha_hasta = date('Y-m-d');
     }
@@ -213,6 +234,11 @@ function exportarAExcel($pdo) {
     if ($filtro_modalidad) {
         $sql .= " AND p.modalidad = ?";
         $params[] = $filtro_modalidad;
+    }
+    
+    if ($filtro_ubicacion) {
+        $sql .= " AND p.ubicacion = ?";
+        $params[] = $filtro_ubicacion;
     }
     
     if ($buscar) {
@@ -252,6 +278,7 @@ function exportarAExcel($pdo) {
         'Precio',
         'Forma de Pago',
         'Modalidad',
+        'Ubicación',
         'Estado',
         'Observaciones',
         'Cliente Fijo',
@@ -277,6 +304,7 @@ function exportarAExcel($pdo) {
             number_format($pedido['precio'], 0, ',', '.'),
             $pedido['forma_pago'],
             $pedido['modalidad'],
+            $pedido['ubicacion'] ?: 'Sin especificar',
             $pedido['estado'],
             $pedido['observaciones'] ?: '',
             $cliente_fijo,
@@ -363,6 +391,48 @@ function exportarAExcel($pdo) {
         </div>
         <?php endif; ?>
 
+        <!-- NUEVA SECCIÓN: Estadísticas por ubicación -->
+        <?php if (!empty($stats_ubicacion)): ?>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <?php foreach ($stats_ubicacion as $stat): ?>
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="font-semibold text-gray-700">
+                            <?php if ($stat['ubicacion'] === 'Local 1'): ?>
+                                🏪 Local 1
+                            <?php else: ?>
+                                🏭 Fábrica
+                            <?php endif; ?>
+                        </h3>
+                        <span class="text-2xl font-bold text-<?= $stat['ubicacion'] === 'Local 1' ? 'blue' : 'orange' ?>-600">
+                            <?= $stat['total'] ?>
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 text-xs">
+                        <div class="text-center">
+                            <div class="font-bold text-yellow-600"><?= $stat['pendientes'] ?></div>
+                            <div class="text-gray-500">Pend.</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-blue-600"><?= $stat['preparando'] ?></div>
+                            <div class="text-gray-500">Prep.</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-bold text-green-600"><?= $stat['listos'] ?></div>
+                            <div class="text-gray-500">List.</div>
+                        </div>
+                        <div class="text-center">
+                            <a href="?ubicacion=<?= urlencode($stat['ubicacion']) ?>" 
+                               class="text-<?= $stat['ubicacion'] === 'Local 1' ? 'blue' : 'orange' ?>-600 hover:underline text-xs">
+                                Ver solo
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+
         <!-- Estadísticas rápidas -->
         <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
@@ -395,7 +465,7 @@ function exportarAExcel($pdo) {
             </div>
         </div>
 
-        <!-- FILTROS MEJORADOS -->
+        <!-- FILTROS MEJORADOS CON UBICACIÓN -->
         <div class="bg-white rounded-lg shadow mb-6 p-6">
             <form method="GET" id="filtrosForm">
                 
@@ -474,9 +544,42 @@ function exportarAExcel($pdo) {
                         </select>
                     </div>
                 </div>
+
+                <!-- NUEVA FILA: Filtro de ubicación -->
+                <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
+                    <!-- Ubicación -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Ubicación:</label>
+                        <select name="ubicacion" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                            <option value="">Todas las ubicaciones</option>
+                            <option value="Local 1" <?= $filtro_ubicacion === 'Local 1' ? 'selected' : '' ?>>🏪 Local 1</option>
+                            <option value="Fábrica" <?= $filtro_ubicacion === 'Fábrica' ? 'selected' : '' ?>>🏭 Fábrica</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Espacios vacíos para mantener el grid -->
+                    <div class="md:col-span-5"></div>
+                </div>
+
+                <!-- NUEVA SECCIÓN: Filtros rápidos por ubicación -->
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <div class="text-sm font-medium text-gray-700 mr-2">Filtrar por ubicación:</div>
+                    <button type="button" onclick="filtrarPorUbicacion('todas')" 
+                            class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">
+                        🌐 Todas
+                    </button>
+                    <button type="button" onclick="filtrarPorUbicacion('Local 1')" 
+                            class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm">
+                        🏪 Solo Local 1
+                    </button>
+                    <button type="button" onclick="filtrarPorUbicacion('Fábrica')" 
+                            class="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded text-sm">
+                        🏭 Solo Fábrica
+                    </button>
+                </div>
                 
                 <!-- Botones de acción -->
-                <div class="flex justify-between items-center">
+                <div class="flex justify-between items-center mt-6">
                     <div class="flex space-x-2">
                         <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg">
                             <i class="fas fa-search mr-2"></i>Filtrar
@@ -524,6 +627,7 @@ function exportarAExcel($pdo) {
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precio</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modalidad</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicación</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impresión</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
@@ -617,6 +721,17 @@ function exportarAExcel($pdo) {
                                             </span>
                                         <?php endif; ?>
                                     </td>
+                                    <td class="px-6 py-4">
+                                        <?php if ($pedido['ubicacion'] === 'Local 1'): ?>
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                🏪 Local 1
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                                🏭 Fábrica
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="px-6 py-4 text-sm text-gray-500">
                                         <div><?= date('d/m/Y', strtotime($pedido['created_at'])) ?></div>
                                         <div class="text-xs"><?= date('H:i', strtotime($pedido['created_at'])) ?></div>
@@ -673,7 +788,7 @@ function exportarAExcel($pdo) {
         <div class="mt-6 flex justify-between items-center text-gray-500">
             <p>
                 Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?>
-                <?php if ($buscar || $filtro_estado || $filtro_fecha_desde || $filtro_fecha_hasta || $filtro_modalidad): ?>
+                <?php if ($buscar || $filtro_estado || $filtro_fecha_desde || $filtro_fecha_hasta || $filtro_modalidad || $filtro_ubicacion): ?>
                     | <a href="?" class="text-blue-600 hover:underline">Limpiar filtros</a>
                 <?php endif; ?>
             </p>
@@ -944,6 +1059,17 @@ function exportarAExcel($pdo) {
             }
         }
         
+        // NUEVA FUNCIÓN: Filtrar por ubicación
+        function filtrarPorUbicacion(ubicacion) {
+            const params = new URLSearchParams(window.location.search);
+            if (ubicacion === 'todas') {
+                params.delete('ubicacion');
+            } else {
+                params.set('ubicacion', ubicacion);
+            }
+            window.location.search = params.toString();
+        }
+        
         function formatDate(date) {
             const año = date.getFullYear();
             const mes = String(date.getMonth() + 1).padStart(2, '0');
@@ -1023,8 +1149,10 @@ function exportarAExcel($pdo) {
             pedidoAImprimir = null;
         }
 
-        // FUNCIONES DEL MODAL DE DETALLES
+        // VER DETALLES - MODAL COMPLETO
         function verDetalles(pedidoId) {
+            console.log('Cargando detalles del pedido:', pedidoId);
+            
             const filas = document.querySelectorAll('tbody tr');
             let pedidoData = null;
             
@@ -1081,10 +1209,18 @@ function exportarAExcel($pdo) {
             const estado = estadoSelect.value;
             const modalidadInfo = celdas[5];
             const modalidad = modalidadInfo.textContent.includes('Delivery') ? 'Delivery' : 'Retira';
-            const fechaInfo = celdas[6];
+            
+            // Ubicación está en la columna 6
+            const ubicacionInfo = celdas[6];
+            const ubicacion = ubicacionInfo.textContent.includes('Local 1') ? 'Local 1' : 'Fábrica';
+            
+            // Fecha está ahora en la columna 7 (porque agregamos ubicación)
+            const fechaInfo = celdas[7];
             const fechas = fechaInfo.textContent.split('\n').map(f => f.trim()).filter(f => f);
             const fechaPedido = fechas.length >= 2 ? `${fechas[0]} ${fechas[1]}` : fechas[0] || 'N/A';
-            const impresionInfo = celdas[7];
+            
+            // Impresión está ahora en la columna 8
+            const impresionInfo = celdas[8];
             const impreso = impresionInfo.textContent.includes('Impresa');
 
             let fechaEntrega = '';
@@ -1111,6 +1247,7 @@ function exportarAExcel($pdo) {
                     formaPago: formaPago
                 },
                 modalidad: modalidad,
+                ubicacion: ubicacion,
                 estado: estado,
                 fechaPedido: fechaPedido,
                 fechaEntrega: fechaEntrega,
@@ -1129,7 +1266,7 @@ function exportarAExcel($pdo) {
             document.getElementById('modal-cliente-nombre').textContent = data.cliente.nombre;
             document.getElementById('modal-cliente-telefono').textContent = data.cliente.telefono;
             
-            // DIRECCIÓN - MUY IMPORTANTE
+            // DIRECCIÓN
             const direccionContainer = document.getElementById('modal-direccion-container');
             const direccionElement = document.getElementById('modal-cliente-direccion');
             
@@ -1234,11 +1371,6 @@ function exportarAExcel($pdo) {
             document.getElementById('detallesModal').classList.remove('hidden');
         }
 
-        function cerrarDetallesModal() {
-            document.getElementById('detallesModal').classList.add('hidden');
-            pedidoActualModal = null;
-        }
-
         function imprimirComandaDesdeModal() {
             if (pedidoActualModal) {
                 imprimirComanda(pedidoActualModal.id);
@@ -1255,6 +1387,14 @@ function exportarAExcel($pdo) {
                 const url = `https://wa.me/${telefono}?text=Hola%20${encodeURIComponent(nombre)},%20tu%20pedido%20#${pedidoActualModal.id}%20está%20${encodeURIComponent(estado)}`;
                 window.open(url, '_blank');
             }
+        }
+
+        function cerrarDetallesModal() {
+            const modal = document.getElementById('detallesModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+            pedidoActualModal = null;
         }
 
         // Cerrar modales al hacer clic fuera
