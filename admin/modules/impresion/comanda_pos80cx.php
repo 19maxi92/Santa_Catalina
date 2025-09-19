@@ -55,16 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Obtener parámetros de filtro (NOMBRES ORIGINALES RESTAURADOS)
+// Obtener parámetros de filtro (RESTAURADOS LOS NOMBRES ORIGINALES)
 $filtro_estado = $_GET['estado'] ?? '';
 $filtro_modalidad = $_GET['modalidad'] ?? '';
 $filtro_ubicacion = $_GET['ubicacion'] ?? '';
 $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
-$busqueda = $_GET['buscar'] ?? ''; // Nombre original: 'buscar'
+$busqueda = $_GET['buscar'] ?? ''; // Cambié a 'buscar' como en original
 $orden = $_GET['orden'] ?? 'created_at DESC';
 
-// Si no hay filtros, mostrar pedidos de hoy por defecto
+// Si no hay rango específico, mostrar solo hoy por defecto
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
     $fecha_desde = date('Y-m-d');
     $fecha_hasta = date('Y-m-d');
@@ -133,11 +133,10 @@ $pedidos = $stmt->fetchAll();
 $stats_sql = "SELECT 
     COUNT(*) as total,
     COUNT(CASE WHEN estado = 'Pendiente' THEN 1 END) as pendientes,
-    COUNT(CASE WHEN estado = 'Preparando' THEN 1 END) as preparando,
+    COUNT(CASE WHEN estado = 'En preparación' THEN 1 END) as preparacion,
     COUNT(CASE WHEN estado = 'Listo' THEN 1 END) as listos,
     COUNT(CASE WHEN estado = 'Entregado' THEN 1 END) as entregados,
-    COUNT(CASE WHEN impreso = 1 THEN 1 END) as impresos,
-    SUM(precio) as total_ventas
+    COUNT(CASE WHEN impreso = 1 THEN 1 END) as impresos
     FROM pedidos 
     WHERE DATE(created_at) = CURDATE()";
 
@@ -155,13 +154,14 @@ $stats = $pdo->query($stats_sql)->fetch();
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-6">
         
-            <div class="flex justify-between items-center mb-6">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">
                 <i class="fas fa-list-alt text-blue-500 mr-2"></i>Pedidos
             </h1>
             <div class="flex space-x-3">
-                <a href="../impresion/config.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-print mr-2"></i>Config Impresora
+                <a href="../impresion/config_pos80cx.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-print mr-2"></i>Config Local 1
                 </a>
                 <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
                     <i class="fas fa-plus mr-2"></i>Nuevo Pedido
@@ -185,7 +185,7 @@ $stats = $pdo->query($stats_sql)->fetch();
         <?php endif; ?>
 
         <!-- Estadísticas del día -->
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
             <div class="bg-white p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-gray-700"><?= $stats['total'] ?></div>
                 <div class="text-sm text-gray-500">Total Hoy</div>
@@ -195,8 +195,8 @@ $stats = $pdo->query($stats_sql)->fetch();
                 <div class="text-sm text-yellow-600">Pendientes</div>
             </div>
             <div class="bg-blue-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-blue-700"><?= $stats['preparando'] ?></div>
-                <div class="text-sm text-blue-600">Preparando</div>
+                <div class="text-2xl font-bold text-blue-700"><?= $stats['preparacion'] ?></div>
+                <div class="text-sm text-blue-600">En Prep.</div>
             </div>
             <div class="bg-green-100 p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-green-700"><?= $stats['listos'] ?></div>
@@ -209,10 +209,6 @@ $stats = $pdo->query($stats_sql)->fetch();
             <div class="bg-purple-100 p-4 rounded-lg shadow text-center">
                 <div class="text-2xl font-bold text-purple-700"><?= $stats['impresos'] ?></div>
                 <div class="text-sm text-purple-600">Impresos</div>
-            </div>
-            <div class="bg-emerald-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-emerald-700">$<?= number_format($stats['total_ventas'], 0, ',', '.') ?></div>
-                <div class="text-sm text-emerald-600">Ventas</div>
             </div>
         </div>
 
@@ -312,9 +308,12 @@ $stats = $pdo->query($stats_sql)->fetch();
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Ordenar por:</label>
                         <select name="orden" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <?php foreach ($ordenes_validos as $valor => $nombre): ?>
-                                <option value="<?= $valor ?>" <?= $orden === $valor ? 'selected' : '' ?>><?= $nombre ?></option>
-                            <?php endforeach; ?>
+                            <option value="created_at DESC" <?= $orden === 'created_at DESC' ? 'selected' : '' ?>>Más recientes</option>
+                            <option value="created_at ASC" <?= $orden === 'created_at ASC' ? 'selected' : '' ?>>Más antiguos</option>
+                            <option value="precio DESC" <?= $orden === 'precio DESC' ? 'selected' : '' ?>>Mayor precio</option>
+                            <option value="precio ASC" <?= $orden === 'precio ASC' ? 'selected' : '' ?>>Menor precio</option>
+                            <option value="estado ASC" <?= $orden === 'estado ASC' ? 'selected' : '' ?>>Por estado</option>
+                            <option value="nombre ASC" <?= $orden === 'nombre ASC' ? 'selected' : '' ?>>Por nombre</option>
                         </select>
                     </div>
                     
@@ -326,6 +325,10 @@ $stats = $pdo->query($stats_sql)->fetch();
                         <button type="button" onclick="limpiarFiltros()" 
                                 class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg">
                             <i class="fas fa-times mr-2"></i>Limpiar
+                        </button>
+                        <button type="button" onclick="aplicarFiltros()" 
+                                class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg">
+                            <i class="fas fa-check mr-2"></i>Aplicar
                         </button>
                     </div>
                 </div>
@@ -432,7 +435,7 @@ $stats = $pdo->query($stats_sql)->fetch();
                                         </span>
                                     <?php else: ?>
                                         <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                                            <i class="fas fa-store mr-1"></i>Retira
+                                            <i class="fas fa-store mr-1"></i>Retiro
                                         </span>
                                     <?php endif; ?>
                                 </td>
@@ -455,14 +458,14 @@ $stats = $pdo->query($stats_sql)->fetch();
                                             <?php
                                             switch ($pedido['estado']) {
                                                 case 'Pendiente': echo 'bg-yellow-100 text-yellow-800 border-yellow-300'; break;
-                                                case 'Preparando': echo 'bg-blue-100 text-blue-800 border-blue-300'; break;
+                                                case 'En preparación': echo 'bg-blue-100 text-blue-800 border-blue-300'; break;
                                                 case 'Listo': echo 'bg-green-100 text-green-800 border-green-300'; break;
                                                 case 'Entregado': echo 'bg-gray-100 text-gray-800 border-gray-300'; break;
                                                 default: echo 'bg-gray-100 text-gray-800 border-gray-300';
                                             }
                                             ?>">
                                         <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                                        <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
+                                        <option value="En preparación" <?= $pedido['estado'] === 'En preparación' ? 'selected' : '' ?>>En preparación</option>
                                         <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>Listo</option>
                                         <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
                                     </select>
@@ -541,6 +544,27 @@ $stats = $pdo->query($stats_sql)->fetch();
         </div>
     </div>
 
+    <!-- Modal de Impresión -->
+    <div id="impresionModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div id="impresionContent">
+                    <!-- Contenido dinámico -->
+                </div>
+                <div class="flex justify-center space-x-4 mt-6">
+                    <button onclick="confirmarImpresion()" 
+                            class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded">
+                        <i class="fas fa-print mr-2"></i>Confirmar Impresión
+                    </button>
+                    <button onclick="cerrarModal()" 
+                            class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de Detalles -->
     <div id="detallesModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
         <div class="relative top-10 mx-auto p-5 border max-w-4xl shadow-lg rounded-md bg-white">
@@ -557,6 +581,7 @@ $stats = $pdo->query($stats_sql)->fetch();
     </div>
 
     <script>
+        let pedidoAImprimir = null;
         let pedidoActualModal = null;
 
         // Funciones para filtros rápidos (RESTAURADAS)
@@ -631,7 +656,6 @@ $stats = $pdo->query($stats_sql)->fetch();
                 console.error('Formulario filtrosForm no encontrado');
             }
         }
-
         function filtrarPorUbicacion(ubicacion) {
             const params = new URLSearchParams(window.location.search);
             if (ubicacion === 'todas') {
@@ -642,59 +666,64 @@ $stats = $pdo->query($stats_sql)->fetch();
             window.location.search = params.toString();
         }
 
-        // FUNCIÓN PARA LOCAL 1 - ABRIR COMANDA PARA IMPRIMIR/PDF
+        // FUNCIÓN PRINCIPAL PARA LOCAL 1 - POS80-CX (RUTA CORREGIDA)
         function imprimirLocal1(pedidoId) {
-            console.log('🏪 Abriendo comanda Local 1 - Pedido #' + pedidoId);
+            console.log('🏪 Impresión Local 1 - Pedido #' + pedidoId);
             
-            // URL para abrir comanda en nueva ventana
-            const url = `../impresion/generar_pdf.php?pedido=${pedidoId}&ubicacion=Local%201`;
-            
-            // Abrir en nueva ventana
-            const ventana = window.open(url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
-            
-            if (!ventana) {
-                alert('❌ Error: No se pudo abrir la ventana.\n\n' +
-                      'Por favor, permite ventanas emergentes y vuelve a intentar.');
-                return false;
+            // Confirmar antes de imprimir
+            if (confirm(`¿Imprimir comanda del pedido #${pedidoId} en Local 1?\n\n` +
+                        `Impresora: POS80-CX (USB)\n` +
+                        `Formato: Ticket 80mm`)) {
+                
+                // URL corregida - usar la comanda multi con parámetro ubicación
+                const url = `../modules/impresion/comanda_multi.php?pedido=${pedidoId}&ubicacion=Local%201&auto=1`;
+                
+                // Configuración de ventana optimizada
+                const ventanaConfig = 'width=400,height=700,scrollbars=yes,resizable=no,menubar=no,toolbar=no,status=no';
+                
+                // Abrir ventana de impresión
+                const ventanaImpresion = window.open(url, '_blank', ventanaConfig);
+                
+                if (!ventanaImpresion) {
+                    alert('❌ Error: No se pudo abrir la ventana de impresión.\n\n' +
+                          'Soluciones:\n' +
+                          '• Permitir ventanas emergentes en este sitio\n' +
+                          '• Verificar bloqueador de pop-ups\n' +
+                          '• Intentar de nuevo');
+                    return false;
+                }
+                
+                // Focus en la nueva ventana
+                ventanaImpresion.focus();
+                
+                // Marcar como impreso automáticamente
+                setTimeout(() => {
+                    marcarPedidoComoImpreso(pedidoId);
+                }, 2000);
+                
+                console.log('✅ Comanda enviada a POS80-CX Local 1');
+                return true;
             }
             
-            // Focus en la nueva ventana
-            ventana.focus();
-            
-            // Marcar como impreso automáticamente
-            setTimeout(() => {
-                marcarPedidoComoImpreso(pedidoId);
-            }, 2000);
-            
-            console.log('✅ Comanda Local 1 abierta - usar Ctrl+P para imprimir/guardar PDF');
-            return true;
+            return false;
         }
 
-        // FUNCIÓN PARA FÁBRICA - ABRIR COMANDA PARA IMPRIMIR/PDF
+        // Función para impresora de Fábrica (3nstar RPT006S)
         function imprimirComanda(pedidoId) {
-            console.log('🏭 Abriendo comanda Fábrica - Pedido #' + pedidoId);
+            console.log('🏭 Impresión Fábrica - Pedido #' + pedidoId);
             
-            // URL para abrir comanda en nueva ventana
-            const url = `../impresion/generar_pdf.php?pedido=${pedidoId}&ubicacion=Fábrica`;
+            const url = `../modules/impresion/comanda_multi.php?pedido=${pedidoId}&ubicacion=Fábrica`;
+            const ventanaConfig = 'width=500,height=700,scrollbars=yes';
             
-            // Abrir en nueva ventana
-            const ventana = window.open(url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
+            const ventana = window.open(url, '_blank', ventanaConfig);
             
             if (!ventana) {
-                alert('❌ Error: No se pudo abrir la ventana.\n\n' +
-                      'Por favor, permite ventanas emergentes y vuelve a intentar.');
+                alert('Error: No se pudo abrir la ventana de impresión.\nVerificar que no esté bloqueada por el navegador.');
                 return false;
             }
             
-            // Focus en la nueva ventana
             ventana.focus();
-            
-            // Marcar como impreso automáticamente
-            setTimeout(() => {
-                marcarPedidoComoImpreso(pedidoId);
-            }, 2000);
-            
-            console.log('🖨️ Comanda Fábrica abierta - usar Ctrl+P para imprimir/guardar PDF');
+            console.log('🖨️ Abriendo comanda para Fábrica - Pedido #' + pedidoId);
             return true;
         }
 
@@ -948,9 +977,23 @@ $stats = $pdo->query($stats_sql)->fetch();
             pedidoActualModal = null;
         }
 
+        function cerrarModal() {
+            document.getElementById('impresionModal').classList.add('hidden');
+            pedidoAImprimir = null;
+        }
+
         // Cerrar modales al hacer clic fuera
         document.addEventListener('DOMContentLoaded', function() {
+            const impresionModal = document.getElementById('impresionModal');
             const detallesModal = document.getElementById('detallesModal');
+            
+            if (impresionModal) {
+                impresionModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        cerrarModal();
+                    }
+                });
+            }
             
             if (detallesModal) {
                 detallesModal.addEventListener('click', function(e) {
@@ -970,6 +1013,7 @@ $stats = $pdo->query($stats_sql)->fetch();
         document.addEventListener('keydown', function(e) {
             // Escape para cerrar modales
             if (e.key === 'Escape') {
+                cerrarModal();
                 cerrarDetallesModal();
             }
         });

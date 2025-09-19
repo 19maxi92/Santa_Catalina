@@ -1,177 +1,145 @@
 <?php
-// admin/modules/productos/index.php - Versión corregida para evitar error 500
+/**
+ * Módulo de Productos Simplificado
+ * admin/modules/productos/index.php - REEMPLAZAR EL ACTUAL
+ * Solo para actualizar precios de manera simple y rápida
+ */
 
-// Error handling mejorado
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+require_once '../../config.php';
+requireLogin();
 
-// Verificar que el archivo existe antes de incluir
-$config_path = '../../config.php';
-if (!file_exists($config_path)) {
-    die("Error: No se puede encontrar config.php en la ruta: $config_path");
-}
+$pdo = getConnection();
 
-try {
-    require_once $config_path;
-} catch (Exception $e) {
-    die("Error cargando configuración: " . $e->getMessage());
-}
-
-// Verificar que las funciones necesarias existen
-if (!function_exists('getConnection')) {
-    die("Error: Función getConnection no está disponible");
-}
-
-if (!function_exists('requireLogin')) {
-    die("Error: Función requireLogin no está disponible");
-}
-
-// Iniciar sesión y verificar login
-try {
-    requireLogin();
-} catch (Exception $e) {
-    die("Error en verificación de login: " . $e->getMessage());
-}
-
-// Obtener conexión a BD
-try {
-    $pdo = getConnection();
-} catch (Exception $e) {
-    die("Error de conexión a base de datos: " . $e->getMessage());
-}
-
-// Manejar acciones
 $mensaje = '';
 $error = '';
 
-if ($_POST) {
+// Procesar actualización masiva
+if ($_POST && isset($_POST['actualizar_masivo'])) {
     try {
-        switch ($_POST['accion']) {
-            case 'toggle_estado':
-                $id = (int)$_POST['id'];
-                $estado = $_POST['estado'] === '1' ? 0 : 1;
-                
-                $stmt = $pdo->prepare("UPDATE productos SET activo = ?, updated_by = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$estado, $_SESSION['admin_user'] ?? 'admin', $id]);
-                $mensaje = $estado ? 'Producto activado' : 'Producto desactivado';
-                break;
-
-            case 'eliminar':
-                $id = (int)$_POST['id'];
-                
-                // Verificar si tiene pedidos asociados
-                $stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE producto = (SELECT nombre FROM productos WHERE id = ?)");
+        $productos_actualizados = 0;
+        
+        foreach ($_POST['productos'] as $id => $datos) {
+            $precio_efectivo = (float)$datos['precio_efectivo'];
+            $precio_transferencia = (float)$datos['precio_transferencia'];
+            
+            if ($precio_efectivo > 0 && $precio_transferencia > 0) {
+                // Obtener precio anterior para historial
+                $stmt = $pdo->prepare("SELECT nombre, precio_efectivo, precio_transferencia FROM productos WHERE id = ?");
                 $stmt->execute([$id]);
-                $tiene_pedidos = $stmt->fetchColumn();
-
-                if ($tiene_pedidos > 0) {
-                    $error = 'No se puede eliminar: el producto tiene pedidos asociados. Use desactivar en su lugar.';
-                } else {
-                    $stmt = $pdo->prepare("DELETE FROM productos WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $mensaje = 'Producto eliminado correctamente';
+                $producto_anterior = $stmt->fetch();
+                
+                if ($producto_anterior) {
+                    // Actualizar precio
+                    $stmt = $pdo->prepare("UPDATE productos SET precio_efectivo = ?, precio_transferencia = ?, updated_at = NOW(), updated_by = ? WHERE id = ?");
+                    $stmt->execute([$precio_efectivo, $precio_transferencia, $_SESSION['admin_user'] ?? 'admin', $id]);
+                    
+                    // Guardar en historial si cambió
+                    if ($producto_anterior['precio_efectivo'] != $precio_efectivo || $producto_anterior['precio_transferencia'] != $precio_transferencia) {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO historial_precios 
+                            (producto_id, tipo, precio_anterior_efectivo, precio_anterior_transferencia, 
+                             precio_nuevo_efectivo, precio_nuevo_transferencia, motivo, usuario, fecha_cambio) 
+                            VALUES (?, 'producto', ?, ?, ?, ?, ?, ?, NOW())
+                        ");
+                        $stmt->execute([
+                            $id,
+                            $producto_anterior['precio_efectivo'],
+                            $producto_anterior['precio_transferencia'],
+                            $precio_efectivo,
+                            $precio_transferencia,
+                            'Actualización masiva',
+                            $_SESSION['admin_user'] ?? 'admin'
+                        ]);
+                    }
+                    
+                    $productos_actualizados++;
                 }
-                break;
-
-            case 'cambio_rapido_precio':
-                $id = (int)$_POST['id'];
-                $nuevo_efectivo = (float)$_POST['precio_efectivo'];
-                $nuevo_transferencia = (float)$_POST['precio_transferencia'];
-                $motivo = sanitize($_POST['motivo'] ?? '');
-
-                if ($nuevo_efectivo <= 0 || $nuevo_transferencia <= 0) {
-                    throw new Exception('Los precios deben ser mayores a 0');
-                }
-
-                $stmt = $pdo->prepare("UPDATE productos SET precio_efectivo = ?, precio_transferencia = ?, updated_by = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$nuevo_efectivo, $nuevo_transferencia, $_SESSION['admin_user'] ?? 'admin', $id]);
-                $mensaje = 'Precios actualizados correctamente';
-                break;
+            }
         }
+        
+        $mensaje = "✅ $productos_actualizados productos actualizados correctamente";
+        
     } catch (Exception $e) {
-        $error = 'Error procesando la acción: ' . $e->getMessage();
+        $error = "❌ Error: " . $e->getMessage();
     }
 }
 
-// Obtener filtros
-$filtro_categoria = isset($_GET['categoria']) ? sanitize($_GET['categoria']) : '';
-$filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
-$buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
-
-// Construir consulta de productos
-try {
-    $sql = "SELECT p.*, 
-                   COUNT(pe.id) as total_pedidos,
-                   SUM(pe.cantidad) as unidades_vendidas,
-                   SUM(pe.precio) as total_facturado,
-                   MAX(pe.created_at) as ultima_venta
-            FROM productos p
-            LEFT JOIN pedidos pe ON pe.producto = p.nombre
-            WHERE 1=1";
-    $params = [];
-
-    if ($filtro_categoria) {
-        $sql .= " AND p.categoria = ?";
-        $params[] = $filtro_categoria;
+// Crear producto nuevo
+if ($_POST && isset($_POST['crear_producto'])) {
+    try {
+        $nombre = sanitize($_POST['nombre_nuevo']);
+        $precio_efectivo = (float)$_POST['precio_efectivo_nuevo'];
+        $precio_transferencia = (float)$_POST['precio_transferencia_nuevo'];
+        $categoria = sanitize($_POST['categoria_nueva'] ?? 'Standard');
+        
+        if (empty($nombre)) {
+            throw new Exception('El nombre es obligatorio');
+        }
+        
+        if ($precio_efectivo <= 0 || $precio_transferencia <= 0) {
+            throw new Exception('Los precios deben ser mayores a 0');
+        }
+        
+        // Verificar que no exista
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM productos WHERE nombre = ?");
+        $stmt->execute([$nombre]);
+        if ($stmt->fetchColumn() > 0) {
+            throw new Exception('Ya existe un producto con ese nombre');
+        }
+        
+        // Crear producto
+        $stmt = $pdo->prepare("
+            INSERT INTO productos (nombre, precio_efectivo, precio_transferencia, categoria, activo, created_at, updated_at, updated_by) 
+            VALUES (?, ?, ?, ?, 1, NOW(), NOW(), ?)
+        ");
+        $stmt->execute([$nombre, $precio_efectivo, $precio_transferencia, $categoria, $_SESSION['admin_user'] ?? 'admin']);
+        
+        $mensaje = "✅ Producto '$nombre' creado correctamente";
+        
+    } catch (Exception $e) {
+        $error = "❌ Error: " . $e->getMessage();
     }
-
-    if ($filtro_estado !== '') {
-        $sql .= " AND p.activo = ?";
-        $params[] = $filtro_estado;
-    }
-
-    if ($buscar) {
-        $sql .= " AND (p.nombre LIKE ? OR p.descripcion LIKE ?)";
-        $buscarParam = "%$buscar%";
-        $params[] = $buscarParam;
-        $params[] = $buscarParam;
-    }
-
-    $sql .= " GROUP BY p.id ORDER BY p.orden_mostrar, p.nombre";
-
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $productos = $stmt->fetchAll();
-
-} catch (Exception $e) {
-    $error = 'Error obteniendo productos: ' . $e->getMessage();
-    $productos = [];
 }
 
-// Obtener categorías para filtro
-try {
-    $categorias = $pdo->query("SELECT DISTINCT categoria FROM productos WHERE categoria IS NOT NULL ORDER BY categoria")->fetchAll();
-} catch (Exception $e) {
-    $categorias = [];
+// Activar/Desactivar producto
+if ($_POST && isset($_POST['toggle_activo'])) {
+    try {
+        $producto_id = (int)$_POST['producto_id'];
+        $nuevo_estado = (int)$_POST['nuevo_estado'];
+        
+        $stmt = $pdo->prepare("UPDATE productos SET activo = ?, updated_at = NOW(), updated_by = ? WHERE id = ?");
+        $stmt->execute([$nuevo_estado, $_SESSION['admin_user'] ?? 'admin', $producto_id]);
+        
+        $estado_texto = $nuevo_estado ? 'activado' : 'desactivado';
+        $mensaje = "✅ Producto $estado_texto correctamente";
+        
+    } catch (Exception $e) {
+        $error = "❌ Error: " . $e->getMessage();
+    }
 }
 
-// Estadísticas generales
-try {
-    $stats = $pdo->query("
-        SELECT 
-            COUNT(*) as total_productos,
-            SUM(CASE WHEN activo = 1 THEN 1 ELSE 0 END) as productos_activos,
-            SUM(CASE WHEN activo = 0 THEN 1 ELSE 0 END) as productos_inactivos
-        FROM productos
-    ")->fetch();
+// Obtener todos los productos
+$productos = $pdo->query("
+    SELECT id, nombre, precio_efectivo, precio_transferencia, categoria, activo, updated_at 
+    FROM productos 
+    ORDER BY categoria, nombre
+")->fetchAll();
 
-    $promos_activas = $pdo->query("
-        SELECT COUNT(*) FROM promos 
-        WHERE activa = 1 
-        AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio)
-        AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)
-    ")->fetchColumn();
-} catch (Exception $e) {
-    $stats = ['total_productos' => 0, 'productos_activos' => 0, 'productos_inactivos' => 0];
-    $promos_activas = 0;
-}
+// Obtener categorías para el selector
+$categorias = $pdo->query("
+    SELECT DISTINCT categoria 
+    FROM productos 
+    WHERE categoria IS NOT NULL 
+    ORDER BY categoria
+")->fetchAll(PDO::FETCH_COLUMN);
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Productos - <?= APP_NAME ?></title>
+    <title>Gestión de Precios - <?= APP_NAME ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -184,7 +152,7 @@ try {
                     <i class="fas fa-arrow-left"></i>
                 </a>
                 <h1 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-boxes text-purple-500 mr-2"></i>Gestión de Productos
+                    <i class="fas fa-tags text-green-500 mr-2"></i>Gestión de Precios
                 </h1>
             </div>
             <a href="../../logout.php" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded">
@@ -193,99 +161,65 @@ try {
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="container mx-auto px-4 py-6">
-        
         <!-- Mensajes -->
         <?php if ($mensaje): ?>
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($mensaje) ?>
+            <?= $mensaje ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-exclamation-circle mr-2"></i><?= htmlspecialchars($error) ?>
+            <?= $error ?>
         </div>
         <?php endif; ?>
 
-        <!-- Estadísticas -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-blue-600"><?= $stats['productos_activos'] ?></div>
-                <div class="text-sm text-gray-600">Productos Activos</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-gray-600"><?= $stats['productos_inactivos'] ?></div>
-                <div class="text-sm text-gray-600">Productos Inactivos</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-purple-600"><?= $promos_activas ?></div>
-                <div class="text-sm text-gray-600">Promos Activas</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-green-600"><?= $stats['total_productos'] ?></div>
-                <div class="text-sm text-gray-600">Total Productos</div>
-            </div>
-        </div>
-
-        <!-- Barra de herramientas -->
-        <div class="bg-white rounded-lg shadow mb-6 p-6">
-            <div class="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 mb-4">
-                <div class="flex space-x-3">
-                    <a href="crear_producto.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                        <i class="fas fa-plus mr-2"></i>Nuevo Producto
-                    </a>
-                    <a href="promos.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg">
-                        <i class="fas fa-tags mr-2"></i>Gestionar Promos
-                    </a>
-                    <a href="historial.php" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg">
-                        <i class="fas fa-history mr-2"></i>Historial Cambios
-                    </a>
-                </div>
-
-                <!-- Acciones rápidas -->
-                <div class="flex space-x-2">
-                    <button onclick="actualizarTodosPrecios()" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm">
-                        <i class="fas fa-calculator mr-1"></i>Ajuste Masivo
-                    </button>
-                </div>
-            </div>
-
-            <!-- Filtros -->
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <!-- Buscador -->
+        <!-- Crear nuevo producto -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 class="text-lg font-semibold mb-4">
+                <i class="fas fa-plus text-blue-500 mr-2"></i>Crear Nuevo Producto
+            </h3>
+            
+            <form method="POST" class="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
-                    <input type="text" name="buscar" value="<?= htmlspecialchars($buscar) ?>" 
-                           placeholder="Buscar producto..." 
-                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                    <input type="text" name="nombre_nuevo" required 
+                           placeholder="Ej: 24 Jamón y Queso"
+                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                 </div>
                 
-                <!-- Categoría -->
                 <div>
-                    <select name="categoria" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
-                        <option value="">Todas las categorías</option>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Precio Efectivo</label>
+                    <input type="number" name="precio_efectivo_nuevo" required min="0" step="0.01"
+                           placeholder="12500"
+                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Precio Transferencia</label>
+                    <input type="number" name="precio_transferencia_nuevo" required min="0" step="0.01"
+                           placeholder="12500"
+                           class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                    <select name="categoria_nueva" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="Clásicos">Clásicos</option>
+                        <option value="Especiales">Especiales</option>
+                        <option value="Premium">Premium</option>
+                        <option value="Elegidos">Elegidos</option>
                         <?php foreach ($categorias as $cat): ?>
-                            <option value="<?= htmlspecialchars($cat['categoria']) ?>" <?= $filtro_categoria === $cat['categoria'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($cat['categoria']) ?>
-                            </option>
+                            <option value="<?= htmlspecialchars($cat) ?>"><?= htmlspecialchars($cat) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 
-                <!-- Estado -->
-                <div>
-                    <select name="estado" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
-                        <option value="">Todos los estados</option>
-                        <option value="1" <?= $filtro_estado === '1' ? 'selected' : '' ?>>Solo Activos</option>
-                        <option value="0" <?= $filtro_estado === '0' ? 'selected' : '' ?>>Solo Inactivos</option>
-                    </select>
-                </div>
-                
-                <!-- Botón buscar -->
-                <div>
-                    <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded-lg">
-                        <i class="fas fa-search mr-1"></i>Filtrar
+                <div class="flex items-end">
+                    <button type="submit" name="crear_producto" 
+                            class="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium">
+                        <i class="fas fa-plus mr-1"></i>Crear
                     </button>
                 </div>
             </form>
@@ -293,246 +227,182 @@ try {
 
         <!-- Lista de productos -->
         <div class="bg-white rounded-lg shadow overflow-hidden">
-            <?php if (empty($productos)): ?>
-                <div class="p-8 text-center text-gray-500">
-                    <i class="fas fa-box-open text-6xl mb-4"></i>
-                    <h3 class="text-xl mb-2">No hay productos</h3>
-                    <p>No se encontraron productos con los filtros aplicados</p>
-                    <div class="mt-4">
-                        <a href="crear_producto.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg">
-                            <i class="fas fa-plus mr-2"></i>Crear Primer Producto
-                        </a>
-                    </div>
-                </div>
-            <?php else: ?>
+            <div class="bg-gray-50 px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold flex items-center justify-between">
+                    <span><i class="fas fa-list text-green-500 mr-2"></i>Productos Actuales (<?= count($productos) ?>)</span>
+                    <span class="text-sm text-gray-600">Última actualización: <?= date('d/m/Y H:i') ?></span>
+                </h3>
+            </div>
+
+            <form method="POST" id="formActualizacion">
                 <div class="overflow-x-auto">
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoría</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Precios</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ventas</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Efectivo</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Transferencia</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diferencia</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            <?php foreach ($productos as $producto): ?>
-                                <tr class="hover:bg-gray-50 <?= $producto['activo'] ? '' : 'opacity-50' ?>">
-                                    <td class="px-6 py-4">
-                                        <div class="flex items-center">
-                                            <div>
-                                                <div class="text-sm font-medium text-gray-900">
-                                                    <?= htmlspecialchars($producto['nombre']) ?>
-                                                </div>
-                                                <div class="text-sm text-gray-500 max-w-xs truncate">
-                                                    <?= htmlspecialchars($producto['descripcion'] ?: 'Sin descripción') ?>
-                                                </div>
-                                                <?php if ($producto['orden_mostrar'] > 0): ?>
-                                                    <div class="text-xs text-blue-600">Orden: <?= $producto['orden_mostrar'] ?></div>
-                                                <?php endif; ?>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full 
-                                            <?php
-                                            switch($producto['categoria']) {
-                                                case 'Premium': echo 'bg-purple-100 text-purple-800'; break;
-                                                case 'Surtidos': echo 'bg-blue-100 text-blue-800'; break;
-                                                case 'Clásicos': echo 'bg-green-100 text-green-800'; break;
-                                                default: echo 'bg-gray-100 text-gray-800';
-                                            }
-                                            ?>">
-                                            <?= htmlspecialchars($producto['categoria'] ?: 'Standard') ?>
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <div class="text-sm">
-                                            <div class="font-medium text-green-600">
-                                                Efectivo: <?= formatPrice($producto['precio_efectivo']) ?>
-                                            </div>
-                                            <div class="text-gray-500">
-                                                Transfer: <?= formatPrice($producto['precio_transferencia']) ?>
-                                            </div>
-                                            <button onclick="editarPrecioRapido(<?= $producto['id'] ?>, '<?= htmlspecialchars($producto['nombre']) ?>', <?= $producto['precio_efectivo'] ?>, <?= $producto['precio_transferencia'] ?>)" 
-                                                    class="text-xs text-blue-600 hover:underline mt-1">
-                                                <i class="fas fa-edit mr-1"></i>Editar rápido
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm text-gray-900">
-                                        <?php if ($producto['total_pedidos'] > 0): ?>
-                                            <div class="space-y-1">
-                                                <div><strong><?= $producto['total_pedidos'] ?></strong> pedidos</div>
-                                                <div><strong><?= $producto['unidades_vendidas'] ?></strong> unidades</div>
-                                                <div class="text-green-600 font-medium"><?= formatPrice($producto['total_facturado']) ?></div>
-                                                <?php if ($producto['ultima_venta']): ?>
-                                                    <div class="text-xs text-gray-500">
-                                                        Última: <?= date('d/m/Y', strtotime($producto['ultima_venta'])) ?>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </div>
-                                        <?php else: ?>
-                                            <span class="text-gray-400">Sin ventas aún</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="px-6 py-4">
-                                        <form method="POST" class="inline">
-                                            <input type="hidden" name="accion" value="toggle_estado">
-                                            <input type="hidden" name="id" value="<?= $producto['id'] ?>">
-                                            <input type="hidden" name="estado" value="<?= $producto['activo'] ?>">
-                                            <button type="submit" 
-                                                    class="px-2 py-1 text-xs font-medium rounded-full border-0 
-                                                    <?= $producto['activo'] 
-                                                        ? 'bg-green-100 text-green-800' 
-                                                        : 'bg-red-100 text-red-800' ?>">
-                                                <?= $producto['activo'] ? '✅ Activo' : '❌ Inactivo' ?>
-                                            </button>
-                                        </form>
-                                    </td>
-                                    <td class="px-6 py-4 text-sm font-medium">
-                                        <div class="flex space-x-2">
-                                            <a href="editar_producto.php?id=<?= $producto['id'] ?>" 
-                                               class="text-blue-600 hover:text-blue-900" title="Editar completo">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            <a href="duplicar_producto.php?id=<?= $producto['id'] ?>" 
-                                               class="text-green-600 hover:text-green-900" title="Duplicar">
-                                                <i class="fas fa-copy"></i>
-                                            </a>
-                                            <?php if ($producto['total_pedidos'] == 0): ?>
-                                                <button onclick="eliminarProducto(<?= $producto['id'] ?>, '<?= htmlspecialchars($producto['nombre']) ?>')" 
-                                                        class="text-red-600 hover:text-red-900" title="Eliminar">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            <?php else: ?>
-                                                <span class="text-gray-400" title="No se puede eliminar: tiene pedidos">
-                                                    <i class="fas fa-trash"></i>
-                                                </span>
-                                            <?php endif; ?>
-                                        </div>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <?php 
+                            $categoria_actual = '';
+                            foreach ($productos as $producto): 
+                                $diferencia = $producto['precio_transferencia'] - $producto['precio_efectivo'];
+                                $porcentaje_diferencia = $producto['precio_efectivo'] > 0 ? ($diferencia / $producto['precio_efectivo']) * 100 : 0;
+                                
+                                // Separador por categoría
+                                if ($categoria_actual !== $producto['categoria']):
+                                    $categoria_actual = $producto['categoria'];
+                            ?>
+                                <tr class="bg-blue-50">
+                                    <td colspan="6" class="px-6 py-2 text-sm font-semibold text-blue-800 uppercase">
+                                        📁 <?= htmlspecialchars($categoria_actual ?: 'Sin categoría') ?>
                                     </td>
                                 </tr>
+                            <?php endif; ?>
+                            
+                            <tr class="<?= $producto['activo'] ? 'hover:bg-gray-50' : 'bg-gray-100 opacity-75' ?>">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <form method="POST" class="inline">
+                                        <input type="hidden" name="producto_id" value="<?= $producto['id'] ?>">
+                                        <input type="hidden" name="nuevo_estado" value="<?= $producto['activo'] ? 0 : 1 ?>">
+                                        <button type="submit" name="toggle_activo" 
+                                                class="<?= $producto['activo'] ? 'text-green-600 hover:text-red-600' : 'text-red-600 hover:text-green-600' ?> text-lg"
+                                                title="<?= $producto['activo'] ? 'Desactivar' : 'Activar' ?>">
+                                            <i class="fas <?= $producto['activo'] ? 'fa-toggle-on' : 'fa-toggle-off' ?>"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                                
+                                <td class="px-6 py-4">
+                                    <div class="font-medium text-gray-900"><?= htmlspecialchars($producto['nombre']) ?></div>
+                                    <div class="text-sm text-gray-500">ID: <?= $producto['id'] ?></div>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="number" 
+                                           name="productos[<?= $producto['id'] ?>][precio_efectivo]" 
+                                           value="<?= $producto['precio_efectivo'] ?>"
+                                           min="0" step="0.01"
+                                           class="w-24 px-2 py-1 border rounded text-center focus:ring-2 focus:ring-green-500"
+                                           <?= $producto['activo'] ? '' : 'disabled' ?>>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <input type="number" 
+                                           name="productos[<?= $producto['id'] ?>][precio_transferencia]" 
+                                           value="<?= $producto['precio_transferencia'] ?>"
+                                           min="0" step="0.01"
+                                           class="w-24 px-2 py-1 border rounded text-center focus:ring-2 focus:ring-green-500"
+                                           <?= $producto['activo'] ? '' : 'disabled' ?>>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="<?= $diferencia > 0 ? 'text-green-600' : ($diferencia < 0 ? 'text-red-600' : 'text-gray-600') ?>">
+                                        $<?= number_format(abs($diferencia)) ?>
+                                        <?php if ($porcentaje_diferencia != 0): ?>
+                                            <br><span class="text-xs">(<?= number_format($porcentaje_diferencia, 1) ?>%)</span>
+                                        <?php endif; ?>
+                                    </span>
+                                </td>
+                                
+                                <td class="px-6 py-4 whitespace-nowrap text-sm">
+                                    <span class="text-gray-500">
+                                        <?= date('d/m H:i', strtotime($producto['updated_at'])) ?>
+                                    </span>
+                                </td>
+                            </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Footer con información -->
-        <div class="mt-6 text-center text-gray-500">
-            <p>
-                Mostrando <?= count($productos) ?> producto<?= count($productos) !== 1 ? 's' : '' ?>
-                <?php if ($buscar || $filtro_categoria || $filtro_estado !== ''): ?>
-                    | <a href="?" class="text-purple-600 hover:underline">Limpiar filtros</a>
-                <?php endif; ?>
-            </p>
-        </div>
-    </main>
-
-    <!-- Modal Edición Rápida de Precios -->
-    <div id="precioModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-dollar-sign text-green-500 mr-2"></i>Editar Precios
-            </h3>
-            
-            <form id="precioForm" method="POST">
-                <input type="hidden" name="accion" value="cambio_rapido_precio">
-                <input type="hidden" name="id" id="precio_producto_id">
                 
-                <div class="mb-4">
-                    <div class="font-medium text-gray-800" id="precio_producto_nombre"></div>
-                    <div class="text-sm text-gray-600">Actualización rápida de precios</div>
-                </div>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-gray-700 mb-2">Precio Efectivo</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-500">$</span>
-                            <input type="number" name="precio_efectivo" id="precio_efectivo" step="100" required
-                                   class="w-full pl-8 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                <div class="bg-gray-50 px-6 py-4 border-t">
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-gray-600">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Los cambios se guardan en el historial automáticamente
                         </div>
+                        <button type="submit" name="actualizar_masivo" 
+                                class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-medium"
+                                onclick="return confirm('¿Actualizar todos los precios modificados?')">
+                            <i class="fas fa-save mr-2"></i>Actualizar Precios
+                        </button>
                     </div>
-                    
-                    <div>
-                        <label class="block text-gray-700 mb-2">Precio Transferencia</label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-500">$</span>
-                            <input type="number" name="precio_transferencia" id="precio_transferencia" step="100" required
-                                   class="w-full pl-8 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-gray-700 mb-2">Motivo del cambio</label>
-                        <select name="motivo" class="w-full px-3 py-2 border rounded-lg">
-                            <option value="Ajuste por inflación">Ajuste por inflación</option>
-                            <option value="Incremento costos">Incremento de costos</option>
-                            <option value="Promoción temporal">Promoción temporal</option>
-                            <option value="Corrección precio">Corrección de precio</option>
-                            <option value="Otro">Otro motivo</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="flex justify-end space-x-2 mt-6">
-                    <button type="button" onclick="cerrarPrecioModal()" 
-                            class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                        Cancelar
-                    </button>
-                    <button type="submit" 
-                            class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
-                        <i class="fas fa-save mr-1"></i>Actualizar Precios
-                    </button>
                 </div>
             </form>
         </div>
-    </div>
+
+        <!-- Acciones rápidas -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="historial.php" class="bg-blue-500 hover:bg-blue-600 text-white p-4 rounded-lg text-center">
+                <i class="fas fa-history text-2xl mb-2"></i>
+                <div class="font-medium">Ver Historial</div>
+                <div class="text-sm opacity-75">Cambios de precios</div>
+            </a>
+            
+            <button onclick="aplicarAumentoMasivo()" 
+                    class="bg-yellow-500 hover:bg-yellow-600 text-white p-4 rounded-lg text-center">
+                <i class="fas fa-percentage text-2xl mb-2"></i>
+                <div class="font-medium">Aumento Masivo</div>
+                <div class="text-sm opacity-75">Aplicar % a todos</div>
+            </button>
+            
+            <a href="../pedidos/crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white p-4 rounded-lg text-center">
+                <i class="fas fa-plus-circle text-2xl mb-2"></i>
+                <div class="font-medium">Crear Pedido</div>
+                <div class="text-sm opacity-75">Con precios actuales</div>
+            </a>
+        </div>
+    </main>
 
     <script>
-        // Edición rápida de precios
-        function editarPrecioRapido(id, nombre, precioEfectivo, precioTransferencia) {
-            document.getElementById('precio_producto_id').value = id;
-            document.getElementById('precio_producto_nombre').textContent = nombre;
-            document.getElementById('precio_efectivo').value = precioEfectivo;
-            document.getElementById('precio_transferencia').value = precioTransferencia;
-            document.getElementById('precioModal').classList.remove('hidden');
-        }
-
-        function cerrarPrecioModal() {
-            document.getElementById('precioModal').classList.add('hidden');
-        }
-
-        // Eliminar producto
-        function eliminarProducto(id, nombre) {
-            if (confirm(`¿Estás seguro de eliminar "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="eliminar">
-                    <input type="hidden" name="id" value="${id}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
+        function aplicarAumentoMasivo() {
+            const porcentaje = prompt('¿Qué porcentaje de aumento aplicar?\nEjemplo: 10 para aumentar 10%');
+            
+            if (porcentaje && !isNaN(porcentaje)) {
+                const aumento = parseFloat(porcentaje) / 100;
+                
+                if (confirm(`¿Aplicar ${porcentaje}% de aumento a todos los productos activos?`)) {
+                    document.querySelectorAll('input[name*="precio_efectivo"]').forEach(input => {
+                        if (!input.disabled) {
+                            const valorActual = parseFloat(input.value) || 0;
+                            input.value = Math.round(valorActual * (1 + aumento));
+                        }
+                    });
+                    
+                    document.querySelectorAll('input[name*="precio_transferencia"]').forEach(input => {
+                        if (!input.disabled) {
+                            const valorActual = parseFloat(input.value) || 0;
+                            input.value = Math.round(valorActual * (1 + aumento));
+                        }
+                    });
+                    
+                    alert('✅ Aumento aplicado. ¡No olvides hacer click en "Actualizar Precios"!');
+                }
             }
         }
 
-        // Ajuste masivo de precios
-        function actualizarTodosPrecios() {
-            window.location.href = 'ajuste_masivo.php';
-        }
-
-        // Cerrar modal al hacer clic fuera
+        // Resaltar campos modificados
         document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('precioModal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    cerrarPrecioModal();
-                }
+            const inputs = document.querySelectorAll('input[type="number"]');
+            
+            inputs.forEach(input => {
+                const valorOriginal = input.value;
+                
+                input.addEventListener('input', function() {
+                    if (this.value != valorOriginal) {
+                        this.style.backgroundColor = '#fef3c7'; // yellow-100
+                        this.style.borderColor = '#f59e0b'; // yellow-500
+                    } else {
+                        this.style.backgroundColor = '';
+                        this.style.borderColor = '';
+                    }
+                });
             });
         });
     </script>

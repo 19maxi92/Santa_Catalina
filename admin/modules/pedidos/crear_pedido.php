@@ -32,14 +32,44 @@ if ($_POST) {
         $telefono = sanitize($_POST['telefono']);
         $direccion = sanitize($_POST['direccion']);
         $modalidad = $_POST['modalidad'];
-        $ubicacion = $_POST['ubicacion']; // NUEVO CAMPO
+        $ubicacion = $_POST['ubicacion'];
         $forma_pago = $_POST['forma_pago'];
         $observaciones = sanitize($_POST['observaciones']);
         
-        // Campos de fecha y hora
+        // ========== MODIFICACIÓN 1: HORARIOS CON 3 TURNOS ==========
         $fecha_entrega = $_POST['fecha_entrega'] ?? null;
-        $hora_entrega = $_POST['hora_entrega'] ?? null;
-        $notas_horario = sanitize($_POST['notas_horario'] ?? '');
+        $hora_entrega = null;
+        $notas_horario = '';
+        
+        // Procesar turnos de delivery si es delivery
+        if ($modalidad === 'Delivery') {
+            $turno_delivery = $_POST['turno_delivery'] ?? '';
+            if (empty($turno_delivery)) {
+                throw new Exception('Debe seleccionar un turno de delivery');
+            }
+            
+            // Mapear turnos a horarios específicos
+            $turnos_horarios = [
+                'mañana' => ['hora' => '10:00:00', 'nombre' => 'Mañana (9:00-11:30)'],
+                'merienda' => ['hora' => '16:00:00', 'nombre' => 'Merienda (15:00-17:00)'], 
+                'tarde' => ['hora' => '19:00:00', 'nombre' => 'Tarde (18:00-20:00)']
+            ];
+            
+            if (!isset($turnos_horarios[$turno_delivery])) {
+                throw new Exception('Turno de delivery inválido');
+            }
+            
+            $hora_entrega = $turnos_horarios[$turno_delivery]['hora'];
+            $notas_horario = 'Turno: ' . $turnos_horarios[$turno_delivery]['nombre'];
+            
+            if (!empty($_POST['notas_horario_adicional'])) {
+                $notas_horario .= ' - ' . sanitize($_POST['notas_horario_adicional']);
+            }
+        } else {
+            // Para retiro, usar horario original
+            $hora_entrega = $_POST['hora_entrega'] ?? null;
+            $notas_horario = sanitize($_POST['notas_horario_adicional'] ?? '');
+        }
         
         // Validar campos obligatorios
         if (!$nombre || !$apellido || !$telefono || !$modalidad || !$ubicacion || !$forma_pago) {
@@ -69,15 +99,10 @@ if ($_POST) {
                         if ($prod_data) {
                             $producto = $prod_data['nombre'];
                             $precio = ($forma_pago === 'Efectivo') ? $prod_data['precio_efectivo'] : $prod_data['precio_transferencia'];
-                            $cantidad = (int)explode(' ', $producto)[0];
                             
-                            // Si es premium, agregar sabores
-                            if (strpos($producto, 'Premium') !== false) {
-                                $sabores_seleccionados = $_POST['sabores_premium'] ?? [];
-                                if (!empty($sabores_seleccionados)) {
-                                    $observaciones .= "\nSabores: " . implode(', ', $sabores_seleccionados);
-                                }
-                            }
+                            // Extraer cantidad del nombre del producto
+                            preg_match('/(\d+)/', $producto, $matches);
+                            $cantidad = isset($matches[1]) ? (int)$matches[1] : 24;
                         } else {
                             throw new Exception('Producto no encontrado');
                         }
@@ -87,9 +112,9 @@ if ($_POST) {
                     break;
                     
                 case 'personalizado':
-                    $cant_personalizado = (int)($_POST['cantidad_personalizada'] ?? 0);
+                    $cant_personalizado = (int)$_POST['cant_personalizado'];
+                    $tipo_personalizado = $_POST['tipo_personalizado'];
                     $sabores_personalizados = $_POST['sabores_personalizados'] ?? [];
-                    $tipo_personalizado = $_POST['tipo_personalizado'] ?? 'comun';
                     
                     if ($cant_personalizado <= 0) {
                         throw new Exception('La cantidad debe ser mayor a 0');
@@ -99,8 +124,10 @@ if ($_POST) {
                         throw new Exception('Debe seleccionar al menos un sabor');
                     }
                     
-                    // Calcular planchas
+                    // Calcular planchas necesarias
                     $planchas = ceil($cant_personalizado / 8);
+                    
+                    // Precio base por plancha según tipo
                     $precio_plancha_base = ($tipo_personalizado === 'premium') ? 7000 : 3500;
                     $precio_plancha = ($forma_pago === 'Efectivo') ? $precio_plancha_base * 0.9 : $precio_plancha_base;
                     
@@ -168,6 +195,9 @@ if ($_POST) {
                     <i class="fas fa-plus-circle text-green-500 mr-2"></i>Nuevo Pedido
                 </h1>
             </div>
+            <a href="../../logout.php" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded">
+                <i class="fas fa-sign-out-alt mr-1"></i>Salir
+            </a>
         </div>
     </header>
 
@@ -197,32 +227,69 @@ if ($_POST) {
                     <div class="space-y-4">
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Nombre <span class="text-red-500">*</span></label>
-                            <input type="text" name="nombre" value="<?= $cliente_seleccionado['nombre'] ?? ($_POST['nombre'] ?? '') ?>" required
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <input type="text" name="nombre" value="<?= $cliente_seleccionado['nombre'] ?? htmlspecialchars($_POST['nombre'] ?? '') ?>" 
+                                   required maxlength="100" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         </div>
                         
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Apellido <span class="text-red-500">*</span></label>
-                            <input type="text" name="apellido" value="<?= $cliente_seleccionado['apellido'] ?? ($_POST['apellido'] ?? '') ?>" required
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <input type="text" name="apellido" value="<?= $cliente_seleccionado['apellido'] ?? htmlspecialchars($_POST['apellido'] ?? '') ?>" 
+                                   required maxlength="100" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         </div>
                         
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Teléfono <span class="text-red-500">*</span></label>
-                            <input type="tel" name="telefono" value="<?= $cliente_seleccionado['telefono'] ?? ($_POST['telefono'] ?? '') ?>" required
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <input type="tel" name="telefono" value="<?= $cliente_seleccionado['telefono'] ?? htmlspecialchars($_POST['telefono'] ?? '') ?>" 
+                                   required maxlength="20" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
                         </div>
                         
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Dirección</label>
-                            <input type="text" name="direccion" value="<?= $cliente_seleccionado['direccion'] ?? ($_POST['direccion'] ?? '') ?>"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                            <textarea name="direccion" rows="2" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" 
+                                      placeholder="Requerida para delivery"><?= $cliente_seleccionado['direccion'] ?? htmlspecialchars($_POST['direccion'] ?? '') ?></textarea>
                         </div>
-                        
-                        <!-- FECHA/HORA -->
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Modalidad <span class="text-red-500">*</span></label>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="radio" name="modalidad" value="Retira" required class="mr-2" 
+                                           <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Retira') ? 'checked' : '' ?>>
+                                    <span>🏪 Retira en local</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="modalidad" value="Delivery" required class="mr-2"
+                                           <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Delivery') ? 'checked' : '' ?>>
+                                    <span>🚚 Delivery</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Ubicación <span class="text-red-500">*</span></label>
+                            <select name="ubicacion" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
+                                <option value="">Seleccionar ubicación...</option>
+                                <option value="Fábrica" <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Fábrica') ? 'selected' : '' ?>>Fábrica</option>
+                                <option value="Local 1" <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Local 1') ? 'selected' : '' ?>>Local 1</option>
+                                <option value="Local 2" <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Local 2') ? 'selected' : '' ?>>Local 2</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-gray-700 mb-2 font-medium">Forma de Pago <span class="text-red-500">*</span></label>
+                            <select name="forma_pago" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
+                                <option value="">Seleccionar forma de pago...</option>
+                                <option value="Efectivo" <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Efectivo') ? 'selected' : '' ?>>Efectivo</option>
+                                <option value="Transferencia" <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Transferencia') ? 'selected' : '' ?>>Transferencia</option>
+                                <option value="MercadoPago" <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'MercadoPago') ? 'selected' : '' ?>>MercadoPago</option>
+                            </select>
+                        </div>
+
+                        <!-- ========== MODIFICACIÓN 2: HORARIOS CON 3 TURNOS ========== -->
+                        <div class="bg-orange-50 p-4 rounded-lg">
                             <h4 class="font-medium text-gray-800 mb-3">
-                                <i class="fas fa-calendar-clock text-orange-500 mr-2"></i>¿Para cuándo es el pedido?
+                                <i class="fas fa-clock text-orange-500 mr-2"></i>
+                                Horario de entrega
                             </h4>
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -234,7 +301,18 @@ if ($_POST) {
                                            class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
                                 </div>
                                 
-                                <div>
+                                <!-- SECCIÓN CONDICIONAL SEGÚN MODALIDAD -->
+                                <div id="horario_delivery" class="hidden">
+                                    <label class="block text-sm text-gray-700 mb-1">Turno de delivery <span class="text-red-500">*</span></label>
+                                    <select name="turno_delivery" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
+                                        <option value="">Seleccionar turno...</option>
+                                        <option value="mañana">🌅 Mañana (9:00 - 11:30)</option>
+                                        <option value="merienda">☕ Merienda (15:00 - 17:00)</option>
+                                        <option value="tarde">🌆 Tarde (18:00 - 20:00)</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="horario_retiro" class="hidden">
                                     <label class="block text-sm text-gray-700 mb-1">Hora aproximada</label>
                                     <select name="hora_entrega" class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
                                         <option value="">Sin horario específico</option>
@@ -256,86 +334,21 @@ if ($_POST) {
                             
                             <div class="mt-3">
                                 <label class="block text-sm text-gray-700 mb-1">Notas sobre horario</label>
-                                <input type="text" name="notas_horario" 
+                                <input type="text" name="notas_horario_adicional" 
                                        placeholder="Ej: Flexible, después de las 15:00, urgente..."
                                        class="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-orange-500">
                             </div>
                         </div>
-                        
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">Modalidad <span class="text-red-500">*</span></label>
-                            <div class="space-y-2">
-                                <label class="flex items-center">
-                                    <input type="radio" name="modalidad" value="Retira" required class="mr-2" 
-                                           <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Retira') ? 'checked' : '' ?>>
-                                    <i class="fas fa-store mr-2 text-blue-500"></i>Retira en Local
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="radio" name="modalidad" value="Delivery" required class="mr-2"
-                                           <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Delivery') ? 'checked' : '' ?>>
-                                    <i class="fas fa-truck mr-2 text-green-500"></i>Delivery
-                                </label>
-                            </div>
-                        </div>
 
-                        <!-- NUEVA SECCIÓN: Selección de Ubicación -->
-                        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <h4 class="font-medium text-purple-800 mb-3">
-                                <i class="fas fa-map-marker-alt text-purple-500 mr-2"></i>¿Dónde se procesa este pedido? <span class="text-red-500">*</span>
-                            </h4>
-                            
-                            <div class="grid grid-cols-2 gap-3">
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="ubicacion" value="Local 1" required class="sr-only ubicacion-radio">
-                                    <div class="ubicacion-btn bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg p-4 text-center transition-all duration-200">
-                                        <div class="text-3xl mb-2">🏪</div>
-                                        <div class="font-bold text-blue-800">LOCAL 1</div>
-                                        <div class="text-xs text-blue-600 mt-1">Atención público</div>
-                                    </div>
-                                </label>
-                                
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="ubicacion" value="Fábrica" required class="sr-only ubicacion-radio">
-                                    <div class="ubicacion-btn bg-orange-50 hover:bg-orange-100 border-2 border-orange-200 rounded-lg p-4 text-center transition-all duration-200">
-                                        <div class="text-3xl mb-2">🏭</div>
-                                        <div class="font-bold text-orange-800">FÁBRICA</div>
-                                        <div class="text-xs text-orange-600 mt-1">Producción central</div>
-                                    </div>
-                                </label>
-                            </div>
-                            
-                            <div class="text-xs text-gray-500 mt-2 text-center">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Determina dónde se prepara y desde dónde se entrega
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">Forma de Pago <span class="text-red-500">*</span></label>
-                            <div class="space-y-2">
-                                <label class="flex items-center">
-                                    <input type="radio" name="forma_pago" value="Efectivo" required class="mr-2" onchange="updatePrecios()"
-                                           <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Efectivo') ? 'checked' : '' ?>>
-                                    <i class="fas fa-money-bill mr-2 text-green-500"></i>Efectivo (con descuento)
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="radio" name="forma_pago" value="Transferencia" required class="mr-2" onchange="updatePrecios()"
-                                           <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Transferencia') ? 'checked' : '' ?>>
-                                    <i class="fas fa-credit-card mr-2 text-blue-500"></i>Transferencia
-                                </label>
-                            </div>
-                        </div>
-                        
                         <div>
                             <label class="block text-gray-700 mb-2 font-medium">Observaciones</label>
-                            <textarea name="observaciones" rows="3"
-                                      class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                                      placeholder="Observaciones adicionales..."><?= $cliente_seleccionado['observaciones'] ?? ($_POST['observaciones'] ?? '') ?></textarea>
+                            <textarea name="observaciones" rows="3" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500" 
+                                      placeholder="Instrucciones especiales, sabores específicos..."><?= htmlspecialchars($_POST['observaciones'] ?? '') ?></textarea>
                         </div>
                     </div>
                 </div>
 
-                <!-- Columna 2: Productos (sin cambios) -->
+                <!-- Columna 2: Productos -->
                 <div class="bg-white rounded-lg shadow p-6">
                     <h3 class="text-lg font-semibold mb-4">
                         <i class="fas fa-shopping-cart text-orange-500 mr-2"></i>Seleccionar Producto
@@ -364,27 +377,14 @@ if ($_POST) {
                                     <input type="radio" name="producto_id" value="<?= $prod['id'] ?>" 
                                            class="mr-3" onchange="selectProduct(<?= $prod['id'] ?>, '<?= htmlspecialchars($prod['nombre']) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>)">
                                     <div class="flex-1">
-                                        <div class="font-medium"><?= $prod['nombre'] ?></div>
-                                        <div class="text-sm text-gray-600">
-                                            <span class="precio-efectivo">Efectivo: <?= formatPrice($prod['precio_efectivo']) ?></span> | 
-                                            <span class="precio-transferencia">Transfer: <?= formatPrice($prod['precio_transferencia']) ?></span>
+                                        <div class="font-medium"><?= htmlspecialchars($prod['nombre']) ?></div>
+                                        <div class="text-sm text-gray-500">
+                                            Efectivo: <?= formatPrice($prod['precio_efectivo']) ?> | 
+                                            Transferencia: <?= formatPrice($prod['precio_transferencia']) ?>
                                         </div>
                                     </div>
                                 </label>
                             <?php endforeach; ?>
-                        </div>
-                        
-                        <!-- Premium sabores -->
-                        <div id="sabores-premium" class="mt-4 hidden">
-                            <h4 class="font-medium mb-2">Seleccionar Sabores:</h4>
-                            <div class="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                                <?php foreach ($sabores_premium as $sabor): ?>
-                                    <label class="flex items-center">
-                                        <input type="checkbox" name="sabores_premium[]" value="<?= $sabor ?>" class="mr-2">
-                                        <span class="text-sm"><?= $sabor ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
                         </div>
                     </div>
                     
@@ -393,7 +393,7 @@ if ($_POST) {
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-gray-700 mb-2">Cantidad:</label>
-                                <input type="number" name="cantidad_personalizada" min="1" max="200" value="8"
+                                <input type="number" name="cant_personalizado" min="1" max="200" value="24" 
                                        class="w-full px-3 py-2 border rounded-lg">
                             </div>
                             
@@ -433,183 +433,206 @@ if ($_POST) {
                         </div>
                     </div>
                     
-                    <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-medium mt-6">
-                        <i class="fas fa-save mr-2"></i>Crear Pedido
-                    </button>
+                    <div class="mt-6">
+                        <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-semibold">
+                            <i class="fas fa-plus-circle mr-2"></i>Crear Pedido
+                        </button>
+                    </div>
                 </div>
             </div>
         </form>
     </main>
 
-    <!-- CSS y JavaScript -->
-    <style>
-    .ubicacion-radio:checked + .ubicacion-btn {
-        border-color: currentColor;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        transform: translateY(-2px);
-    }
-
-    .ubicacion-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-
-    .tab-btn.active {
-        border-bottom-color: #3b82f6 !important;
-        color: #3b82f6 !important;
-    }
-    </style>
-
+    <!-- ========== MODIFICACIÓN 3: JAVASCRIPT CON TURNOS ========== -->
     <script>
-        let currentProduct = null;
-        let paymentMethod = 'Efectivo';
-        
-        // Manejo de ubicación
-        document.addEventListener('DOMContentLoaded', function() {
-            const radios = document.querySelectorAll('input[name="ubicacion"]');
-            
-            radios.forEach(radio => {
-                radio.addEventListener('change', function() {
-                    document.querySelectorAll('.ubicacion-btn').forEach(btn => {
-                        btn.classList.remove('ring-2', 'ring-blue-400', 'ring-orange-400');
-                    });
-                    
-                    const btn = this.nextElementSibling;
-                    if (this.value === 'Local 1') {
-                        btn.classList.add('ring-2', 'ring-blue-400');
-                    } else {
-                        btn.classList.add('ring-2', 'ring-orange-400');
-                    }
-                    
-                    updateResumen();
-                });
+        let selectedProduct = null;
+
+        function showTab(tabName) {
+            // Ocultar todos los contenidos
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
             });
-        });
-        
-        // Tabs
-        function showTab(tab) {
-            document.getElementById('content-predefinido').style.display = tab === 'predefinido' ? 'block' : 'none';
-            document.getElementById('content-personalizado').style.display = tab === 'personalizado' ? 'block' : 'none';
             
-            document.getElementById('tab-predefinido').className = tab === 'predefinido' 
-                ? 'tab-btn py-2 px-4 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600'
-                : 'tab-btn py-2 px-4 border-b-2 font-medium text-sm cursor-pointer border-transparent text-gray-500 hover:text-blue-600';
+            // Mostrar el contenido seleccionado
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
             
-            document.getElementById('tab-personalizado').className = tab === 'personalizado' 
-                ? 'tab-btn py-2 px-4 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600'
-                : 'tab-btn py-2 px-4 border-b-2 font-medium text-sm cursor-pointer border-transparent text-gray-500 hover:text-blue-600';
+            // Actualizar botones de tab
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-600', 'active');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
             
-            document.getElementById('tipo_pedido_hidden').value = tab;
-            updateResumen();
-        }
-
-        // Seleccionar producto
-        function selectProduct(id, name, precioEfectivo, precioTransferencia) {
-            currentProduct = { id, name, precioEfectivo, precioTransferencia };
+            document.getElementById(`tab-${tabName}`).classList.add('border-blue-500', 'text-blue-600', 'active');
+            document.getElementById(`tab-${tabName}`).classList.remove('border-transparent', 'text-gray-500');
             
-            const saboresDiv = document.getElementById('sabores-premium');
-            if (name.includes('Premium')) {
-                saboresDiv.classList.remove('hidden');
-            } else {
-                saboresDiv.classList.add('hidden');
+            // Actualizar campo oculto
+            document.getElementById('tipo_pedido_hidden').value = tabName;
+            
+            // Limpiar selección si cambia de tab
+            if (tabName === 'predefinido') {
+                document.querySelectorAll('input[name="producto_id"]').forEach(input => {
+                    input.checked = false;
+                });
             }
             
             updateResumen();
         }
 
-        // Actualizar precios
-        function updatePrecios() {
-            const formaPago = document.querySelector('input[name="forma_pago"]:checked')?.value;
-            if (formaPago) {
-                paymentMethod = formaPago;
-                updateResumen();
-            }
+        function selectProduct(id, nombre, precioEfectivo, precioTransferencia) {
+            selectedProduct = {
+                id: id,
+                nombre: nombre,
+                precioEfectivo: precioEfectivo,
+                precioTransferencia: precioTransferencia
+            };
+            updateResumen();
         }
 
-        // Actualizar resumen
         function updateResumen() {
             const resumenDiv = document.getElementById('resumen-pedido');
-            const activeTab = document.getElementById('tipo_pedido_hidden').value;
-            const ubicacion = document.querySelector('input[name="ubicacion"]:checked')?.value;
+            const formaPago = document.querySelector('select[name="forma_pago"]').value;
             
-            let html = '';
-            
-            if (activeTab === 'predefinido' && currentProduct) {
-                const precio = paymentMethod === 'Efectivo' ? currentProduct.precioEfectivo : currentProduct.precioTransferencia;
+            if (selectedProduct && formaPago) {
+                const precio = formaPago === 'Efectivo' ? selectedProduct.precioEfectivo : selectedProduct.precioTransferencia;
                 
-                html = `
-                    <div class="border-b pb-3">
-                        <div class="font-medium">${currentProduct.name}</div>
-                        <div class="text-sm text-gray-600">Pago: ${paymentMethod}</div>
-                        ${ubicacion ? `<div class="text-xs ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">${ubicacion === 'Local 1' ? '🏪 Local 1' : '🏭 Fábrica'}</div>` : ''}
+                resumenDiv.innerHTML = `
+                    <div class="border-b pb-3 mb-3">
+                        <div class="font-medium">${selectedProduct.nombre}</div>
+                        <div class="text-sm text-gray-500">Forma de pago: ${formaPago}</div>
                     </div>
-                    <div class="flex justify-between items-center font-bold text-lg">
+                    <div class="flex justify-between items-center text-lg font-semibold">
                         <span>Total:</span>
-                        <span class="text-green-600">${precio.toLocaleString()}</span>
+                        <span class="text-green-600">$${precio.toLocaleString()}</span>
                     </div>
                 `;
-            } else if (activeTab === 'personalizado') {
-                const cantidad = document.querySelector('input[name="cantidad_personalizada"]')?.value || 8;
-                const tipo = document.querySelector('select[name="tipo_personalizado"]')?.value || 'comun';
-                const planchas = Math.ceil(cantidad / 8);
-                const precioBase = tipo === 'premium' ? 7000 : 3500;
-                const precio = paymentMethod === 'Efectivo' ? precioBase * 0.9 * planchas : precioBase * planchas;
-                
-                html = `
-                    <div class="border-b pb-3">
-                        <div class="font-medium">Personalizado ${tipo} x${cantidad}</div>
-                        <div class="text-sm text-gray-600">${planchas} plancha${planchas > 1 ? 's' : ''} - ${paymentMethod}</div>
-                        ${ubicacion ? `<div class="text-xs ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">${ubicacion === 'Local 1' ? '🏪 Local 1' : '🏭 Fábrica'}</div>` : ''}
+            } else if (selectedProduct) {
+                resumenDiv.innerHTML = `
+                    <div class="border-b pb-3 mb-3">
+                        <div class="font-medium">${selectedProduct.nombre}</div>
+                        <div class="text-sm text-red-500">Selecciona forma de pago para ver el precio</div>
                     </div>
-                    <div class="flex justify-between items-center font-bold text-lg">
-                        <span>Total:</span>
-                        <span class="text-green-600">${Math.round(precio).toLocaleString()}</span>
+                    <div class="text-sm text-gray-500">
+                        Efectivo: $${selectedProduct.precioEfectivo.toLocaleString()}<br>
+                        Transferencia: $${selectedProduct.precioTransferencia.toLocaleString()}
                     </div>
                 `;
             } else {
-                html = `
+                resumenDiv.innerHTML = `
                     <div class="text-gray-500 text-center py-8">
                         <i class="fas fa-shopping-cart text-4xl mb-2"></i>
                         <div>Seleccioná un producto para ver el resumen</div>
-                        ${ubicacion ? `<div class="text-xs mt-2 ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">${ubicacion === 'Local 1' ? '🏪 Local 1' : '🏭 Fábrica'}</div>` : ''}
                     </div>
                 `;
             }
-            
-            resumenDiv.innerHTML = html;
         }
 
-        // Validaciones del formulario
-        document.getElementById('pedidoForm').addEventListener('submit', function(e) {
-            const ubicacion = document.querySelector('input[name="ubicacion"]:checked');
-            if (!ubicacion) {
-                e.preventDefault();
-                alert('Debe seleccionar la ubicación del pedido (Local 1 o Fábrica).');
-                return false;
-            }
-
-            const tipoPedido = document.getElementById('tipo_pedido_hidden').value;
+        document.addEventListener('DOMContentLoaded', function() {
+            // NUEVO: Manejo de turnos de delivery
+            const modalidadInputs = document.querySelectorAll('input[name="modalidad"]');
+            const horarioDelivery = document.getElementById('horario_delivery');
+            const horarioRetiro = document.getElementById('horario_retiro');
+            const turnoSelect = document.querySelector('select[name="turno_delivery"]');
             
-            if (tipoPedido === 'predefinido') {
-                const productoSeleccionado = document.querySelector('input[name="producto_id"]:checked');
-                if (!productoSeleccionado) {
-                    e.preventDefault();
-                    alert('Por favor selecciona un producto.');
-                    return false;
+            function toggleHorarios() {
+                const modalidad = document.querySelector('input[name="modalidad"]:checked');
+                
+                if (modalidad) {
+                    if (modalidad.value === 'Delivery') {
+                        horarioDelivery.classList.remove('hidden');
+                        horarioRetiro.classList.add('hidden');
+                        if (turnoSelect) turnoSelect.required = true;
+                    } else {
+                        horarioDelivery.classList.add('hidden');
+                        horarioRetiro.classList.remove('hidden');
+                        if (turnoSelect) {
+                            turnoSelect.required = false;
+                            turnoSelect.value = '';
+                        }
+                    }
                 }
             }
             
-            return true;
-        });
-
-        // Inicializar
-        document.addEventListener('DOMContentLoaded', function() {
-            showTab('predefinido');
-            
-            // Event listeners para form changes
-            document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
-                radio.addEventListener('change', updatePrecios);
+            // Event listeners para modalidad
+            modalidadInputs.forEach(input => {
+                input.addEventListener('change', toggleHorarios);
             });
+            
+            // Ejecutar al cargar
+            toggleHorarios();
+
+            // Event listeners para actualizar resumen
+            document.querySelector('select[name="forma_pago"]').addEventListener('change', updateResumen);
+            
+            // Validación del formulario
+            document.getElementById('pedidoForm').addEventListener('submit', function(e) {
+                const modalidad = document.querySelector('input[name="modalidad"]:checked');
+                const formaPago = document.querySelector('select[name="forma_pago"]').value;
+                const ubicacion = document.querySelector('select[name="ubicacion"]').value;
+                
+                // Validación básica
+                if (!formaPago) {
+                    e.preventDefault();
+                    alert('⚠️ Selecciona una forma de pago');
+                    return false;
+                }
+                
+                if (!ubicacion) {
+                    e.preventDefault();
+                    alert('⚠️ Selecciona una ubicación');
+                    return false;
+                }
+                
+                // Validación específica para delivery
+                if (modalidad && modalidad.value === 'Delivery') {
+                    const turno = document.querySelector('select[name="turno_delivery"]').value;
+                    const direccion = document.querySelector('textarea[name="direccion"]').value.trim();
+                    
+                    if (!turno) {
+                        e.preventDefault();
+                        alert('⚠️ Por favor selecciona un turno de delivery');
+                        return false;
+                    }
+                    
+                    if (!direccion) {
+                        e.preventDefault();
+                        alert('⚠️ La dirección es obligatoria para delivery');
+                        document.querySelector('textarea[name="direccion"]').focus();
+                        return false;
+                    }
+                }
+                
+                // Validación de producto
+                const tipoTab = document.getElementById('tipo_pedido_hidden').value;
+                
+                if (tipoTab === 'predefinido') {
+                    const productoSeleccionado = document.querySelector('input[name="producto_id"]:checked');
+                    if (!productoSeleccionado) {
+                        e.preventDefault();
+                        alert('⚠️ Selecciona un producto');
+                        return false;
+                    }
+                } else if (tipoTab === 'personalizado') {
+                    const cantidad = document.querySelector('input[name="cant_personalizado"]').value;
+                    const sabores = document.querySelectorAll('input[name="sabores_personalizados[]"]:checked');
+                    
+                    if (!cantidad || cantidad <= 0) {
+                        e.preventDefault();
+                        alert('⚠️ Ingresa una cantidad válida');
+                        return false;
+                    }
+                    
+                    if (sabores.length === 0) {
+                        e.preventDefault();
+                        alert('⚠️ Selecciona al menos un sabor');
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+
+            // Inicialización
+            showTab('predefinido');
         });
     </script>
 </body>

@@ -4,6 +4,42 @@ requireLogin();
 
 $pdo = getConnection();
 
+// Obtener productos y precios
+$productos = $pdo->query("SELECT * FROM productos WHERE activo = 1 ORDER BY nombre")->fetchAll();
+
+// Obtener cliente si viene por parámetro
+$cliente_seleccionado = null;
+if (isset($_GET['cliente_id'])) {
+    $stmt = $pdo->prepare("SELECT * FROM clientes_fijos WHERE id = ? AND activo = 1");
+    $stmt->execute([$_GET['cliente_id']]);
+    $cliente_seleccionado = $stmt->fetch();
+}
+
+// Definir sabores por categoría
+$sabores = [
+    'comun' => [
+        'Jamón y Queso' => 'Jamón y queso, lechuga, tomate, huevo',
+    ],
+    'especiales' => [
+        'Surtidos Clásicos' => 'Jamón y queso, lechuga, tomate, huevo',
+        'Surtidos Especiales' => 'Jamón y queso, lechuga, tomate, huevo, choclo, aceitunas',
+        'Surtidos Premium' => 'Jamón y queso, lechuga, tomate, huevo, choclo, aceitunas'
+    ],
+    'premium' => [
+        'Ananá' => 'Ananá fresco',
+        'Atún' => 'Atún en conserva',
+        'Berenjena' => 'Berenjena grillada',
+        'Durazno' => 'Durazno en almíbar',
+        'Jamón Crudo' => 'Jamón crudo importado',
+        'Morrón' => 'Morrón asado',
+        'Palmito' => 'Palmito en conserva',
+        'Panceta' => 'Panceta crocante',
+        'Pollo' => 'Pollo desmenuzado',
+        'Roquefort' => 'Queso roquefort',
+        'Salame' => 'Salame premium'
+    ]
+];
+
 $mensaje = '';
 $error = '';
 
@@ -11,606 +47,692 @@ $error = '';
 if ($_POST) {
     try {
         $nombre = sanitize($_POST['nombre']);
-        $descripcion = sanitize($_POST['descripcion']);
-        $categoria = sanitize($_POST['categoria']);
-        $precio_efectivo = (float)$_POST['precio_efectivo'];
-        $precio_transferencia = (float)$_POST['precio_transferencia'];
-        $orden_mostrar = (int)$_POST['orden_mostrar'];
-        $activo = isset($_POST['activo']) ? 1 : 0;
-
-        // Validaciones
-        if (empty($nombre)) {
-            throw new Exception('El nombre del producto es obligatorio');
+        $apellido = sanitize($_POST['apellido']);
+        $telefono = sanitize($_POST['telefono']);
+        $direccion = sanitize($_POST['direccion']);
+        $modalidad = $_POST['modalidad'];
+        $ubicacion = $_POST['ubicacion'];
+        $forma_pago = $_POST['forma_pago'];
+        $observaciones = sanitize($_POST['observaciones']);
+        
+        // Campos de fecha y hora
+        $fecha_entrega = $_POST['fecha_entrega'] ?? null;
+        $hora_entrega = $_POST['hora_entrega'] ?? null;
+        $notas_horario = sanitize($_POST['notas_horario'] ?? '');
+        
+        // Validar campos obligatorios
+        if (!$nombre || !$apellido || !$telefono || !$modalidad || !$ubicacion || !$forma_pago) {
+            throw new Exception('Todos los campos obligatorios deben completarse');
         }
-
-        if ($precio_efectivo <= 0 || $precio_transferencia <= 0) {
-            throw new Exception('Los precios deben ser mayores a 0');
+        
+        // Validar fecha de entrega
+        if ($fecha_entrega && $fecha_entrega < date('Y-m-d')) {
+            throw new Exception('La fecha de entrega no puede ser anterior a hoy');
         }
-
-        if ($precio_efectivo >= $precio_transferencia) {
-            throw new Exception('El precio en efectivo debe ser menor al precio por transferencia (descuento)');
-        }
-
-        // Si es categoría nueva
-        if ($categoria === 'nueva') {
-            $categoria = sanitize($_POST['categoria_nueva']);
-            if (empty($categoria)) {
-                throw new Exception('Debe especificar el nombre de la nueva categoría');
+        
+        // Procesar producto seleccionado
+        if (isset($_POST['tipo_pedido'])) {
+            $tipo = $_POST['tipo_pedido'];
+            $producto = '';
+            $cantidad = 0;
+            $precio = 0;
+            
+            switch ($tipo) {
+                case 'predefinido':
+                    if (isset($_POST['producto_id']) && $_POST['producto_id']) {
+                        $producto_id = (int)$_POST['producto_id'];
+                        $stmt = $pdo->prepare("SELECT * FROM productos WHERE id = ?");
+                        $stmt->execute([$producto_id]);
+                        $prod_data = $stmt->fetch();
+                        
+                        if ($prod_data) {
+                            $producto = $prod_data['nombre'];
+                            $precio = ($forma_pago === 'Efectivo') ? 
+                                     $prod_data['precio_efectivo'] : $prod_data['precio_transferencia'];
+                            $cantidad = (int)filter_var($producto, FILTER_SANITIZE_NUMBER_INT);
+                            
+                            // Agregar sabores si es premium
+                            if (isset($_POST['sabores_premium']) && !empty($_POST['sabores_premium'])) {
+                                $sabores_seleccionados = $_POST['sabores_premium'];
+                                $observaciones .= "\nSabores: " . implode(', ', $sabores_seleccionados);
+                            }
+                        } else {
+                            throw new Exception('Producto no encontrado');
+                        }
+                    } else {
+                        throw new Exception('Debe seleccionar un producto');
+                    }
+                    break;
+                    
+                case 'personalizado':
+                    $cant_personalizado = (int)($_POST['cantidad_personalizada'] ?? 8);
+                    $precio_personalizado = (float)($_POST['precio_personalizado'] ?? 0);
+                    
+                    if ($cant_personalizado <= 0 || $precio_personalizado <= 0) {
+                        throw new Exception('Cantidad y precio del personalizado deben ser mayores a 0');
+                    }
+                    
+                    $planchas = ceil($cant_personalizado / 8);
+                    $sabores_personalizados = $_POST['sabores_personalizados'] ?? [];
+                    
+                    if (empty($sabores_personalizados)) {
+                        throw new Exception('Debe seleccionar al menos un sabor para el pedido personalizado');
+                    }
+                    
+                    $producto = "Personalizado x$cant_personalizado ($planchas plancha" . ($planchas > 1 ? 's' : '') . ")";
+                    $cantidad = $cant_personalizado;
+                    $precio = $precio_personalizado;
+                    
+                    $observaciones .= "\nSabores personalizados: " . implode(', ', $sabores_personalizados);
+                    $observaciones .= "\nPlanchas: $planchas";
+                    break;
+                    
+                default:
+                    throw new Exception('Tipo de pedido no válido');
             }
+            
+            if (empty($producto) || $cantidad <= 0 || $precio <= 0) {
+                throw new Exception("Error en los datos del producto. Producto: '$producto', Cantidad: $cantidad, Precio: $precio");
+            }
+            
+            // Insertar pedido
+            $stmt = $pdo->prepare("
+                INSERT INTO pedidos (nombre, apellido, telefono, direccion, producto, cantidad, precio, 
+                                   forma_pago, modalidad, ubicacion, observaciones, cliente_fijo_id, 
+                                   fecha_entrega, hora_entrega, notas_horario) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            $cliente_fijo_id = $cliente_seleccionado ? $cliente_seleccionado['id'] : null;
+            
+            $result = $stmt->execute([
+                $nombre, $apellido, $telefono, $direccion, $producto, $cantidad, $precio,
+                $forma_pago, $modalidad, $ubicacion, $observaciones, $cliente_fijo_id,
+                $fecha_entrega, $hora_entrega, $notas_horario
+            ]);
+            
+            if ($result) {
+                $mensaje = "✅ Pedido creado exitosamente";
+                
+                // Limpiar formulario
+                $_POST = [];
+                $cliente_seleccionado = null;
+            } else {
+                throw new Exception('Error al guardar el pedido en la base de datos');
+            }
+        } else {
+            throw new Exception('Debe seleccionar un tipo de pedido');
         }
-
-        // Verificar que no existe otro producto con el mismo nombre
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM productos WHERE nombre = ?");
-        $stmt->execute([$nombre]);
-        if ($stmt->fetchColumn() > 0) {
-            throw new Exception('Ya existe un producto con ese nombre');
-        }
-
-        // Insertar producto
-        $stmt = $pdo->prepare("
-            INSERT INTO productos (nombre, descripcion, categoria, precio_efectivo, precio_transferencia, 
-                                 orden_mostrar, activo, updated_by, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-        ");
         
-        $stmt->execute([
-            $nombre,
-            $descripcion,
-            $categoria,
-            $precio_efectivo,
-            $precio_transferencia,
-            $orden_mostrar,
-            $activo,
-            $_SESSION['admin_user']
-        ]);
-
-        $mensaje = 'Producto creado correctamente';
-        
-        // Limpiar formulario DESPUÉS del éxito
-        $_POST = [];
-
     } catch (Exception $e) {
         $error = $e->getMessage();
     }
 }
-
-// Obtener categorías existentes
-$categorias_existentes = $pdo->query("
-    SELECT DISTINCT categoria, COUNT(*) as cantidad 
-    FROM productos 
-    WHERE categoria IS NOT NULL 
-    GROUP BY categoria 
-    ORDER BY categoria
-")->fetchAll();
-
-// Obtener último orden usado
-$ultimo_orden = $pdo->query("SELECT COALESCE(MAX(orden_mostrar), 0) + 10 FROM productos")->fetchColumn();
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crear Producto - <?= APP_NAME ?></title>
+    <title>Crear Pedido - Sistema Santa Catalina</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .tab-btn.active { @apply border-blue-500 text-blue-600; }
+        .producto-card { transition: all 0.2s ease; }
+        .producto-card:hover { transform: translateY(-2px); }
+        .producto-card.selected { @apply ring-2 ring-blue-500 bg-blue-50; }
+        .sabor-item { transition: all 0.2s ease; }
+        .sabor-item:hover { @apply bg-gray-50; }
+        .contador-display { font-size: 2rem; font-weight: bold; }
+        .precio-input { border: 2px solid #e5e7eb; }
+        .precio-input:focus { border-color: #3b82f6; outline: none; }
+    </style>
 </head>
 <body class="bg-gray-100">
-    <!-- Header -->
-    <header class="bg-white shadow-md">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center">
-                <a href="index.php" class="text-gray-600 hover:text-gray-800 mr-4">
-                    <i class="fas fa-arrow-left"></i>
-                </a>
-                <h1 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-plus-circle text-green-500 mr-2"></i>Crear Nuevo Producto
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">
+                    <i class="fas fa-plus-circle text-green-500 mr-2"></i>Crear Nuevo Pedido
                 </h1>
+                <p class="text-gray-600">Sistema de gestión Santa Catalina</p>
             </div>
-            <a href="../../logout.php" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded">
-                <i class="fas fa-sign-out-alt mr-1"></i>Salir
+            <a href="../pedidos/" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>Volver
             </a>
         </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="container mx-auto px-4 py-6">
-        
-        <!-- Mensajes -->
         <?php if ($mensaje): ?>
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-check-circle mr-2"></i><?= $mensaje ?>
-            <div class="mt-2">
-                <a href="index.php" class="text-green-800 underline">Ver lista de productos</a> |
-                <a href="?" class="text-green-800 underline">Crear otro producto</a>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                <?= htmlspecialchars($mensaje) ?>
             </div>
-        </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <i class="fas fa-exclamation-circle mr-2"></i><?= $error ?>
-        </div>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <i class="fas fa-exclamation-triangle mr-2"></i><?= htmlspecialchars($error) ?>
+            </div>
         <?php endif; ?>
 
-        <!-- Formulario -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            <!-- Columna 1: Información Básica -->
+        <form method="POST" id="pedidoForm" class="space-y-6">
+            <!-- Información del Cliente -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>Información Básica
+                    <i class="fas fa-user text-blue-500 mr-2"></i>Información del Cliente
                 </h3>
                 
-                <form method="POST" id="productoForm">
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">
-                                Nombre del Producto <span class="text-red-500">*</span>
-                            </label>
-                            <input type="text" name="nombre" value="<?= htmlspecialchars($_POST['nombre'] ?? '') ?>" 
-                                   required maxlength="100" id="producto_nombre"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                                   placeholder="Ej: 24 Especial Verano">
-                            <div class="text-xs text-gray-500 mt-1">
-                                Este nombre aparecerá en los pedidos y será visible para los clientes
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">Descripción</label>
-                            <textarea name="descripcion" rows="3" maxlength="500" id="producto_descripcion"
-                                      class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                                      placeholder="Describe los ingredientes, sabores o características especiales..."><?= htmlspecialchars($_POST['descripcion'] ?? '') ?></textarea>
-                            <div class="text-xs text-gray-500 mt-1">
-                                Ayuda al equipo a conocer mejor el producto
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">
-                                Categoría <span class="text-red-500">*</span>
-                            </label>
-                            <div class="space-y-2">
-                                <select name="categoria" id="categoria_select" 
-                                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
-                                    <option value="">Seleccionar categoría...</option>
-                                    <?php foreach ($categorias_existentes as $cat): ?>
-                                        <option value="<?= $cat['categoria'] ?>" 
-                                                <?= (isset($_POST['categoria']) && $_POST['categoria'] === $cat['categoria']) ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($cat['categoria']) ?> (<?= $cat['cantidad'] ?> productos)
-                                        </option>
-                                    <?php endforeach; ?>
-                                    <option value="nueva">+ Crear nueva categoría</option>
-                                </select>
-                                
-                                <input type="text" name="categoria_nueva" id="categoria_nueva" 
-                                       class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 hidden"
-                                       placeholder="Nombre de la nueva categoría">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-gray-700 mb-2 font-medium">Orden de Aparición</label>
-                            <input type="number" name="orden_mostrar" value="<?= $_POST['orden_mostrar'] ?? $ultimo_orden ?>" 
-                                   min="0" step="10"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500">
-                            <div class="text-xs text-gray-500 mt-1">
-                                Número menor = aparece primero. Sugerido: <?= $ultimo_orden ?>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="flex items-center">
-                                <input type="checkbox" name="activo" value="1" 
-                                       <?= (isset($_POST['activo']) || !isset($_POST['nombre'])) ? 'checked' : '' ?>
-                                       class="mr-2" id="producto_activo">
-                                <span class="text-gray-700">Producto activo (disponible para pedidos)</span>
-                            </label>
-                        </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Nombre *</label>
+                        <input type="text" name="nombre" required class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= $cliente_seleccionado ? htmlspecialchars($cliente_seleccionado['nombre']) : htmlspecialchars($_POST['nombre'] ?? '') ?>">
                     </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Apellido *</label>
+                        <input type="text" name="apellido" required class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= $cliente_seleccionado ? htmlspecialchars($cliente_seleccionado['apellido']) : htmlspecialchars($_POST['apellido'] ?? '') ?>">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Teléfono *</label>
+                        <input type="tel" name="telefono" required class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= $cliente_seleccionado ? htmlspecialchars($cliente_seleccionado['telefono']) : htmlspecialchars($_POST['telefono'] ?? '') ?>">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Dirección</label>
+                        <input type="text" name="direccion" class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= $cliente_seleccionado ? htmlspecialchars($cliente_seleccionado['direccion']) : htmlspecialchars($_POST['direccion'] ?? '') ?>">
+                    </div>
+                </div>
             </div>
 
-            <!-- Columna 2: Precios -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-dollar-sign text-green-500 mr-2"></i>Configuración de Precios
-                </h3>
-
-                <div class="space-y-4">
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <label class="block text-gray-700 mb-2 font-medium">
-                            Precio Efectivo <span class="text-red-500">*</span>
+            <!-- Modalidad y Ubicación -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h4 class="font-medium text-gray-800 mb-3">
+                        <i class="fas fa-shipping-fast text-green-500 mr-2"></i>Modalidad de Entrega *
+                    </h4>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="radio" name="modalidad" value="Retira" required class="mr-2"
+                                   <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Retira') ? 'checked' : '' ?>>
+                            <i class="fas fa-store mr-2 text-blue-500"></i>Retira en Local
                         </label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-500">$</span>
-                            <input type="number" name="precio_efectivo" 
-                                   value="<?= $_POST['precio_efectivo'] ?? '' ?>" 
-                                   required min="100" step="100" id="precio_efectivo"
-                                   class="w-full pl-8 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
-                                   placeholder="11000">
-                        </div>
-                        <div class="text-xs text-green-700 mt-1">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Precio con descuento por pago en efectivo
+                        <label class="flex items-center">
+                            <input type="radio" name="modalidad" value="Delivery" required class="mr-2"
+                                   <?= (isset($_POST['modalidad']) && $_POST['modalidad'] === 'Delivery') ? 'checked' : '' ?>>
+                            <i class="fas fa-truck mr-2 text-green-500"></i>Delivery
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h4 class="font-medium text-gray-800 mb-3">
+                        <i class="fas fa-map-marker-alt text-purple-500 mr-2"></i>Ubicación de Procesamiento *
+                    </h4>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="radio" name="ubicacion" value="Local 1" required class="mr-2" onchange="updateResumen()"
+                                   <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Local 1') ? 'checked' : '' ?>>
+                            <i class="fas fa-store-alt mr-2 text-blue-500"></i>Local 1
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="ubicacion" value="Fábrica" required class="mr-2" onchange="updateResumen()"
+                                   <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Fábrica') ? 'checked' : '' ?>>
+                            <i class="fas fa-industry mr-2 text-orange-500"></i>Fábrica
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenido Principal: 3 Columnas -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Columna 1: Tabs y Formas de Pago -->
+                <div class="space-y-6">
+                    <!-- Tabs de Tipo de Pedido -->
+                    <div class="bg-white rounded-lg shadow">
+                        <div class="border-b">
+                            <nav class="flex">
+                                <button type="button" id="tab-predefinido" class="tab-btn py-3 px-6 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600" onclick="showTab('predefinido')">
+                                    <i class="fas fa-list mr-2"></i>Predefinido
+                                </button>
+                                <button type="button" id="tab-personalizado" class="tab-btn py-3 px-6 border-b-2 font-medium text-sm cursor-pointer border-transparent text-gray-500 hover:text-blue-600" onclick="showTab('personalizado')">
+                                    <i class="fas fa-cogs mr-2"></i>Personalizado
+                                </button>
+                            </nav>
                         </div>
                     </div>
 
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <label class="block text-gray-700 mb-2 font-medium">
-                            Precio Transferencia <span class="text-red-500">*</span>
-                        </label>
-                        <div class="relative">
-                            <span class="absolute left-3 top-2 text-gray-500">$</span>
-                            <input type="number" name="precio_transferencia" 
-                                   value="<?= $_POST['precio_transferencia'] ?? '' ?>" 
-                                   required min="100" step="100" id="precio_transferencia"
-                                   class="w-full pl-8 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                                   placeholder="12000">
-                        </div>
-                        <div class="text-xs text-blue-700 mt-1">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Precio normal para transferencias y tarjetas
-                        </div>
-                    </div>
-
-                    <!-- Calculadora de descuento -->
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <h4 class="font-medium text-gray-700 mb-2">
-                            <i class="fas fa-calculator mr-1"></i>Calculadora de Descuento
+                    <!-- Formas de Pago -->
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <h4 class="font-medium text-gray-800 mb-3">
+                            <i class="fas fa-credit-card text-green-500 mr-2"></i>Forma de Pago *
                         </h4>
                         <div class="space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span>Descuento efectivo:</span>
-                                <span id="descuento_pesos" class="font-medium">$0</span>
-                            </div>
-                            <div class="flex justify-between text-sm">
-                                <span>Porcentaje descuento:</span>
-                                <span id="descuento_porcentaje" class="font-medium">0%</span>
-                            </div>
+                            <label class="flex items-center">
+                                <input type="radio" name="forma_pago" value="Efectivo" required class="mr-2" onchange="updateResumen()"
+                                       <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Efectivo') ? 'checked' : '' ?>>
+                                <i class="fas fa-money-bills mr-2 text-green-500"></i>Efectivo (10% desc.)
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="forma_pago" value="Transferencia" required class="mr-2" onchange="updateResumen()"
+                                       <?= (isset($_POST['forma_pago']) && $_POST['forma_pago'] === 'Transferencia') ? 'checked' : '' ?>>
+                                <i class="fas fa-university mr-2 text-blue-500"></i>Transferencia
+                            </label>
                         </div>
-                        <div class="mt-3">
-                            <button type="button" onclick="aplicarDescuentoComun(10)" 
-                                    class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm mr-2">10%</button>
-                            <button type="button" onclick="aplicarDescuentoComun(15)" 
-                                    class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm mr-2">15%</button>
-                            <button type="button" onclick="aplicarDescuentoComun(20)" 
-                                    class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm">20%</button>
+                    </div>
+                </div>
+
+                <!-- Columna 2: Selección de Productos -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-shopping-cart text-purple-500 mr-2"></i>Seleccionar Producto
+                    </h3>
+
+                    <input type="hidden" name="tipo_pedido" id="tipo_pedido_hidden" value="predefinido">
+
+                    <!-- Tab Predefinido -->
+                    <div id="content-predefinido" class="tab-content">
+                        <div class="space-y-3">
+                            <?php foreach ($productos as $producto): ?>
+                                <div class="producto-card border rounded-lg p-4 cursor-pointer" onclick="selectProduct(<?= $producto['id'] ?>, '<?= htmlspecialchars($producto['nombre']) ?>', <?= $producto['precio_efectivo'] ?>, <?= $producto['precio_transferencia'] ?>)">
+                                    <input type="radio" name="producto_id" value="<?= $producto['id'] ?>" class="sr-only">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <h4 class="font-medium text-gray-800"><?= htmlspecialchars($producto['nombre']) ?></h4>
+                                            <?php if ($producto['descripcion']): ?>
+                                                <p class="text-sm text-gray-600 mt-1"><?= htmlspecialchars($producto['descripcion']) ?></p>
+                                            <?php endif; ?>
+                                            <div class="mt-2">
+                                                <span class="text-sm text-gray-500">Efectivo: </span>
+                                                <span class="font-medium text-green-600">$<?= number_format($producto['precio_efectivo'], 0, ',', '.') ?></span>
+                                                <span class="mx-2">|</span>
+                                                <span class="text-sm text-gray-500">Transfer: </span>
+                                                <span class="font-medium text-blue-600">$<?= number_format($producto['precio_transferencia'], 0, ',', '.') ?></span>
+                                            </div>
+                                        </div>
+                                        <div class="text-purple-500">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <!-- Sabores Premium (solo si aplica) -->
+                        <div id="sabores-premium" class="hidden mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <h5 class="font-medium text-yellow-800 mb-3">
+                                <i class="fas fa-star text-yellow-500 mr-2"></i>Seleccionar Sabores Premium
+                            </h5>
+                            <div class="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
+                                <?php foreach ($sabores['premium'] as $sabor => $descripcion): ?>
+                                    <label class="sabor-item flex items-center p-2 rounded">
+                                        <input type="checkbox" name="sabores_premium[]" value="<?= $sabor ?>" class="mr-2">
+                                        <div>
+                                            <span class="text-sm font-medium"><?= $sabor ?></span>
+                                            <span class="text-xs text-gray-500 ml-2">(<?= $descripcion ?>)</span>
+                                        </div>
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Previsualización -->
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <h4 class="font-medium text-purple-700 mb-2">
-                            <i class="fas fa-eye mr-1"></i>Cómo se verá al cliente
-                        </h4>
-                        <div class="text-sm space-y-1" id="preview_precios">
-                            <div class="line-through text-gray-500">Precio normal: $0</div>
-                            <div class="text-green-600 font-bold">Efectivo: $0</div>
-                            <div class="text-xs text-green-600">¡Ahorrás $0!</div>
+                    <!-- Tab Personalizado -->
+                    <div id="content-personalizado" class="tab-content" style="display: none;">
+                        <div class="space-y-6">
+                            <!-- Contador de Sándwiches -->
+                            <div class="text-center p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border">
+                                <h4 class="font-medium text-gray-800 mb-4">
+                                    <i class="fas fa-calculator text-blue-500 mr-2"></i>Cantidad de Sándwiches
+                                </h4>
+                                <div class="flex items-center justify-center space-x-4">
+                                    <button type="button" onclick="cambiarCantidad(-8)" class="bg-red-500 hover:bg-red-600 text-white w-10 h-10 rounded-full">
+                                        <i class="fas fa-minus"></i>
+                                    </button>
+                                    <div class="contador-display text-blue-600" id="cantidad-display">8</div>
+                                    <button type="button" onclick="cambiarCantidad(8)" class="bg-green-500 hover:bg-green-600 text-white w-10 h-10 rounded-full">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="cantidad_personalizada" id="cantidad_personalizada" value="8">
+                                <p class="text-sm text-gray-600 mt-2">
+                                    <span id="planchas-info">1 plancha</span> • <span class="text-blue-600">Se incrementa de 8 en 8</span>
+                                </p>
+                            </div>
+
+                            <!-- Campo de Precio Personalizable -->
+                            <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <label class="block text-gray-700 mb-2 font-medium">
+                                    <i class="fas fa-dollar-sign text-green-500 mr-2"></i>Precio Total *
+                                </label>
+                                <input type="number" 
+                                       name="precio_personalizado" 
+                                       id="precio_personalizado"
+                                       min="0" 
+                                       step="0.01" 
+                                       required 
+                                       class="precio-input w-full px-4 py-3 text-lg font-bold text-center rounded-lg"
+                                       placeholder="Ingresá el precio total"
+                                       onchange="updateResumen()">
+                                <p class="text-sm text-gray-600 mt-1 text-center">Ingresá el precio según los sándwiches seleccionados</p>
+                            </div>
+
+                            <!-- Sabores por Categoría -->
+                            <div class="space-y-4">
+                                <h4 class="font-medium text-gray-800">
+                                    <i class="fas fa-list text-purple-500 mr-2"></i>Seleccionar Sabores
+                                </h4>
+
+                                <!-- Sabores Comunes -->
+                                <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                    <h5 class="font-medium text-blue-800 mb-3">
+                                        <i class="fas fa-circle text-blue-500 mr-2"></i>Comunes
+                                    </h5>
+                                    <?php foreach ($sabores['comun'] as $sabor => $descripcion): ?>
+                                        <label class="sabor-item flex items-center p-2 rounded">
+                                            <input type="checkbox" name="sabores_personalizados[]" value="<?= $sabor ?>" class="mr-2">
+                                            <div>
+                                                <span class="text-sm font-medium"><?= $sabor ?></span>
+                                                <span class="text-xs text-gray-600 ml-2">(<?= $descripcion ?>)</span>
+                                            </div>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+
+                                <!-- Sabores Especiales -->
+                                <div class="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                    <h5 class="font-medium text-orange-800 mb-3">
+                                        <i class="fas fa-star text-orange-500 mr-2"></i>Especiales
+                                    </h5>
+                                    <?php foreach ($sabores['especiales'] as $sabor => $descripcion): ?>
+                                        <label class="sabor-item flex items-center p-2 rounded">
+                                            <input type="checkbox" name="sabores_personalizados[]" value="<?= $sabor ?>" class="mr-2">
+                                            <div>
+                                                <span class="text-sm font-medium"><?= $sabor ?></span>
+                                                <span class="text-xs text-gray-600 ml-2">(<?= $descripcion ?>)</span>
+                                            </div>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+
+                                <!-- Sabores Premium -->
+                                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <h5 class="font-medium text-yellow-800 mb-3">
+                                        <i class="fas fa-crown text-yellow-500 mr-2"></i>Premium
+                                    </h5>
+                                    <div class="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto">
+                                        <?php foreach ($sabores['premium'] as $sabor => $descripcion): ?>
+                                            <label class="sabor-item flex items-center p-2 rounded">
+                                                <input type="checkbox" name="sabores_personalizados[]" value="<?= $sabor ?>" class="mr-2">
+                                                <div>
+                                                    <span class="text-sm font-medium"><?= $sabor ?></span>
+                                                    <span class="text-xs text-gray-600 ml-2">(<?= $descripcion ?>)</span>
+                                                </div>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna 3: Resumen del Pedido -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-receipt text-purple-500 mr-2"></i>Resumen del Pedido
+                    </h3>
+                    
+                    <div id="resumen-pedido" class="space-y-3">
+                        <div class="text-gray-500 text-center py-8">
+                            <i class="fas fa-shopping-cart text-4xl mb-2"></i>
+                            <div>Seleccioná un producto para ver el resumen</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Columna 3: Vista Previa y Acciones -->
+            <!-- Información Adicional -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-eye text-purple-500 mr-2"></i>Vista Previa del Producto
+                    <i class="fas fa-clock text-blue-500 mr-2"></i>Información Adicional
                 </h3>
-
-                <!-- Card de preview -->
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 mb-6" id="producto_preview">
-                    <div class="text-center text-gray-400">
-                        <i class="fas fa-image text-4xl mb-2"></i>
-                        <div class="text-sm">Completa el formulario para ver la vista previa</div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">Fecha de Entrega</label>
+                        <input type="date" name="fecha_entrega" class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= htmlspecialchars($_POST['fecha_entrega'] ?? '') ?>" min="<?= date('Y-m-d') ?>">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Hora de Entrega</label>
+                        <input type="time" name="hora_entrega" class="w-full px-3 py-2 border rounded-lg"
+                               value="<?= htmlspecialchars($_POST['hora_entrega'] ?? '') ?>">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">Notas de Horario</label>
+                        <input type="text" name="notas_horario" class="w-full px-3 py-2 border rounded-lg"
+                               placeholder="Ej: Flexible, mañana, etc."
+                               value="<?= htmlspecialchars($_POST['notas_horario'] ?? '') ?>">
                     </div>
                 </div>
-
-                <!-- Acciones del formulario -->
-                <div class="space-y-3">
-                    <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-medium">
-                        <i class="fas fa-plus-circle mr-2"></i>Crear Producto
-                    </button>
-                    
-                    <button type="button" onclick="previsualizarProducto()" 
-                            class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg">
-                        <i class="fas fa-eye mr-2"></i>Actualizar Vista Previa
-                    </button>
-                    
-                    <a href="index.php" class="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-center block">
-                        <i class="fas fa-times mr-2"></i>Cancelar
-                    </a>
+                
+                <div class="mt-4">
+                    <label class="block text-gray-700 mb-2">Observaciones</label>
+                    <textarea name="observaciones" rows="3" class="w-full px-3 py-2 border rounded-lg"
+                              placeholder="Observaciones adicionales sobre el pedido..."><?= htmlspecialchars($_POST['observaciones'] ?? '') ?></textarea>
                 </div>
+            </div>
 
-                <!-- Productos sugeridos -->
-                <div class="mt-6 pt-4 border-t">
-                    <h4 class="font-medium text-gray-700 mb-3">
-                        <i class="fas fa-lightbulb mr-1"></i>Productos Populares
-                    </h4>
-                    <div class="space-y-2 text-sm">
-                        <div class="flex justify-between">
-                            <span>24 Jamón y Queso</span>
-                            <button type="button" onclick="copiarProducto('24 Jamón y Queso', 'Clásicos', 11000, 12000)" 
-                                    class="text-blue-600 hover:underline text-xs">Copiar</button>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>48 Premium</span>
-                            <button type="button" onclick="copiarProducto('48 Premium', 'Premium', 42000, 44000)" 
-                                    class="text-blue-600 hover:underline text-xs">Copiar</button>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>24 Surtidos</span>
-                            <button type="button" onclick="copiarProducto('24 Surtidos', 'Surtidos', 11000, 12000)" 
-                                    class="text-blue-600 hover:underline text-xs">Copiar</button>
-                        </div>
-                    </div>
-                </div>
+            <!-- Botones de Acción -->
+            <div class="flex justify-between">
+                <a href="../pedidos/" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors">
+                    <i class="fas fa-times mr-2"></i>Cancelar
+                </a>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg transition-colors">
+                    <i class="fas fa-save mr-2"></i>Crear Pedido
+                </button>
             </div>
         </form>
-        </div>
-
-        <!-- Tips para crear productos -->
-        <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 class="font-semibold text-blue-800 mb-3">
-                <i class="fas fa-lightbulb mr-2"></i>Tips para Crear Productos Efectivos
-            </h3>
-            <div class="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
-                <div>
-                    <h4 class="font-medium mb-2">📝 Nombres Descriptivos</h4>
-                    <ul class="space-y-1">
-                        <li>• Incluye la cantidad (24, 48, etc.)</li>
-                        <li>• Especifica el tipo (Premium, Clásico)</li>
-                        <li>• Menciona lo especial (Temporada, Promo)</li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-medium mb-2">💰 Precios Estratégicos</h4>
-                    <ul class="space-y-1">
-                        <li>• Efectivo: 10-15% menos que transferencia</li>
-                        <li>• Usa números redondos (11000, no 10857)</li>
-                        <li>• Considera costos de materia prima</li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-medium mb-2">🏷️ Categorización</h4>
-                    <ul class="space-y-1">
-                        <li>• Clásicos: tradicionales jamón y queso</li>
-                        <li>• Surtidos: variedad de sabores</li>
-                        <li>• Premium: ingredientes gourmet</li>
-                    </ul>
-                </div>
-                <div>
-                    <h4 class="font-medium mb-2">📊 Orden de Aparición</h4>
-                    <ul class="space-y-1">
-                        <li>• Productos populares: orden bajo (1-10)</li>
-                        <li>• Productos especiales: orden medio (11-50)</li>
-                        <li>• Productos temporales: orden alto (51+)</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </main>
+    </div>
 
     <script>
-        // Manejo de categorías
-        document.getElementById('categoria_select').addEventListener('change', function() {
-            const nuevaCategoria = document.getElementById('categoria_nueva');
-            if (this.value === 'nueva') {
-                nuevaCategoria.classList.remove('hidden');
-                nuevaCategoria.required = true;
-                nuevaCategoria.focus();
-            } else {
-                nuevaCategoria.classList.add('hidden');
-                nuevaCategoria.required = false;
-                nuevaCategoria.value = '';
-            }
-        });
+        let currentProduct = null;
+        let paymentMethod = 'Transferencia';
+        let activeTab = 'predefinido';
 
-        // Calcular descuentos automáticamente - FUNCIÓN CORREGIDA
-        function calcularDescuentos() {
-            const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
-            const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
+        // Cambiar tabs
+        function showTab(tab) {
+            activeTab = tab;
             
-            if (efectivo > 0 && transferencia > 0 && transferencia > efectivo) {
-                const descuentoPesos = transferencia - efectivo;
-                const descuentoPorcentaje = (descuentoPesos / transferencia * 100).toFixed(1);
+            // Ocultar todos los contenidos
+            document.getElementById('content-predefinido').style.display = tab === 'predefinido' ? 'block' : 'none';
+            document.getElementById('content-personalizado').style.display = tab === 'personalizado' ? 'block' : 'none';
+            
+            // Actualizar estilos de tabs
+            document.getElementById('tab-predefinido').className = tab === 'predefinido' 
+                ? 'tab-btn py-3 px-6 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600'
+                : 'tab-btn py-3 px-6 border-b-2 font-medium text-sm cursor-pointer border-transparent text-gray-500 hover:text-blue-600';
+            
+            document.getElementById('tab-personalizado').className = tab === 'personalizado' 
+                ? 'tab-btn py-3 px-6 border-b-2 font-medium text-sm active cursor-pointer border-blue-500 text-blue-600'
+                : 'tab-btn py-3 px-6 border-b-2 font-medium text-sm cursor-pointer border-transparent text-gray-500 hover:text-blue-600';
+            
+            document.getElementById('tipo_pedido_hidden').value = tab;
+            
+            // Limpiar selecciones previas
+            if (tab === 'predefinido') {
+                currentProduct = null;
+                // Desmarcar productos
+                document.querySelectorAll('.producto-card').forEach(card => {
+                    card.classList.remove('selected');
+                });
+                document.querySelectorAll('input[name="producto_id"]').forEach(radio => {
+                    radio.checked = false;
+                });
+            }
+            
+            updateResumen();
+        }
+
+        // Seleccionar producto predefinido
+        function selectProduct(id, name, precioEfectivo, precioTransferencia) {
+            currentProduct = { id, name, precioEfectivo, precioTransferencia };
+            
+            // Marcar visualmente el producto seleccionado
+            document.querySelectorAll('.producto-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+            
+            // Marcar el radio button
+            document.querySelector(`input[name="producto_id"][value="${id}"]`).checked = true;
+            
+            // Mostrar sabores premium si aplica
+            const saboresDiv = document.getElementById('sabores-premium');
+            if (name.includes('Premium') || name.includes('Surtidos Premium')) {
+                saboresDiv.classList.remove('hidden');
+            } else {
+                saboresDiv.classList.add('hidden');
+            }
+            
+            updateResumen();
+        }
+
+        // Cambiar cantidad personalizada (contador de 8 en 8)
+        function cambiarCantidad(cambio) {
+            const input = document.getElementById('cantidad_personalizada');
+            const display = document.getElementById('cantidad-display');
+            const planchasInfo = document.getElementById('planchas-info');
+            
+            let cantidad = parseInt(input.value) + cambio;
+            if (cantidad < 8) cantidad = 8; // Mínimo 8
+            
+            input.value = cantidad;
+            display.textContent = cantidad;
+            
+            const planchas = Math.ceil(cantidad / 8);
+            planchasInfo.textContent = `${planchas} plancha${planchas > 1 ? 's' : ''}`;
+            
+            updateResumen();
+        }
+
+        // Actualizar formas de pago
+        function updatePrecios() {
+            const formaPago = document.querySelector('input[name="forma_pago"]:checked')?.value;
+            if (formaPago) {
+                paymentMethod = formaPago;
+                updateResumen();
+            }
+        }
+
+        // Actualizar resumen del pedido
+        function updateResumen() {
+            const resumenDiv = document.getElementById('resumen-pedido');
+            const ubicacion = document.querySelector('input[name="ubicacion"]:checked')?.value;
+            
+            let html = '';
+            
+            if (activeTab === 'predefinido' && currentProduct) {
+                const precio = paymentMethod === 'Efectivo' ? currentProduct.precioEfectivo : currentProduct.precioTransferencia;
                 
-                document.getElementById('descuento_pesos').textContent = '$' + descuentoPesos.toLocaleString();
-                document.getElementById('descuento_porcentaje').textContent = descuentoPorcentaje + '%';
+                html = `
+                    <div class="border-b pb-3">
+                        <div class="font-medium">${currentProduct.name}</div>
+                        <div class="text-sm text-gray-600">Pago: ${paymentMethod}</div>
+                        ${ubicacion ? `<div class="text-xs mt-1 ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">
+                            <i class="fas fa-${ubicacion === 'Local 1' ? 'store-alt' : 'industry'} mr-1"></i>${ubicacion}
+                        </div>` : ''}
+                    </div>
+                    <div class="flex justify-between items-center font-bold text-lg">
+                        <span>Total:</span>
+                        <span class="text-green-600">${precio.toLocaleString()}</span>
+                    </div>
+                `;
+            } else if (activeTab === 'personalizado') {
+                const cantidad = document.querySelector('input[name="cantidad_personalizada"]')?.value || 8;
+                const precio = parseFloat(document.querySelector('input[name="precio_personalizado"]')?.value || 0);
+                const planchas = Math.ceil(cantidad / 8);
                 
-                // Actualizar preview
-                document.getElementById('preview_precios').innerHTML = `
-                    <div class="line-through text-gray-500">Precio normal: $${transferencia.toLocaleString()}</div>
-                    <div class="text-green-600 font-bold">Efectivo: $${efectivo.toLocaleString()}</div>
-                    <div class="text-xs text-green-600">¡Ahorrás $${descuentoPesos.toLocaleString()}!</div>
+                html = `
+                    <div class="border-b pb-3">
+                        <div class="font-medium">Personalizado x${cantidad}</div>
+                        <div class="text-sm text-gray-600">${planchas} plancha${planchas > 1 ? 's' : ''}</div>
+                        <div class="text-sm text-gray-600">Pago: ${paymentMethod}</div>
+                        ${ubicacion ? `<div class="text-xs mt-1 ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">
+                            <i class="fas fa-${ubicacion === 'Local 1' ? 'store-alt' : 'industry'} mr-1"></i>${ubicacion}
+                        </div>` : ''}
+                    </div>
+                    <div class="flex justify-between items-center font-bold text-lg">
+                        <span>Total:</span>
+                        <span class="text-green-600">${precio > 0 ? ' + precio.toLocaleString() : 'Sin precio'}</span>
+                    </div>
                 `;
             } else {
-                document.getElementById('descuento_pesos').textContent = '$0';
-                document.getElementById('descuento_porcentaje').textContent = '0%';
-                document.getElementById('preview_precios').innerHTML = `
-                    <div class="line-through text-gray-500">Precio normal: $0</div>
-                    <div class="text-green-600 font-bold">Efectivo: $0</div>
-                    <div class="text-xs text-green-600">¡Ahorrás $0!</div>
-                `;
-            }
-        }
-
-        // Aplicar descuentos comunes - FUNCIÓN CORREGIDA
-        function aplicarDescuentoComun(porcentaje) {
-            const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
-            if (transferencia > 0) {
-                const efectivo = Math.round(transferencia * (1 - porcentaje / 100) / 100) * 100;
-                document.getElementById('precio_efectivo').value = efectivo;
-                calcularDescuentos();
-                previsualizarProducto();
-            } else {
-                alert('Ingrese primero el precio de transferencia');
-                document.getElementById('precio_transferencia').focus();
-            }
-        }
-
-        // Event listeners para precios
-        document.getElementById('precio_efectivo').addEventListener('input', function() {
-            calcularDescuentos();
-            previsualizarProducto();
-        });
-        
-        document.getElementById('precio_transferencia').addEventListener('input', function() {
-            calcularDescuentos();
-            previsualizarProducto();
-        });
-
-        // Previsualizar producto - FUNCIÓN CORREGIDA
-        function previsualizarProducto() {
-            const nombre = document.getElementById('producto_nombre').value;
-            const descripcion = document.getElementById('producto_descripcion').value;
-            const categoriaSelect = document.getElementById('categoria_select');
-            const categoriaNueva = document.getElementById('categoria_nueva');
-            
-            let categoria = categoriaSelect.value;
-            if (categoria === 'nueva' && categoriaNueva.value) {
-                categoria = categoriaNueva.value;
-            }
-            
-            const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
-            const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
-            const activo = document.getElementById('producto_activo').checked;
-
-            if (!nombre) {
-                document.getElementById('producto_preview').innerHTML = `
-                    <div class="text-center text-gray-400">
-                        <i class="fas fa-image text-4xl mb-2"></i>
-                        <div class="text-sm">Ingresa un nombre para ver la vista previa</div>
+                html = `
+                    <div class="text-gray-500 text-center py-8">
+                        <i class="fas fa-shopping-cart text-4xl mb-2"></i>
+                        <div>Seleccioná un producto para ver el resumen</div>
+                        ${ubicacion ? `<div class="text-xs mt-2 ${ubicacion === 'Local 1' ? 'text-blue-600' : 'text-orange-600'}">
+                            <i class="fas fa-${ubicacion === 'Local 1' ? 'store-alt' : 'industry'} mr-1"></i>${ubicacion}
+                        </div>` : ''}
                     </div>
                 `;
-                return;
             }
-
-            const preview = document.getElementById('producto_preview');
             
-            let estadoClass = activo ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
-            let estadoText = activo ? '✅ Activo' : '❌ Inactivo';
-            let estadoColor = activo ? 'text-green-600' : 'text-red-600';
-
-            let categoriaColor = 'bg-gray-100 text-gray-800';
-            switch(categoria) {
-                case 'Premium': categoriaColor = 'bg-purple-100 text-purple-800'; break;
-                case 'Surtidos': categoriaColor = 'bg-blue-100 text-blue-800'; break;
-                case 'Clásicos': categoriaColor = 'bg-green-100 text-green-800'; break;
-            }
-
-            preview.className = `border-2 rounded-lg p-4 mb-6 ${estadoClass}`;
-            preview.innerHTML = `
-                <div class="space-y-3">
-                    <div class="flex justify-between items-start">
-                        <h4 class="font-bold text-lg text-gray-800">${nombre}</h4>
-                        <span class="px-2 py-1 text-xs font-medium rounded-full ${categoriaColor}">
-                            ${categoria || 'Sin categoría'}
-                        </span>
-                    </div>
-                    
-                    ${descripcion ? `<p class="text-sm text-gray-600">${descripcion}</p>` : ''}
-                    
-                    <div class="flex justify-between items-center">
-                        <div>
-                            ${transferencia > efectivo && efectivo > 0 ? 
-                                `<div class="text-sm text-gray-400 line-through">$${transferencia.toLocaleString()}</div>` : ''
-                            }
-                            <div class="text-lg font-bold text-green-600">
-                                Efectivo: $${efectivo.toLocaleString()}
-                            </div>
-                            <div class="text-sm text-gray-600">
-                                Transfer: $${transferencia.toLocaleString()}
-                            </div>
-                        </div>
-                        <div class="${estadoColor} font-medium text-sm">
-                            ${estadoText}
-                        </div>
-                    </div>
-                </div>
-            `;
+            resumenDiv.innerHTML = html;
         }
 
-        // Copiar datos de producto existente
-        function copiarProducto(nombre, categoria, efectivo, transferencia) {
-            document.getElementById('producto_nombre').value = nombre;
-            document.getElementById('categoria_select').value = categoria;
-            document.getElementById('precio_efectivo').value = efectivo;
-            document.getElementById('precio_transferencia').value = transferencia;
-            
-            calcularDescuentos();
-            previsualizarProducto();
-        }
+        // Validaciones del formulario
+        document.getElementById('pedidoForm').addEventListener('submit', function(e) {
+            const ubicacion = document.querySelector('input[name="ubicacion"]:checked');
+            if (!ubicacion) {
+                e.preventDefault();
+                alert('Debe seleccionar la ubicación del pedido (Local 1 o Fábrica).');
+                return false;
+            }
 
-        // Auto-previsualizar cuando cambian los campos
-        document.addEventListener('DOMContentLoaded', function() {
-            const campos = [
-                'producto_nombre', 
-                'producto_descripcion', 
-                'categoria_select', 
-                'producto_activo'
-            ];
+            const tipoPedido = document.getElementById('tipo_pedido_hidden').value;
             
-            campos.forEach(id => {
-                const elemento = document.getElementById(id);
-                if (elemento) {
-                    elemento.addEventListener('input', previsualizarProducto);
-                    elemento.addEventListener('change', previsualizarProducto);
+            if (tipoPedido === 'predefinido') {
+                const productoSeleccionado = document.querySelector('input[name="producto_id"]:checked');
+                if (!productoSeleccionado) {
+                    e.preventDefault();
+                    alert('Por favor selecciona un producto.');
+                    return false;
                 }
+            } else if (tipoPedido === 'personalizado') {
+                const precio = parseFloat(document.querySelector('input[name="precio_personalizado"]')?.value || 0);
+                if (precio <= 0) {
+                    e.preventDefault();
+                    alert('Por favor ingresa un precio válido para el pedido personalizado.');
+                    return false;
+                }
+                
+                const saboresSeleccionados = document.querySelectorAll('input[name="sabores_personalizados[]"]:checked');
+                if (saboresSeleccionados.length === 0) {
+                    e.preventDefault();
+                    alert('Por favor selecciona al menos un sabor para el pedido personalizado.');
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            showTab('predefinido');
+            
+            // Event listeners para cambios en forma de pago
+            document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
+                radio.addEventListener('change', updatePrecios);
             });
             
-            // Event listener especial para categoría nueva
-            document.getElementById('categoria_nueva').addEventListener('input', previsualizarProducto);
-            
-            // Previsualizar inicial si hay datos
-            if (document.getElementById('producto_nombre').value) {
-                previsualizarProducto();
-                calcularDescuentos();
-            }
-        });
-
-        // Validaciones antes de enviar
-        document.getElementById('productoForm').addEventListener('submit', function(e) {
-            const efectivo = parseFloat(document.getElementById('precio_efectivo').value) || 0;
-            const transferencia = parseFloat(document.getElementById('precio_transferencia').value) || 0;
-            const nombre = document.getElementById('producto_nombre').value.trim();
-            
-            if (!nombre) {
-                e.preventDefault();
-                alert('El nombre del producto es obligatorio.');
-                document.getElementById('producto_nombre').focus();
-                return;
-            }
-            
-            if (efectivo <= 0 || transferencia <= 0) {
-                e.preventDefault();
-                alert('Los precios deben ser mayores a 0.');
-                return;
-            }
-            
-            if (efectivo >= transferencia) {
-                e.preventDefault();
-                alert('El precio en efectivo debe ser menor al precio por transferencia para aplicar descuento.');
-                return;
-            }
-
-            const categoria = document.getElementById('categoria_select').value;
-            const categoriaNueva = document.getElementById('categoria_nueva').value;
-            
-            if (categoria === 'nueva' && !categoriaNueva.trim()) {
-                e.preventDefault();
-                alert('Ingrese el nombre de la nueva categoría.');
-                document.getElementById('categoria_nueva').focus();
-                return;
-            }
-
-            // Confirmación final
-            const confirmacion = confirm(`¿Crear el producto "${nombre}"?\n\nEfectivo: ${efectivo.toLocaleString()}\nTransferencia: ${transferencia.toLocaleString()}`);
-            if (!confirmacion) {
-                e.preventDefault();
-                return;
-            }
+            // Event listener para cambios en precio personalizado
+            document.getElementById('precio_personalizado').addEventListener('input', updateResumen);
         });
     </script>
 </body>
