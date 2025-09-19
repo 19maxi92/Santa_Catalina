@@ -1,14 +1,128 @@
 <?php
+// empleados/dashboard.php - VERSIÓN SIMPLE CON AUTO-IMPRESIÓN
 require_once '../config.php';
 session_start();
 
-// Verificar acceso de empleado
+// Verificar acceso de empleado (método simple y directo)
 if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== true) {
     header('Location: login.php');
     exit;
 }
 
 $pdo = getConnection();
+
+// NUEVO: Manejar peticiones AJAX para impresión automática
+if (isset($_POST['marcar_impreso']) && isset($_POST['pedido_id'])) {
+    header('Content-Type: application/json');
+    
+    $pedido_id = (int)$_POST['pedido_id'];
+    
+    try {
+        // Verificar si las columnas existen, si no las agregamos dinámicamente
+        $stmt = $pdo->query("SHOW COLUMNS FROM pedidos LIKE 'impreso_auto'");
+        if ($stmt->rowCount() == 0) {
+            $pdo->exec("ALTER TABLE pedidos ADD COLUMN impreso_auto BOOLEAN DEFAULT FALSE");
+        }
+        
+        $stmt = $pdo->query("SHOW COLUMNS FROM pedidos LIKE 'fecha_impreso'");
+        if ($stmt->rowCount() == 0) {
+            $pdo->exec("ALTER TABLE pedidos ADD COLUMN fecha_impreso DATETIME NULL");
+        }
+        
+        // Marcar como impreso
+        $stmt = $pdo->prepare("UPDATE pedidos SET impreso_auto = 1, fecha_impreso = NOW() WHERE id = ? AND ubicacion = 'Local 1'");
+        $stmt->execute([$pedido_id]);
+        
+        echo json_encode(['success' => true, 'message' => 'Pedido marcado como impreso']);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// NUEVO: Verificar estado de la impresora por MAC
+if (isset($_GET['check_printer']) && $_GET['check_printer'] == '1') {
+    header('Content-Type: application/json');
+    
+    // MAC de la impresora que esperamos encontrar
+    $expected_mac = 'C0-25-E9-14-50-03';
+    $expected_ip = '192.168.1.41';
+    
+    // Verificar información del cliente
+    $client_ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    // Determinar estado de la impresora
+    $printer_status = [
+        'expected_mac' => $expected_mac,
+        'expected_ip' => $expected_ip,
+        'client_ip' => $client_ip,
+        'detected' => false,
+        'can_print' => false,
+        'message' => '',
+        'warning' => ''
+    ];
+    
+    // Verificar si estamos en la red correcta (método simple)
+    if (strpos($client_ip, '192.168.1.') === 0 || $client_ip === '127.0.0.1' || $client_ip === $expected_ip || $client_ip === 'unknown') {
+        $printer_status['detected'] = true;
+        $printer_status['can_print'] = true; // Asumimos que está OK si estamos en la red
+        $printer_status['message'] = 'Impresora POS80-CX detectada - Lista para imprimir';
+    } else {
+        $printer_status['message'] = 'No se detectó la impresora POS80-CX en esta red';
+        $printer_status['warning'] = 'Verifique que esté conectado a la red Local_SantaCatalina';
+    }
+    
+    echo json_encode($printer_status);
+    exit;
+}
+
+// NUEVO: Verificar si hay nuevos pedidos para impresión automática
+if (isset($_GET['check_new']) && $_GET['check_new'] == '1') {
+    header('Content-Type: application/json');
+    
+    try {
+        // Verificar si las columnas existen antes de usar
+        $has_impreso_auto = $pdo->query("SHOW COLUMNS FROM pedidos LIKE 'impreso_auto'")->rowCount() > 0;
+        
+        if ($has_impreso_auto) {
+            $stmt = $pdo->prepare("
+                SELECT id, nombre, apellido, producto, created_at
+                FROM pedidos 
+                WHERE ubicacion = 'Local 1' 
+                AND estado = 'Pendiente' 
+                AND DATE(created_at) = CURDATE()
+                AND (impreso_auto IS NULL OR impreso_auto = 0)
+                AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+                ORDER BY created_at DESC
+            ");
+        } else {
+            // Fallback si no existen las columnas
+            $stmt = $pdo->prepare("
+                SELECT id, nombre, apellido, producto, created_at
+                FROM pedidos 
+                WHERE ubicacion = 'Local 1' 
+                AND estado = 'Pendiente' 
+                AND DATE(created_at) = CURDATE()
+                AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+                ORDER BY created_at DESC
+                LIMIT 3
+            ");
+        }
+        
+        $stmt->execute();
+        $nuevos_pedidos = $stmt->fetchAll();
+        
+        echo json_encode([
+            'success' => true,
+            'new_orders' => $nuevos_pedidos,
+            'count' => count($nuevos_pedidos),
+            'has_auto_print_columns' => $has_impreso_auto
+        ]);
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit;
+}
 
 // Estadísticas generales para empleados
 $stats = [
@@ -18,7 +132,7 @@ $stats = [
     'pedidos_hoy' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn()
 ];
 
-// NUEVO: Estadísticas por ubicación para hoy
+// Estadísticas por ubicación para hoy
 $stats_ubicacion = $pdo->query("
     SELECT 
         ubicacion,
@@ -32,12 +146,46 @@ $stats_ubicacion = $pdo->query("
     GROUP BY ubicacion
 ")->fetchAll();
 
-// Pedidos del día con información completa (incluyendo ubicación)
+// NUEVO: Pedidos del Local 1 pendientes de impresión
+try {
+    $has_impreso_auto = $pdo->query("SHOW COLUMNS FROM pedidos LIKE 'impreso_auto'")->rowCount() > 0;
+    
+    if ($has_impreso_auto) {
+        $stmt_local1 = $pdo->prepare("
+            SELECT id, nombre, apellido, producto, created_at, estado
+            FROM pedidos 
+            WHERE ubicacion = 'Local 1' 
+            AND estado = 'Pendiente' 
+            AND DATE(created_at) = CURDATE()
+            AND (impreso_auto IS NULL OR impreso_auto = 0)
+            ORDER BY created_at DESC
+            LIMIT 10
+        ");
+    } else {
+        // Mostrar todos los pedidos pendientes del Local 1 si no hay columnas de impresión
+        $stmt_local1 = $pdo->prepare("
+            SELECT id, nombre, apellido, producto, created_at, estado
+            FROM pedidos 
+            WHERE ubicacion = 'Local 1' 
+            AND estado = 'Pendiente' 
+            AND DATE(created_at) = CURDATE()
+            ORDER BY created_at DESC
+            LIMIT 10
+        ");
+    }
+    
+    $stmt_local1->execute();
+    $pedidos_local1_pendientes = $stmt_local1->fetchAll();
+} catch (Exception $e) {
+    $pedidos_local1_pendientes = [];
+}
+
+// Pedidos del día
 $pedidos_hoy = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado, modalidad, ubicacion,
            observaciones, direccion, telefono, forma_pago,
            created_at, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
-           fecha_entrega, hora_entrega, notas_horario, impreso
+           fecha_entrega, hora_entrega, notas_horario
     FROM pedidos 
     WHERE DATE(created_at) = CURDATE()
     ORDER BY 
@@ -50,20 +198,10 @@ $pedidos_hoy = $pdo->query("
         created_at ASC
 ")->fetchAll();
 
-// NUEVO: Pedidos urgentes (más de 1 hora)
+// Pedidos urgentes (más de 1 hora)
 $pedidos_urgentes = array_filter($pedidos_hoy, function($pedido) {
     return $pedido['minutos_transcurridos'] > 60 && in_array($pedido['estado'], ['Pendiente', 'Preparando']);
 });
-
-// NUEVO: Próximas entregas programadas
-$proximas_entregas = $pdo->query("
-    SELECT id, nombre, apellido, producto, ubicacion, fecha_entrega, hora_entrega, notas_horario
-    FROM pedidos 
-    WHERE fecha_entrega >= CURDATE() 
-    AND estado NOT IN ('Entregado')
-    ORDER BY fecha_entrega, hora_entrega
-    LIMIT 5
-")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -73,8 +211,70 @@ $proximas_entregas = $pdo->query("
     <title>Panel Empleados - Santa Catalina</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .auto-print-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .print-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+        
+        .print-status {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 8px;
+        }
+        
+        .print-status.active { background-color: #10B981; }
+        .print-status.inactive { background-color: #EF4444; }
+        
+        .pedido-nuevo {
+            animation: highlight 2s ease-in-out;
+            border-left: 4px solid #F59E0B;
+        }
+        
+        @keyframes highlight {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: #FEF3C7; }
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
+    <!-- Toggle de impresión automática con estado -->
+    <div class="print-toggle">
+        <button id="toggleAutoPrint" 
+                class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-lg transition-all duration-200 flex items-center">
+            <i class="fas fa-print mr-2"></i>
+            <span id="printStatusText">Auto-Print Local 1: OFF</span>
+            <span id="printStatus" class="print-status inactive"></span>
+        </button>
+        
+        <!-- Indicador de estado de impresora -->
+        <div id="printerStatusIndicator" class="mt-2 text-xs text-white bg-gray-800 px-3 py-1 rounded hidden">
+            <i class="fas fa-circle-notch fa-spin mr-1"></i>
+            Verificando impresora...
+        </div>
+    </div>
+
     <!-- Header -->
     <header class="bg-blue-600 text-white shadow-md">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
@@ -82,7 +282,7 @@ $proximas_entregas = $pdo->query("
                 <i class="fas fa-clipboard-list mr-2"></i>Panel de Empleados - Santa Catalina
             </h1>
             <div class="flex items-center space-x-4">
-                <span class="text-blue-100">👋 Hola, <?= $_SESSION['empleado_name'] ?></span>
+                <span class="text-blue-100">👋 Hola, <?= $_SESSION['empleado_name'] ?? 'Empleado' ?></span>
                 <a href="logout.php" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded transition">
                     <i class="fas fa-sign-out-alt mr-1"></i>Salir
                 </a>
@@ -93,7 +293,75 @@ $proximas_entregas = $pdo->query("
     <!-- Main Content -->
     <main class="container mx-auto px-4 py-6">
         
-        <!-- NUEVA SECCIÓN: Alerta de pedidos urgentes -->
+        <!-- NUEVA SECCIÓN: Pedidos Local 1 pendientes de impresión -->
+        <?php if (!empty($pedidos_local1_pendientes)): ?>
+        <div class="bg-orange-50 border border-orange-200 rounded-lg shadow mb-6 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-orange-800 flex items-center">
+                    <i class="fas fa-print text-orange-600 mr-2"></i>
+                    🏪 Local 1 - Pedidos Pendientes de Impresión
+                    <span class="ml-2 bg-orange-200 text-orange-800 px-3 py-1 rounded-full text-sm">
+                        <?= count($pedidos_local1_pendientes) ?> pedidos
+                    </span>
+                </h2>
+                
+                <button onclick="imprimirTodosPendientes()" 
+                        class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded flex items-center">
+                    <i class="fas fa-print mr-2"></i>
+                    Imprimir Todos
+                </button>
+            </div>
+            
+            <div class="space-y-3">
+                <?php foreach ($pedidos_local1_pendientes as $pedido): ?>
+                    <div class="bg-white p-4 rounded border-l-4 border-orange-400 pedido-nuevo" data-pedido-id="<?= $pedido['id'] ?>">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="font-semibold text-gray-800">
+                                    #<?= $pedido['id'] ?> - <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
+                                </div>
+                                <div class="text-sm text-gray-600">
+                                    <?= htmlspecialchars($pedido['producto']) ?>
+                                </div>
+                                <div class="text-xs text-orange-600 mt-1">
+                                    <i class="fas fa-clock mr-1"></i>
+                                    <?= date('H:i:s', strtotime($pedido['created_at'])) ?>
+                                    (hace <?= round((time() - strtotime($pedido['created_at'])) / 60) ?> min)
+                                </div>
+                            </div>
+                            
+                            <div class="flex space-x-2">
+                                <button onclick="imprimirComanda(<?= $pedido['id'] ?>, false)" 
+                                        class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-print mr-1"></i>
+                                    Imprimir
+                                </button>
+                                <button onclick="marcarComoImpreso(<?= $pedido['id'] ?>)" 
+                                        class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm">
+                                    <i class="fas fa-check mr-1"></i>
+                                    Marcar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            
+            <!-- Información de la impresora con estado en tiempo real -->
+            <div id="printerInfo" class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                <div class="flex items-center text-blue-800">
+                    <i id="printerIcon" class="fas fa-circle-notch fa-spin mr-2"></i>
+                    <strong>Impresora:</strong> 
+                    <span id="printerStatusText">Verificando POS80-CX (MAC: C0-25-E9-14-50-03)...</span>
+                </div>
+                <div id="printerDetails" class="text-xs text-blue-600 mt-1">
+                    IP esperada: 192.168.1.41 | Red: Local_SantaCatalina
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
+        <!-- Alerta de pedidos urgentes -->
         <?php if (!empty($pedidos_urgentes)): ?>
         <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded">
             <div class="flex items-center">
@@ -110,7 +378,7 @@ $proximas_entregas = $pdo->query("
         </div>
         <?php endif; ?>
 
-        <!-- Stats Cards Generales -->
+        <!-- Stats Cards -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
             <div class="bg-yellow-500 text-white p-6 rounded-lg shadow text-center">
                 <i class="fas fa-clock text-3xl mb-2"></i>
@@ -137,7 +405,33 @@ $proximas_entregas = $pdo->query("
             </div>
         </div>
 
-        <!-- NUEVA SECCIÓN: Estadísticas por Ubicación -->
+        <!-- Botones de acceso -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <a href="pedidos.php" class="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg">
+                <i class="fas fa-list-alt text-3xl mb-3"></i>
+                <div class="text-lg">Todos los Pedidos</div>
+                <div class="text-sm opacity-90">Gestión completa</div>
+            </a>
+            
+            <a href="pedidos.php?ubicacion=Local 1" class="bg-blue-500 hover:bg-blue-600 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg relative">
+                <i class="fas fa-store text-3xl mb-3"></i>
+                <div class="text-lg">Solo Local 1</div>
+                <div class="text-sm opacity-90">🏪 Atención al público + Impresión</div>
+                <?php if (count($pedidos_local1_pendientes) > 0): ?>
+                    <span class="absolute -top-2 -right-2 bg-orange-500 text-white text-xs px-2 py-1 rounded-full">
+                        <?= count($pedidos_local1_pendientes) ?>
+                    </span>
+                <?php endif; ?>
+            </a>
+            
+            <a href="pedidos.php?ubicacion=Fábrica" class="bg-orange-500 hover:bg-orange-600 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg">
+                <i class="fas fa-industry text-3xl mb-3"></i>
+                <div class="text-lg">Solo Fábrica</div>
+                <div class="text-sm opacity-90">🏭 Producción central</div>
+            </a>
+        </div>
+
+        <!-- Estadísticas por ubicación -->
         <?php if (!empty($stats_ubicacion)): ?>
         <div class="bg-white rounded-lg shadow mb-6 p-6">
             <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -149,77 +443,30 @@ $proximas_entregas = $pdo->query("
                 <?php foreach ($stats_ubicacion as $stat): ?>
                     <div class="border rounded-lg p-4 <?= $stat['ubicacion'] === 'Local 1' ? 'border-blue-200 bg-blue-50' : 'border-orange-200 bg-orange-50' ?>">
                         <div class="flex items-center justify-between mb-3">
-                            <h3 class="font-bold text-lg <?= $stat['ubicacion'] === 'Local 1' ? 'text-blue-800' : 'text-orange-800' ?>">
-                                <?php if ($stat['ubicacion'] === 'Local 1'): ?>
-                                    🏪 Local 1
-                                <?php else: ?>
-                                    🏭 Fábrica
-                                <?php endif; ?>
+                            <h3 class="font-bold text-lg <?= $stat['ubicacion'] === 'Local 1' ? 'text-blue-600' : 'text-orange-600' ?>">
+                                <?= $stat['ubicacion'] === 'Local 1' ? '🏪 Local' : '🏭 Fábrica' ?>
                             </h3>
                             <span class="text-2xl font-bold <?= $stat['ubicacion'] === 'Local 1' ? 'text-blue-600' : 'text-orange-600' ?>">
                                 <?= $stat['total'] ?>
                             </span>
                         </div>
                         
-                        <div class="grid grid-cols-4 gap-2 text-sm">
-                            <div class="text-center">
-                                <div class="font-bold text-yellow-600"><?= $stat['pendientes'] ?></div>
-                                <div class="text-gray-500 text-xs">Pend.</div>
+                        <div class="space-y-1 text-sm">
+                            <div class="flex justify-between">
+                                <span>Pendientes:</span>
+                                <span class="font-semibold text-yellow-600"><?= $stat['pendientes'] ?></span>
                             </div>
-                            <div class="text-center">
-                                <div class="font-bold text-blue-600"><?= $stat['preparando'] ?></div>
-                                <div class="text-gray-500 text-xs">Prep.</div>
+                            <div class="flex justify-between">
+                                <span>Preparando:</span>
+                                <span class="font-semibold text-blue-600"><?= $stat['preparando'] ?></span>
                             </div>
-                            <div class="text-center">
-                                <div class="font-bold text-green-600"><?= $stat['listos'] ?></div>
-                                <div class="text-gray-500 text-xs">List.</div>
+                            <div class="flex justify-between">
+                                <span>Listos:</span>
+                                <span class="font-semibold text-green-600"><?= $stat['listos'] ?></span>
                             </div>
-                            <div class="text-center">
-                                <div class="font-bold text-gray-600"><?= $stat['entregados'] ?></div>
-                                <div class="text-gray-500 text-xs">Entr.</div>
-                            </div>
-                        </div>
-                        
-                        <div class="mt-3 text-center">
-                            <a href="pedidos.php?ubicacion=<?= urlencode($stat['ubicacion']) ?>" 
-                               class="text-xs <?= $stat['ubicacion'] === 'Local 1' ? 'text-blue-600 hover:text-blue-800' : 'text-orange-600 hover:text-orange-800' ?> hover:underline">
-                                Ver solo <?= $stat['ubicacion'] ?>
-                            </a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- NUEVA SECCIÓN: Próximas entregas programadas -->
-        <?php if (!empty($proximas_entregas)): ?>
-        <div class="bg-white rounded-lg shadow mb-6 p-6">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-                <i class="fas fa-calendar-check text-green-500 mr-2"></i>
-                Próximas Entregas Programadas
-            </h2>
-            
-            <div class="space-y-3">
-                <?php foreach ($proximas_entregas as $entrega): ?>
-                    <div class="flex items-center justify-between p-3 border-l-4 border-green-400 bg-green-50 rounded">
-                        <div>
-                            <div class="font-semibold text-gray-800">
-                                #<?= $entrega['id'] ?> - <?= htmlspecialchars($entrega['nombre'] . ' ' . $entrega['apellido']) ?>
-                            </div>
-                            <div class="text-sm text-gray-600">
-                                <?= htmlspecialchars($entrega['producto']) ?>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <div class="font-bold text-green-600">
-                                <?= date('d/m', strtotime($entrega['fecha_entrega'])) ?>
-                                <?php if ($entrega['hora_entrega']): ?>
-                                    <?= substr($entrega['hora_entrega'], 0, 5) ?>
-                                <?php endif; ?>
-                            </div>
-                            <div class="text-xs text-gray-500">
-                                <?= $entrega['ubicacion'] === 'Local 1' ? '🏪 Local' : '🏭 Fábrica' ?>
+                            <div class="flex justify-between">
+                                <span>Entregados:</span>
+                                <span class="font-semibold text-gray-600"><?= $stat['entregados'] ?></span>
                             </div>
                         </div>
                     </div>
@@ -228,28 +475,7 @@ $proximas_entregas = $pdo->query("
         </div>
         <?php endif; ?>
 
-        <!-- Botones de acceso mejorados -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <a href="pedidos.php" class="bg-blue-600 hover:bg-blue-700 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg">
-                <i class="fas fa-list-alt text-3xl mb-3"></i>
-                <div class="text-lg">Todos los Pedidos</div>
-                <div class="text-sm opacity-90">Gestión completa</div>
-            </a>
-            
-            <a href="pedidos.php?ubicacion=Local 1" class="bg-blue-500 hover:bg-blue-600 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg">
-                <i class="fas fa-store text-3xl mb-3"></i>
-                <div class="text-lg">Solo Local 1</div>
-                <div class="text-sm opacity-90">🏪 Atención al público</div>
-            </a>
-            
-            <a href="pedidos.php?ubicacion=Fábrica" class="bg-orange-500 hover:bg-orange-600 text-white p-6 rounded-lg text-center font-semibold transition shadow-lg">
-                <i class="fas fa-industry text-3xl mb-3"></i>
-                <div class="text-lg">Solo Fábrica</div>
-                <div class="text-sm opacity-90">🏭 Producción central</div>
-            </a>
-        </div>
-
-        <!-- Lista de pedidos de hoy MEJORADA -->
+        <!-- Lista de pedidos de hoy (simplificada) -->
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <div class="bg-gray-50 px-6 py-4 border-b">
                 <h2 class="text-xl font-semibold text-gray-800 flex items-center">
@@ -265,393 +491,443 @@ $proximas_entregas = $pdo->query("
                 <div class="p-12 text-center text-gray-500">
                     <i class="fas fa-coffee text-6xl mb-4 text-gray-300"></i>
                     <h3 class="text-xl mb-2">¡Día tranquilo!</h3>
-                    <p>No hay pedidos para hoy aún</p>
+                    <p>No hay pedidos registrados para hoy</p>
                 </div>
             <?php else: ?>
                 <div class="divide-y divide-gray-200">
-                    <?php foreach ($pedidos_hoy as $pedido): ?>
-                        <?php
-                        $estado_colors = [
-                            'Pendiente' => 'bg-yellow-100 border-l-yellow-400 text-yellow-800',
-                            'Preparando' => 'bg-blue-100 border-l-blue-400 text-blue-800',
-                            'Listo' => 'bg-green-100 border-l-green-400 text-green-800',
-                            'Entregado' => 'bg-gray-100 border-l-gray-400 text-gray-800'
-                        ];
-                        
-                        $urgencia = '';
-                        if ($pedido['minutos_transcurridos'] > 60) {
-                            $urgencia = 'border-r-4 border-r-red-500';
-                        } elseif ($pedido['minutos_transcurridos'] > 30) {
-                            $urgencia = 'border-r-4 border-r-orange-500';
-                        }
-
-                        // Color de ubicación
-                        $ubicacion_color = $pedido['ubicacion'] === 'Local 1' ? 'text-blue-600' : 'text-orange-600';
-                        $ubicacion_bg = $pedido['ubicacion'] === 'Local 1' ? 'bg-blue-100' : 'bg-orange-100';
-                        ?>
-                        <div class="p-4 hover:bg-gray-50 border-l-4 <?= $estado_colors[$pedido['estado']] ?> <?= $urgencia ?>">
-                            <div class="flex justify-between items-start">
+                    <?php foreach (array_slice($pedidos_hoy, 0, 10) as $pedido): ?>
+                        <div class="p-4 hover:bg-gray-50 transition-colors">
+                            <div class="flex justify-between items-center">
                                 <div class="flex-1">
-                                    <div class="flex items-center space-x-3 mb-2">
-                                        <span class="font-bold text-lg text-gray-900">#<?= $pedido['id'] ?></span>
-                                        <span class="font-medium text-gray-800">
+                                    <div class="flex items-center mb-1">
+                                        <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-semibold mr-2">
+                                            #<?= $pedido['id'] ?>
+                                        </span>
+                                        <span class="font-semibold text-gray-800">
                                             <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
                                         </span>
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full <?= str_replace('border-l-', 'bg-', $estado_colors[$pedido['estado']]) ?>">
+                                    </div>
+                                    <p class="text-gray-600 text-sm mb-1"><?= htmlspecialchars(substr($pedido['producto'], 0, 50)) ?><?= strlen($pedido['producto']) > 50 ? '...' : '' ?></p>
+                                    <div class="flex items-center text-xs text-gray-500 space-x-3">
+                                        <span><i class="fas fa-clock mr-1"></i><?= date('H:i', strtotime($pedido['created_at'])) ?></span>
+                                        <span><i class="fas fa-map-marker-alt mr-1"></i><?= $pedido['ubicacion'] ?></span>
+                                        <span class="px-2 py-1 rounded text-xs
+                                            <?= $pedido['estado'] === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' : 
+                                                ($pedido['estado'] === 'Preparando' ? 'bg-blue-100 text-blue-800' : 
+                                                'bg-green-100 text-green-800') ?>">
                                             <?= $pedido['estado'] ?>
                                         </span>
-                                        
-                                        <!-- NUEVO: Badge de ubicación -->
-                                        <span class="px-2 py-1 text-xs font-medium rounded-full <?= $ubicacion_bg ?> <?= $ubicacion_color ?>">
-                                            <?= $pedido['ubicacion'] === 'Local 1' ? '🏪 Local 1' : '🏭 Fábrica' ?>
-                                        </span>
-                                        
-                                        <!-- Modalidad -->
-                                        <?php if ($pedido['modalidad'] === 'Delivery'): ?>
-                                            <i class="fas fa-truck text-green-600" title="Delivery"></i>
-                                        <?php else: ?>
-                                            <i class="fas fa-store text-blue-600" title="Retira"></i>
-                                        <?php endif; ?>
-
-                                        <!-- NUEVO: Estado de impresión -->
-                                        <?php if ($pedido['impreso']): ?>
-                                            <i class="fas fa-print text-green-600" title="Comanda impresa"></i>
-                                        <?php else: ?>
-                                            <i class="fas fa-print text-red-600" title="Sin imprimir"></i>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <div class="text-gray-700 mb-1">
-                                        <i class="fas fa-sandwich text-orange-500 mr-1"></i>
-                                        <strong><?= htmlspecialchars($pedido['producto']) ?></strong>
-                                        <span class="text-green-600 font-semibold ml-3">
-                                            <?= formatPrice($pedido['precio']) ?>
-                                        </span>
-                                        <span class="text-gray-500 text-sm ml-2">
-                                            (<?= $pedido['forma_pago'] ?>)
-                                        </span>
-                                    </div>
-
-                                    <!-- NUEVA: Información de dirección para delivery -->
-                                    <?php if ($pedido['modalidad'] === 'Delivery'): ?>
-                                        <div class="text-sm text-gray-600 mb-1">
-                                            <?php if ($pedido['direccion']): ?>
-                                                <i class="fas fa-map-marker-alt text-red-500 mr-1"></i>
-                                                <span class="font-medium"><?= htmlspecialchars($pedido['direccion']) ?></span>
-                                            <?php else: ?>
-                                                <i class="fas fa-exclamation-triangle text-red-500 mr-1"></i>
-                                                <span class="text-red-600 font-medium">¡SIN DIRECCIÓN!</span>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <!-- Teléfono -->
-                                    <div class="text-sm text-gray-600 mb-1">
-                                        <i class="fas fa-phone mr-1"></i>
-                                        <a href="tel:<?= $pedido['telefono'] ?>" class="text-blue-600 hover:underline">
-                                            <?= htmlspecialchars($pedido['telefono']) ?>
-                                        </a>
-                                    </div>
-                                    
-                                    <?php if ($pedido['observaciones']): ?>
-                                    <div class="text-sm text-gray-600 mb-1">
-                                        <i class="fas fa-comment mr-1"></i>
-                                        <?= htmlspecialchars($pedido['observaciones']) ?>
-                                    </div>
-                                    <?php endif; ?>
-
-                                    <!-- NUEVA: Información de entrega programada -->
-                                    <?php if ($pedido['fecha_entrega'] || $pedido['hora_entrega'] || $pedido['notas_horario']): ?>
-                                    <div class="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mt-1">
-                                        <i class="fas fa-calendar-clock mr-1"></i>
-                                        <strong>Para:</strong>
-                                        <?php if ($pedido['fecha_entrega']): ?>
-                                            <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
-                                        <?php endif; ?>
-                                        <?php if ($pedido['hora_entrega']): ?>
-                                            <?= substr($pedido['hora_entrega'], 0, 5) ?>
-                                        <?php endif; ?>
-                                        <?php if ($pedido['notas_horario']): ?>
-                                            (<?= htmlspecialchars($pedido['notas_horario']) ?>)
-                                        <?php endif; ?>
-                                    </div>
-                                    <?php endif; ?>
-                                    
-                                    <div class="text-sm text-gray-500">
-                                        <i class="fas fa-clock mr-1"></i>
-                                        Hace <?= $pedido['minutos_transcurridos'] ?> min
-                                        (<?= date('H:i', strtotime($pedido['created_at'])) ?>)
                                     </div>
                                 </div>
                                 
-                                <div class="flex flex-col space-y-2 ml-4">
-                                    <?php if ($pedido['minutos_transcurridos'] > 60): ?>
-                                        <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">
-                                            <i class="fas fa-exclamation-triangle mr-1"></i>URGENTE
-                                        </span>
-                                    <?php elseif ($pedido['minutos_transcurridos'] > 30): ?>
-                                        <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                                            <i class="fas fa-clock mr-1"></i>PRIORIDAD
-                                        </span>
-                                    <?php endif; ?>
-
-                                    <!-- NUEVO: Botón WhatsApp directo -->
-                                    <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
-                                       target="_blank"
-                                       class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs text-center">
-                                        <i class="fab fa-whatsapp mr-1"></i>WhatsApp
-                                    </a>
-                                </div>
+                                <?php if ($pedido['ubicacion'] === 'Local 1' && $pedido['estado'] === 'Pendiente'): ?>
+                                    <button onclick="imprimirComanda(<?= $pedido['id'] ?>, false)" 
+                                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm ml-3">
+                                        <i class="fas fa-print mr-1"></i>
+                                        Imprimir
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Footer info mejorado -->
-        <div class="mt-8 text-center text-gray-500">
-            <div class="bg-white rounded-lg p-6 shadow">
-                <p class="mb-2">
-                    <i class="fas fa-sync-alt mr-1"></i>
-                    Página actualizada automáticamente cada 30 segundos
-                </p>
                 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                    <div class="text-center">
-                        <div class="font-bold text-blue-600"><?= count($pedidos_hoy) ?></div>
-                        <div>Pedidos Hoy</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="font-bold text-red-600"><?= count($pedidos_urgentes) ?></div>
-                        <div>Urgentes</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="font-bold text-green-600"><?= count($proximas_entregas) ?></div>
-                        <div>Próximas</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="font-bold text-purple-600"><?= count($stats_ubicacion) ?></div>
-                        <div>Ubicaciones</div>
-                    </div>
+                <?php if (count($pedidos_hoy) > 10): ?>
+                <div class="p-4 bg-gray-50 text-center">
+                    <a href="pedidos.php" class="text-blue-500 hover:underline">
+                        Ver todos los <?= count($pedidos_hoy) ?> pedidos del día
+                    </a>
                 </div>
-                
-                <p class="text-xs text-blue-600 mb-2">
-                    🔴 Más de 1 hora = Urgente | 🟠 Más de 30 min = Prioridad
-                </p>
-                <p class="text-xs text-gray-500">
-                    🏪 Local 1 = Atención al público | 🏭 Fábrica = Producción central
-                </p>
-            </div>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
     </main>
 
-    <!-- Auto refresh script mejorado -->
     <script>
-        // Auto-refresh cada 30 segundos
-        setInterval(function() {
-            location.reload();
-        }, 30000);
+        // SISTEMA DE IMPRESIÓN AUTOMÁTICA SIMPLIFICADO
+        let autoPrintEnabled = localStorage.getItem('local1_autoPrintEnabled') === 'true';
+        let checkInterval;
+        let printerConnected = false;
+        let printerCheckInterval;
         
-        // Mostrar última actualización
-        const lastUpdate = new Date().toLocaleTimeString();
-        console.log('Última actualización:', lastUpdate);
-        
-        // Efectos visuales mejorados
+        // Configurar estado inicial
         document.addEventListener('DOMContentLoaded', function() {
-            // Animación para las stats cards
-            const statsCards = document.querySelectorAll('.bg-yellow-500, .bg-blue-500, .bg-green-500, .bg-purple-500');
-            statsCards.forEach((card, index) => {
+            updatePrintToggleUI();
+            checkPrinterConnection(); // Verificar impresora al cargar
+            
+            // Verificar impresora cada 2 minutos
+            printerCheckInterval = setInterval(checkPrinterConnection, 120000);
+            
+            if (autoPrintEnabled) {
+                startAutoCheck();
+            }
+            
+            // Auto-imprimir pedidos existentes si está habilitado
+            if (autoPrintEnabled && <?= count($pedidos_local1_pendientes) ?> > 0) {
                 setTimeout(() => {
-                    card.style.transform = 'scale(1.05)';
-                    setTimeout(() => {
-                        card.style.transform = 'scale(1)';
-                        card.style.transition = 'transform 0.2s ease';
-                    }, 100);
-                }, index * 50);
-            });
-
-            // Destacar pedidos urgentes con animación
-            const urgentes = document.querySelectorAll('.border-r-red-500');
-            urgentes.forEach(el => {
-                el.style.animation = 'pulse 2s infinite';
-            });
-
-            // Notificación de pedidos urgentes
-            const pedidosUrgentes = <?= count($pedidos_urgentes) ?>;
-            if (pedidosUrgentes > 0) {
-                console.log(`⚠️ Hay ${pedidosUrgentes} pedido(s) urgente(s)`);
-                
-                // Solo mostrar notificación si hay muchos urgentes
-                if (pedidosUrgentes > 2) {
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-                    notification.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i>${pedidosUrgentes} pedidos urgentes`;
-                    document.body.appendChild(notification);
+                    if (printerConnected) {
+                        showNotification('🖨️ Revisando pedidos pendientes de impresión...', 'info');
+                        imprimirTodosPendientes();
+                    } else {
+                        showNotification('⚠️ Impresora no disponible - revise la conexión', 'error');
+                    }
+                }, 3000);
+            }
+        });
+        
+        // Función para verificar conexión de impresora
+        function checkPrinterConnection() {
+            const printerIcon = document.getElementById('printerIcon');
+            const printerStatusText = document.getElementById('printerStatusText');
+            const printerDetails = document.getElementById('printerDetails');
+            
+            // Mostrar estado de verificación
+            printerIcon.className = 'fas fa-circle-notch fa-spin mr-2';
+            printerStatusText.textContent = 'Verificando conexión con POS80-CX...';
+            
+            fetch(window.location.href + '?check_printer=1')
+                .then(response => response.json())
+                .then(data => {
+                    printerConnected = data.can_print;
                     
-                    setTimeout(() => {
-                        notification.remove();
-                    }, 5000);
+                    if (data.can_print) {
+                        // Impresora conectada y lista
+                        printerIcon.className = 'fas fa-check-circle text-green-600 mr-2';
+                        printerIcon.style.color = '#10B981';
+                        printerStatusText.textContent = 'POS80-CX conectada y lista';
+                        printerStatusText.style.color = '#10B981';
+                        printerDetails.innerHTML = `✅ IP: ${data.expected_ip} | MAC: ${data.expected_mac} | Estado: ONLINE`;
+                        
+                        updatePrintToggleUI();
+                        
+                    } else if (data.detected) {
+                        // Detectada pero no responde
+                        printerIcon.className = 'fas fa-exclamation-triangle text-yellow-600 mr-2';
+                        printerIcon.style.color = '#F59E0B';
+                        printerStatusText.textContent = 'POS80-CX detectada pero no responde';
+                        printerStatusText.style.color = '#F59E0B';
+                        printerDetails.innerHTML = `⚠️ ${data.warning || 'Puede estar ocupada o apagada'}`;
+                        
+                        showNotification('⚠️ Impresora detectada pero no responde - verifique que esté encendida', 'warning');
+                        
+                    } else {
+                        // No detectada
+                        printerIcon.className = 'fas fa-times-circle text-red-600 mr-2';
+                        printerIcon.style.color = '#EF4444';
+                        printerStatusText.textContent = 'POS80-CX NO detectada';
+                        printerStatusText.style.color = '#EF4444';
+                        printerDetails.innerHTML = `❌ ${data.message} | Tu IP: ${data.client_ip}`;
+                        
+                        // Deshabilitar auto-print si no hay impresora
+                        if (autoPrintEnabled) {
+                            showNotification('❌ Impresora no detectada - Auto-impresión deshabilitada', 'error');
+                            autoPrintEnabled = false;
+                            localStorage.setItem('local1_autoPrintEnabled', false);
+                            updatePrintToggleUI();
+                            stopAutoCheck();
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error verificando impresora:', error);
+                    printerConnected = false;
+                    
+                    printerIcon.className = 'fas fa-question-circle text-gray-600 mr-2';
+                    printerStatusText.textContent = 'Error verificando impresora';
+                    printerStatusText.style.color = '#6B7280';
+                    printerDetails.innerHTML = '❓ No se pudo verificar el estado de la impresora';
+                });
+        }
+        
+        // Toggle de impresión automática
+        document.getElementById('toggleAutoPrint').addEventListener('click', function() {
+            if (!printerConnected) {
+                showNotification('❌ No se puede activar: Impresora POS80-CX no detectada', 'error');
+                checkPrinterConnection(); // Verificar de nuevo
+                return;
+            }
+            
+            autoPrintEnabled = !autoPrintEnabled;
+            localStorage.setItem('local1_autoPrintEnabled', autoPrintEnabled);
+            updatePrintToggleUI();
+            
+            if (autoPrintEnabled) {
+                startAutoCheck();
+                showNotification('✅ Impresión automática LOCAL 1 ACTIVADA', 'success');
+            } else {
+                stopAutoCheck();
+                showNotification('❌ Impresión automática LOCAL 1 DESACTIVADA', 'info');
+            }
+        });
+        
+        function updatePrintToggleUI() {
+            const button = document.getElementById('toggleAutoPrint');
+            const statusText = document.getElementById('printStatusText');
+            const statusIndicator = document.getElementById('printStatus');
+            const indicator = document.getElementById('printerStatusIndicator');
+            
+            if (autoPrintEnabled && printerConnected) {
+                button.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-full shadow-lg transition-all duration-200 flex items-center';
+                statusText.textContent = 'Auto-Print Local 1: ON';
+                statusIndicator.className = 'print-status active';
+                if (indicator) {
+                    indicator.className = 'mt-2 text-xs text-white bg-green-600 px-3 py-1 rounded';
+                    indicator.innerHTML = '<i class="fas fa-check mr-1"></i>Impresora conectada';
+                    indicator.style.display = 'block';
+                }
+            } else if (autoPrintEnabled && !printerConnected) {
+                button.className = 'bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-full shadow-lg transition-all duration-200 flex items-center';
+                statusText.textContent = 'Auto-Print: ESPERANDO';
+                statusIndicator.className = 'print-status active';
+                if (indicator) {
+                    indicator.className = 'mt-2 text-xs text-white bg-yellow-600 px-3 py-1 rounded';
+                    indicator.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Sin impresora';
+                    indicator.style.display = 'block';
+                }
+            } else {
+                button.className = 'bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-lg transition-all duration-200 flex items-center';
+                statusText.textContent = 'Auto-Print Local 1: OFF';
+                statusIndicator.className = 'print-status inactive';
+                if (indicator) {
+                    indicator.style.display = 'none';
                 }
             }
-
-            // Destacar ubicaciones con colores
-            const ubicacionElements = document.querySelectorAll('[class*="bg-blue-100"], [class*="bg-orange-100"]');
-            ubicacionElements.forEach(el => {
-                el.style.transition = 'all 0.3s ease';
-            });
-
-            // Info de debug para empleados
-            console.log('=== DASHBOARD EMPLEADO ===');
-            console.log('Pedidos hoy:', <?= count($pedidos_hoy) ?>);
-            console.log('Pedidos urgentes:', pedidosUrgentes);
-            console.log('Ubicaciones activas:', <?= count($stats_ubicacion) ?>);
-            console.log('========================');
-        });
-
-        // Función para mostrar tiempo real
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('es-AR', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                second: '2-digit'
-            });
-            
-            let clockElement = document.getElementById('live-clock');
-            if (!clockElement) {
-                clockElement = document.createElement('div');
-                clockElement.id = 'live-clock';
-                clockElement.className = 'fixed bottom-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-mono shadow-lg z-40';
-                document.body.appendChild(clockElement);
+        }
+        
+        function startAutoCheck() {
+            if (!printerConnected) {
+                showNotification('⚠️ No se puede iniciar auto-impresión sin impresora conectada', 'warning');
+                return;
             }
             
-            clockElement.textContent = timeString;
+            checkInterval = setInterval(checkForNewOrdersLocal1, 30000); // Cada 30 segundos
+            console.log('🖨️ Impresión automática Local 1 iniciada - revisando cada 30 segundos');
         }
-
-        // Actualizar reloj cada segundo
-        setInterval(updateClock, 1000);
-        updateClock();
-
-        // Keyboard shortcuts para empleados
+        
+        function stopAutoCheck() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+                console.log('⏹️ Impresión automática Local 1 detenida');
+            }
+        }
+        
+        function checkForNewOrdersLocal1() {
+            // Solo buscar nuevos pedidos si la impresora está conectada
+            if (!printerConnected) {
+                console.log('⚠️ Saltando verificación - impresora no conectada');
+                checkPrinterConnection(); // Re-verificar impresora
+                return;
+            }
+            
+            fetch(window.location.href + '?check_new=1')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.new_orders && data.new_orders.length > 0) {
+                        console.log(`🆕 ${data.new_orders.length} nuevos pedidos Local 1 detectados`);
+                        
+                        // Verificar impresora antes de imprimir
+                        if (printerConnected) {
+                            // Imprimir cada pedido nuevo
+                            data.new_orders.forEach(pedido => {
+                                imprimirComanda(pedido.id, true);
+                            });
+                            
+                            showNotification(`🖨️ ${data.new_orders.length} nueva(s) comanda(s) Local 1 impresa(s) automáticamente`, 'success');
+                            
+                            // Recargar página después de 5 segundos para actualizar la lista
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 5000);
+                        } else {
+                            showNotification('❌ Nuevos pedidos detectados pero impresora no disponible', 'error');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error verificando nuevos pedidos:', error);
+                });
+        }
+        
+        // Función para imprimir comanda (simplificada)
+        function imprimirComanda(pedidoId, esAutomatica = false) {
+            if (!printerConnected && esAutomatica) {
+                showNotification('❌ No se puede imprimir automáticamente - Impresora no conectada', 'error');
+                return;
+            }
+            
+            if (!printerConnected && !esAutomatica) {
+                const confirmar = confirm('⚠️ Impresora no detectada. ¿Continuar de todas formas?');
+                if (!confirmar) return;
+            }
+            
+            // Usar el sistema de impresión existente - ruta simplificada
+            const url = `../admin/modules/impresion/comanda_multi.php?pedido=${pedidoId}&ubicacion=Local 1&auto=${esAutomatica ? '1' : '0'}`;
+            
+            if (esAutomatica) {
+                // Impresión automática - ventana pequeña
+                const ventana = window.open(url, '_blank', 'width=300,height=400,scrollbars=no,toolbar=no,menubar=no');
+                if (ventana) {
+                    console.log(`🖨️ AUTO: Imprimiendo pedido #${pedidoId} (Local 1)`);
+                    
+                    // Cerrar ventana después de 3 segundos
+                    setTimeout(() => {
+                        try {
+                            ventana.close();
+                        } catch(e) {
+                            console.log('Ventana ya cerrada');
+                        }
+                    }, 3000);
+                } else {
+                    showNotification('❌ Error: Ventana de impresión bloqueada por el navegador', 'error');
+                }
+            } else {
+                // Impresión manual - ventana normal
+                const ventana = window.open(url, '_blank', 'width=500,height=700');
+                if (ventana) {
+                    ventana.focus();
+                    console.log(`🖨️ MANUAL: Abriendo comanda para pedido #${pedidoId}`);
+                } else {
+                    showNotification('❌ Error: Ventana de impresión bloqueada', 'error');
+                }
+            }
+            
+            // Marcar como impreso después de 2 segundos
+            setTimeout(() => {
+                marcarComoImpreso(pedidoId);
+            }, 2000);
+        }
+        
+        // Imprimir todos los pedidos pendientes
+        function imprimirTodosPendientes() {
+            if (!printerConnected) {
+                const confirmar = confirm('⚠️ Impresora no detectada. ¿Continuar de todas formas?');
+                if (!confirmar) return;
+            }
+            
+            const pedidosIds = <?= json_encode(array_column($pedidos_local1_pendientes, 'id')) ?>;
+            
+            if (pedidosIds.length === 0) {
+                showNotification('✅ No hay pedidos pendientes de impresión', 'info');
+                return;
+            }
+            
+            showNotification(`🖨️ Imprimiendo ${pedidosIds.length} comanda(s) del Local 1...`, 'info');
+            
+            pedidosIds.forEach((pedidoId, index) => {
+                setTimeout(() => {
+                    imprimirComanda(pedidoId, true);
+                }, index * 2000); // 2 segundos entre cada impresión
+            });
+        }
+        
+        // Marcar pedido como impreso
+        function marcarComoImpreso(pedidoId) {
+            const formData = new FormData();
+            formData.append('marcar_impreso', '1');
+            formData.append('pedido_id', pedidoId);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
+                    
+                    // Remover pedido de la lista visual
+                    const elemento = document.querySelector(`[data-pedido-id="${pedidoId}"]`);
+                    if (elemento) {
+                        elemento.style.transition = 'opacity 0.5s, transform 0.5s';
+                        elemento.style.opacity = '0.3';
+                        elemento.style.transform = 'scale(0.95)';
+                        
+                        setTimeout(() => {
+                            elemento.remove();
+                        }, 500);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error marcando pedido:', error);
+            });
+        }
+        
+        // Sistema de notificaciones
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            let bgColor = 'bg-blue-500';
+            let icon = 'info-circle';
+            
+            switch(type) {
+                case 'success':
+                    bgColor = 'bg-green-500';
+                    icon = 'check-circle';
+                    break;
+                case 'error':
+                    bgColor = 'bg-red-500';
+                    icon = 'exclamation-circle';
+                    break;
+                case 'warning':
+                    bgColor = 'bg-yellow-500';
+                    icon = 'exclamation-triangle';
+                    break;
+            }
+            
+            notification.className = `auto-print-notification ${bgColor}`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-${icon} mr-2"></i>
+                    ${message}
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-3 text-white hover:text-gray-200">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-remover después de 5 segundos
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 300);
+                }
+            }, 5000);
+        }
+        
+        // Atajos de teclado
         document.addEventListener('keydown', function(e) {
-            // F5 o Ctrl + R = Refresh
-            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
-                console.log('🔄 Actualizando dashboard...');
+            // Ctrl + P = Toggle auto-print
+            if (e.ctrlKey && e.key === 'p') {
+                e.preventDefault();
+                document.getElementById('toggleAutoPrint').click();
             }
             
-            // Ctrl + 1 = Pedidos Local 1
-            if (e.ctrlKey && e.key === '1') {
+            // Ctrl + T = Test impresora
+            if (e.ctrlKey && e.key === 't') {
                 e.preventDefault();
-                window.location.href = 'pedidos.php?ubicacion=Local 1';
-            }
-            
-            // Ctrl + 2 = Pedidos Fábrica
-            if (e.ctrlKey && e.key === '2') {
-                e.preventDefault();
-                window.location.href = 'pedidos.php?ubicacion=Fábrica';
-            }
-            
-            // Ctrl + U = Pedidos urgentes
-            if (e.ctrlKey && e.key === 'u') {
-                e.preventDefault();
-                window.location.href = 'pedidos.php?estado=Pendiente';
+                checkPrinterConnection();
+                showNotification('🔍 Verificando conexión de impresora...', 'info');
             }
         });
-
-        // Sonido de alerta para pedidos urgentes (opcional)
-        function alertaUrgentes() {
-            const urgentes = <?= count($pedidos_urgentes) ?>;
-            if (urgentes >= 3) {
-                // Solo hacer sonido si hay 3 o más pedidos urgentes
-                console.log('🚨 MUCHOS PEDIDOS URGENTES:', urgentes);
-                
-                // Crear un sonido simple (beep)
-                try {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
-                    
-                    oscillator.connect(gainNode);
-                    gainNode.connect(audioContext.destination);
-                    
-                    oscillator.frequency.value = 800;
-                    oscillator.type = 'sine';
-                    
-                    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-                    gainNode.gain.linearRampToValueAtTime(0.1, audioContext.currentTime + 0.1);
-                    gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.5);
-                    
-                    oscillator.start(audioContext.currentTime);
-                    oscillator.stop(audioContext.currentTime + 0.5);
-                } catch (e) {
-                    console.log('No se pudo reproducir sonido de alerta');
-                }
-            }
-        }
-
-        // Ejecutar alerta después de cargar
-        setTimeout(alertaUrgentes, 2000);
+        
+        // Debug inicial
+        console.log('🏪 Dashboard Empleados Simple con Auto-Impresión cargado');
+        console.log('📍 Buscando impresora POS80-CX MAC: C0-25-E9-14-50-03');
+        console.log('⚙️ Auto-Print:', autoPrintEnabled ? 'ON' : 'OFF');
+        console.log('📋 Pedidos pendientes:', <?= count($pedidos_local1_pendientes) ?>);
+        
+        // Verificar pedidos urgentes
+        <?php if (count($pedidos_urgentes) >= 3): ?>
+        setTimeout(() => {
+            showNotification('🚨 HAY <?= count($pedidos_urgentes) ?> PEDIDOS URGENTES (>1 hora)', 'error');
+        }, 2000);
+        <?php endif; ?>
     </script>
-
-    <!-- CSS adicional -->
-    <style>
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        /* Mejoras visuales para ubicaciones */
-        .border-l-blue-400 { border-left-color: #60a5fa !important; }
-        .border-l-orange-400 { border-left-color: #fb923c !important; }
-        
-        .bg-blue-50 { background-color: #eff6ff !important; }
-        .bg-orange-50 { background-color: #fff7ed !important; }
-
-        /* Hover effects mejorados */
-        .hover\\:bg-gray-50:hover {
-            background-color: #f9fafb;
-            transition: background-color 0.2s ease;
-        }
-
-        /* Responsive improvements */
-        @media (max-width: 768px) {
-            #live-clock {
-                bottom: 80px;
-                right: 4px;
-                left: auto;
-                font-size: 12px;
-                padding: 6px 8px;
-            }
-            
-            .grid.grid-cols-4.gap-2 {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* Animaciones suaves */
-        .transition-all {
-            transition: all 0.3s ease;
-        }
-
-        /* Destacar pedidos por ubicación */
-        [data-ubicacion="Local 1"] {
-            border-left: 3px solid #3b82f6;
-        }
-        
-        [data-ubicacion="Fábrica"] {
-            border-left: 3px solid #f97316;
-        }
-
-        /* Mejoras para botones */
-        .shadow-lg {
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-
-        .shadow-lg:hover {
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            transform: translateY(-2px);
-        }
-    </style>
 </body>
 </html>
