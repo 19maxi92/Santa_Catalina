@@ -1,40 +1,27 @@
 <?php
-// Debug: Mostrar errores
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-require_once '../admin/config.php';
+require_once '../config.php';
 session_start();
 
-// Si ya está logueado como empleado, redirigir al dashboard
+// Si ya está logueado como empleado, redirigir a pedidos directamente
 if (isset($_SESSION['empleado_logged']) && $_SESSION['empleado_logged'] === true) {
-    header('Location: dashboard.php');
+    header('Location: pedidos.php');
     exit;
 }
 
 $error = '';
-$debug_info = [];
 
 if ($_POST) {
     $usuario = sanitize($_POST['usuario']);
     $password = $_POST['password'];
     
-    $debug_info[] = "Usuario ingresado: " . $usuario;
-    $debug_info[] = "Password ingresado: " . $password;
-    
     try {
         $pdo = getConnection();
-        $debug_info[] = "Conexión exitosa a la BD";
         
         $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE usuario = ? AND activo = 1");
         $stmt->execute([$usuario]);
         $user = $stmt->fetch();
         
         if ($user) {
-            $debug_info[] = "Usuario encontrado en BD: " . $user['usuario'];
-            $debug_info[] = "Password en BD: " . $user['password'];
-            $debug_info[] = "Nombre: " . $user['nombre'];
-            
             // Verificar password y que sea empleado
             if ($password === 'Emple2186' && $user['usuario'] === 'empleado') {
                 $_SESSION['empleado_logged'] = true;
@@ -42,20 +29,16 @@ if ($_POST) {
                 $_SESSION['empleado_name'] = $user['nombre'];
                 $_SESSION['empleado_id'] = $user['id'];
                 
-                $debug_info[] = "Login exitoso - Redirigiendo...";
-                
-                header('Location: dashboard.php');
+                // CAMBIO: Redirigir directo a pedidos.php
+                header('Location: pedidos.php');
                 exit;
             } else {
-                $debug_info[] = "Fallo en verificación - Password o usuario incorrecto";
                 $error = 'Credenciales incorrectas';
             }
         } else {
-            $debug_info[] = "Usuario no encontrado en BD";
             $error = 'Usuario no encontrado';
         }
     } catch (Exception $e) {
-        $debug_info[] = "Error de conexión: " . $e->getMessage();
         $error = 'Error de conexión: ' . $e->getMessage();
     }
 }
@@ -80,16 +63,6 @@ if ($_POST) {
         <?php if ($error): ?>
         <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             <i class="fas fa-exclamation-triangle mr-2"></i><?= $error ?>
-        </div>
-        <?php endif; ?>
-        
-        <!-- Debug Info (solo para testing) -->
-        <?php if (!empty($debug_info)): ?>
-        <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded mb-4 text-sm">
-            <strong>Debug Info:</strong>
-            <?php foreach ($debug_info as $info): ?>
-                <div>• <?= htmlspecialchars($info) ?></div>
-            <?php endforeach; ?>
         </div>
         <?php endif; ?>
         
@@ -128,7 +101,7 @@ if ($_POST) {
         
         <!-- Info de prueba -->
         <div class="text-center mt-4 p-3 bg-blue-50 rounded text-xs text-gray-600">
-            <strong>Credenciales de prueba:</strong><br>
+            <strong>Credenciales:</strong><br>
             Usuario: empleado<br>
             Contraseña: Emple2186
         </div>

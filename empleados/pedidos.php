@@ -34,16 +34,16 @@ if ($_POST) {
     }
 }
 
-// FILTROS MEJORADOS - NUEVO: Rango de fechas
+// FILTROS MEJORADOS - Por defecto mostrar HOY
 $filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
-$filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
-$filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
+$filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : date('Y-m-d');
+$filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : date('Y-m-d');
 $buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
 
-// Si no hay rango específico, mostrar solo hoy por defecto (comportamiento para empleados)
-if (!$filtro_fecha_desde && !$filtro_fecha_hasta && !$buscar && !$filtro_estado) {
-    $filtro_fecha_desde = date('Y-m-d');
-    $filtro_fecha_hasta = date('Y-m-d');
+// Si se selecciona "todo", limpiar filtros de fecha
+if (isset($_GET['filtro_rapido']) && $_GET['filtro_rapido'] === 'todo') {
+    $filtro_fecha_desde = '';
+    $filtro_fecha_hasta = '';
 }
 
 // Construir consulta
@@ -73,8 +73,10 @@ if ($filtro_estado) {
 
 if ($buscar) {
     $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ?)";
-    $buscarParam = "%$buscar%";
-    $params = array_merge($params, [$buscarParam, $buscarParam, $buscarParam, $buscarParam]);
+    $params[] = "%$buscar%";
+    $params[] = "%$buscar%";
+    $params[] = "%$buscar%";
+    $params[] = "%$buscar%";
 }
 
 $sql .= " ORDER BY 
@@ -90,7 +92,7 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $pedidos = $stmt->fetchAll();
 
-// Estadísticas del rango seleccionado
+// Estadísticas del período filtrado
 $stats_sql = "SELECT 
     COUNT(*) as total,
     SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes,
@@ -98,9 +100,10 @@ $stats_sql = "SELECT
     SUM(CASE WHEN estado = 'Listo' THEN 1 ELSE 0 END) as listos,
     SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
     SUM(precio) as total_ventas
-    FROM pedidos WHERE 1=1";
+FROM pedidos WHERE 1=1";
 
 $stats_params = [];
+
 if ($filtro_fecha_desde && $filtro_fecha_hasta) {
     $stats_sql .= " AND DATE(created_at) BETWEEN ? AND ?";
     $stats_params[] = $filtro_fecha_desde;
@@ -111,9 +114,6 @@ if ($filtro_fecha_desde && $filtro_fecha_hasta) {
 } elseif ($filtro_fecha_hasta) {
     $stats_sql .= " AND DATE(created_at) <= ?";
     $stats_params[] = $filtro_fecha_hasta;
-} else {
-    // Si no hay filtros de fecha específicos, mostrar estadísticas de hoy
-    $stats_sql .= " AND DATE(created_at) = CURDATE()";
 }
 
 $stats_stmt = $pdo->prepare($stats_sql);
@@ -128,10 +128,31 @@ $stats = $stats_stmt->fetch();
     <title>Gestión de Pedidos - Empleados</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { font-size: 12px; }
+            .print-comanda { page-break-after: always; }
+        }
+        .btn-imprimir:hover { transform: scale(1.05); }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .border-r-red-500 {
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+        
+        .border-r-orange-500 {
+            box-shadow: 0 0 5px rgba(245, 158, 11, 0.3);
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <!-- Header -->
-    <header class="bg-blue-600 text-white shadow-md">
+    <header class="bg-blue-600 text-white shadow-md no-print">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center">
                 <a href="dashboard.php" class="text-blue-100 hover:text-white mr-4">
@@ -151,113 +172,125 @@ $stats = $stats_stmt->fetch();
         
         <!-- Mensajes -->
         <?php if ($mensaje): ?>
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4 no-print">
             <i class="fas fa-check-circle mr-2"></i><?= $mensaje ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 no-print">
             <i class="fas fa-exclamation-circle mr-2"></i><?= $error ?>
         </div>
         <?php endif; ?>
 
-        <!-- NUEVA SECCIÓN: Info del período seleccionado -->
-        <?php if ($filtro_fecha_desde || $filtro_fecha_hasta): ?>
-        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="font-semibold text-blue-800">
-                        <i class="fas fa-calendar-alt mr-2"></i>Período de trabajo:
-                    </h3>
-                    <p class="text-blue-700">
-                        <?php if ($filtro_fecha_desde && $filtro_fecha_hasta): ?>
-                            <?php if ($filtro_fecha_desde === $filtro_fecha_hasta): ?>
-                                <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?>
-                                <?php if ($filtro_fecha_desde === date('Y-m-d')): ?>
-                                    <span class="text-green-600 font-medium">(Hoy)</span>
-                                <?php endif; ?>
-                            <?php else: ?>
-                                Desde <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?> hasta <?= date('d/m/Y', strtotime($filtro_fecha_hasta)) ?>
-                            <?php endif; ?>
-                        <?php elseif ($filtro_fecha_desde): ?>
-                            Desde <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?>
-                        <?php else: ?>
-                            Hasta <?= date('d/m/Y', strtotime($filtro_fecha_hasta)) ?>
-                        <?php endif; ?>
-                    </p>
+        <!-- Estadísticas del período -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6 no-print">
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-blue-100 rounded-lg">
+                        <i class="fas fa-list-ol text-blue-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Total</p>
+                        <p class="text-lg font-semibold text-gray-900"><?= $stats['total'] ?></p>
+                    </div>
                 </div>
-                <!-- Los empleados no necesitan exportar Excel, pero sí pueden ver el total de pedidos -->
-                <div class="text-right">
-                    <div class="text-lg font-bold text-blue-800"><?= count($pedidos) ?> pedidos</div>
-                    <div class="text-sm text-blue-600">en este período</div>
+            </div>
+            
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-orange-100 rounded-lg">
+                        <i class="fas fa-clock text-orange-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Pendientes</p>
+                        <p class="text-lg font-semibold text-gray-900"><?= $stats['pendientes'] ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-yellow-100 rounded-lg">
+                        <i class="fas fa-fire text-yellow-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Preparando</p>
+                        <p class="text-lg font-semibold text-gray-900"><?= $stats['preparando'] ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <i class="fas fa-check text-green-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Listos</p>
+                        <p class="text-lg font-semibold text-gray-900"><?= $stats['listos'] ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-purple-100 rounded-lg">
+                        <i class="fas fa-truck text-purple-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Entregados</p>
+                        <p class="text-lg font-semibold text-gray-900"><?= $stats['entregados'] ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg p-4 shadow">
+                <div class="flex items-center">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <i class="fas fa-dollar-sign text-green-600"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-gray-500">Ventas</p>
+                        <p class="text-lg font-semibold text-gray-900">$<?= number_format($stats['total_ventas'], 0, ',', '.') ?></p>
+                    </div>
                 </div>
             </div>
         </div>
-        <?php endif; ?>
 
-        <!-- Estadísticas -->
-        <div class="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-gray-800"><?= $stats['total'] ?></div>
-                <div class="text-sm text-gray-600">Total</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-yellow-600"><?= $stats['pendientes'] ?></div>
-                <div class="text-sm text-gray-600">Pendientes</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-blue-600"><?= $stats['preparando'] ?></div>
-                <div class="text-sm text-gray-600">Preparando</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-green-600"><?= $stats['listos'] ?></div>
-                <div class="text-sm text-gray-600">Listos</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-gray-600"><?= $stats['entregados'] ?></div>
-                <div class="text-sm text-gray-600">Entregados</div>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-green-600"><?= formatPrice($stats['total_ventas']) ?></div>
-                <div class="text-sm text-gray-600">Ventas</div>
-            </div>
-        </div>
-
-        <!-- FILTROS MEJORADOS PARA EMPLEADOS -->
-        <div class="bg-white rounded-lg shadow mb-6 p-6">
+        <!-- Filtros -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6 no-print">
             <form method="GET" id="filtrosForm">
-                
-                <!-- NUEVA SECCIÓN: Filtros rápidos de fecha -->
+                <!-- Botones de filtro rápido -->
                 <div class="mb-4">
-                    <h4 class="font-semibold text-gray-700 mb-3">
-                        <i class="fas fa-calendar-week mr-2"></i>Filtros rápidos:
-                    </h4>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                        <i class="fas fa-filter text-blue-500 mr-2"></i>Filtros Rápidos
+                    </h3>
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" onclick="setFiltroRapido('hoy')" 
-                                class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm">
+                        <button type="button" onclick="filtrarHoy()" 
+                                class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm transition">
                             <i class="fas fa-calendar-day mr-1"></i>Hoy
                         </button>
-                        <button type="button" onclick="setFiltroRapido('ayer')" 
-                                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">
+                        <button type="button" onclick="filtrarAyer()" 
+                                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm transition">
                             <i class="fas fa-calendar-minus mr-1"></i>Ayer
                         </button>
-                        <button type="button" onclick="setFiltroRapido('semana')" 
-                                class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm">
+                        <button type="button" onclick="filtrarSemana()" 
+                                class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm transition">
                             <i class="fas fa-calendar-week mr-1"></i>Esta semana
                         </button>
-                        <button type="button" onclick="setFiltroRapido('mes')" 
-                                class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded text-sm">
+                        <button type="button" onclick="filtrarMes()" 
+                                class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded text-sm transition">
                             <i class="fas fa-calendar mr-1"></i>Este mes
                         </button>
-                        <button type="button" onclick="setFiltroRapido('todo')" 
-                                class="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded text-sm">
+                        <button type="button" onclick="filtrarTodo()" 
+                                class="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded text-sm transition">
                             <i class="fas fa-calendar-alt mr-1"></i>Todo
                         </button>
                     </div>
                 </div>
 
-                <!-- Filtros principales adaptados para empleados -->
+                <!-- Filtros detallados -->
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
                     <!-- Buscador -->
                     <div>
@@ -271,7 +304,7 @@ $stats = $stats_stmt->fetch();
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Estado:</label>
                         <select name="estado" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="">Todos los estados</option>
+                            <option value="">Todos</option>
                             <option value="Pendiente" <?= $filtro_estado === 'Pendiente' ? 'selected' : '' ?>>⏳ Pendiente</option>
                             <option value="Preparando" <?= $filtro_estado === 'Preparando' ? 'selected' : '' ?>>🔥 Preparando</option>
                             <option value="Listo" <?= $filtro_estado === 'Listo' ? 'selected' : '' ?>>✅ Listo</option>
@@ -293,23 +326,19 @@ $stats = $stats_stmt->fetch();
                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
                     </div>
                     
-                    <!-- Botón buscar -->
+                    <!-- Botón filtrar -->
                     <div class="flex items-end">
-                        <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition">
                             <i class="fas fa-search mr-1"></i>Filtrar
                         </button>
                     </div>
                 </div>
                 
-                <!-- Botones adicionales -->
-                <div class="flex justify-between items-center">
-                    <div>
-                        <a href="?" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
-                            <i class="fas fa-eraser mr-2"></i>Limpiar Filtros
-                        </a>
-                    </div>
-                    
-                    <!-- Info útil para empleados -->
+                <!-- Botón limpiar filtros -->
+                <div class="flex justify-between items-center mt-4">
+                    <a href="?" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-eraser mr-2"></i>Limpiar Filtros
+                    </a>
                     <div class="text-sm text-gray-600">
                         <i class="fas fa-info-circle mr-1"></i>
                         Los pedidos se ordenan por prioridad de estado
@@ -318,17 +347,34 @@ $stats = $stats_stmt->fetch();
             </form>
         </div>
 
-        <!-- Lista de pedidos (adaptada para empleados) -->
-        <div class="space-y-4">
+        <!-- Header con botón imprimir todos -->
+        <div class="flex justify-between items-center mb-4 no-print">
+            <h3 class="text-lg font-semibold text-gray-800">
+                <i class="fas fa-list mr-2"></i>Pedidos 
+                <?php if ($filtro_fecha_desde === $filtro_fecha_hasta && $filtro_fecha_desde === date('Y-m-d')): ?>
+                    de Hoy
+                <?php elseif ($filtro_fecha_desde && $filtro_fecha_hasta): ?>
+                    del <?= date('d/m/Y', strtotime($filtro_fecha_desde)) ?> al <?= date('d/m/Y', strtotime($filtro_fecha_hasta)) ?>
+                <?php else: ?>
+                    (Todos)
+                <?php endif; ?>
+                (<?= count($pedidos) ?>)
+            </h3>
+            
+            <?php if (count($pedidos) > 0): ?>
+            <button onclick="imprimirTodos()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
+                <i class="fas fa-print mr-2"></i>Imprimir Todos
+            </button>
+            <?php endif; ?>
+        </div>
+
+        <!-- Lista de pedidos compacta -->
+        <div class="space-y-3">
             <?php if (empty($pedidos)): ?>
                 <div class="bg-white p-12 rounded-lg shadow text-center text-gray-500">
                     <i class="fas fa-inbox text-6xl mb-4 text-gray-300"></i>
                     <h3 class="text-xl mb-2">No hay pedidos</h3>
                     <p>No se encontraron pedidos para los filtros seleccionados</p>
-                    <div class="mt-4">
-                        <a href="?fecha_desde=<?= date('Y-m-d') ?>&fecha_hasta=<?= date('Y-m-d') ?>" 
-                           class="text-blue-600 hover:underline">Ver pedidos de hoy</a>
-                    </div>
                 </div>
             <?php else: ?>
                 <?php foreach ($pedidos as $pedido): ?>
@@ -342,156 +388,124 @@ $stats = $stats_stmt->fetch();
                     ];
                     
                     $urgencia_class = '';
-                    if ($minutos > 60) {
+                    if ($minutos > 60 && in_array($pedido['estado'], ['Pendiente', 'Preparando'])) {
                         $urgencia_class = 'border-r-4 border-r-red-500';
-                    } elseif ($minutos > 30) {
+                    } elseif ($minutos > 30 && in_array($pedido['estado'], ['Pendiente', 'Preparando'])) {
                         $urgencia_class = 'border-r-4 border-r-orange-500';
                     }
                     ?>
                     
-                    <div class="bg-white rounded-lg shadow border-l-4 <?= $estado_colors[$pedido['estado']] ?> <?= $urgencia_class ?>">
-                        <div class="p-6">
-                            <div class="flex justify-between items-start mb-4">
-                                <!-- Info principal -->
+                    <div class="bg-white rounded-lg shadow border-l-4 <?= $estado_colors[$pedido['estado']] ?> <?= $urgencia_class ?> print-comanda" 
+                         id="pedido-<?= $pedido['id'] ?>">
+                        <div class="p-4">
+                            <div class="flex justify-between items-start">
+                                <!-- Info principal compacta -->
                                 <div class="flex-1">
-                                    <div class="flex items-center space-x-3 mb-3">
-                                        <span class="text-2xl font-bold text-gray-800">#<?= $pedido['id'] ?></span>
-                                        <span class="text-lg font-semibold text-gray-700">
+                                    <div class="flex items-center space-x-3 mb-2">
+                                        <span class="text-lg font-bold text-gray-800">#<?= $pedido['id'] ?></span>
+                                        <span class="font-semibold text-gray-700">
                                             <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
                                         </span>
-                                        <?php if ($pedido['cliente_nombre']): ?>
-                                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                                                Cliente fijo
+                                        <?php if ($minutos > 60 && in_array($pedido['estado'], ['Pendiente', 'Preparando'])): ?>
+                                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                🚨 URGENTE
+                                            </span>
+                                        <?php elseif ($minutos > 30 && in_array($pedido['estado'], ['Pendiente', 'Preparando'])): ?>
+                                            <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                ⚠️ PRIORIDAD
                                             </span>
                                         <?php endif; ?>
                                     </div>
                                     
-                                    <div class="grid md:grid-cols-2 gap-4 text-sm">
+                                    <div class="grid md:grid-cols-3 gap-4 text-sm mb-3">
+                                        <!-- Columna 1: Contacto -->
                                         <div>
+                                            <?php if ($pedido['telefono']): ?>
                                             <p class="text-gray-600 mb-1">
-                                                <i class="fas fa-phone w-4"></i> <?= htmlspecialchars($pedido['telefono']) ?>
+                                                <i class="fas fa-phone w-4 text-blue-500"></i> <?= htmlspecialchars($pedido['telefono']) ?>
                                             </p>
+                                            <?php endif; ?>
                                             <?php if ($pedido['direccion']): ?>
                                             <p class="text-gray-600 mb-1">
                                                 <i class="fas fa-map-marker-alt w-4 text-red-500"></i> 
-                                                <span class="font-medium"><?= htmlspecialchars($pedido['direccion']) ?></span>
-                                            </p>
-                                            <?php else: ?>
-                                            <p class="text-red-600 mb-1">
-                                                <i class="fas fa-exclamation-triangle w-4"></i>
-                                                <span class="font-medium">Sin dirección</span>
+                                                <span class="font-medium"><?= htmlspecialchars(substr($pedido['direccion'], 0, 40)) ?><?= strlen($pedido['direccion']) > 40 ? '...' : '' ?></span>
                                             </p>
                                             <?php endif; ?>
-                                            <p class="text-gray-600 mb-1">
-                                                <i class="fas fa-<?= $pedido['modalidad'] === 'Delivery' ? 'truck text-green-500' : 'store text-blue-500' ?> w-4"></i>
-                                                <?= $pedido['modalidad'] ?>
-                                            </p>
                                         </div>
+                                        
+                                        <!-- Columna 2: Producto -->
+                                        <div>
+                                            <p class="font-medium text-gray-800 mb-1"><?= htmlspecialchars($pedido['producto']) ?></p>
+                                            <p class="text-gray-600">Cantidad: <?= $pedido['cantidad'] ?></p>
+                                        </div>
+                                        
+                                        <!-- Columna 3: Detalles -->
                                         <div>
                                             <p class="text-gray-600 mb-1">
-                                                <i class="fas fa-credit-card w-4"></i> <?= $pedido['forma_pago'] ?>
+                                                <i class="fas fa-<?= $pedido['modalidad'] === 'Delivery' ? 'truck text-green-500' : 'store text-blue-500' ?> w-4"></i>
+                                                <?= $pedido['modalidad'] ?> | <?= $pedido['ubicacion'] ?>
                                             </p>
-                                            <p class="text-gray-600 mb-1">
+                                            <p class="text-gray-600">
                                                 <i class="fas fa-clock w-4"></i> 
-                                                <?= date('H:i', strtotime($pedido['created_at'])) ?> (Hace <?= $minutos ?> min)
+                                                <?= date('H:i', strtotime($pedido['created_at'])) ?> (<?= $minutos ?>min)
                                             </p>
-                                            <?php if ($pedido['observaciones']): ?>
-                                            <p class="text-gray-600 mb-1">
-                                                <i class="fas fa-comment w-4"></i> <?= htmlspecialchars($pedido['observaciones']) ?>
-                                            </p>
-                                            <?php endif; ?>
-
-                                            <!-- Información de fecha/hora de entrega -->
-                                            <?php if ($pedido['fecha_entrega'] || $pedido['hora_entrega'] || $pedido['notas_horario']): ?>
-                                            <div class="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded mt-2">
-                                                <i class="fas fa-clock mr-1"></i>
-                                                <strong>Para:</strong>
-                                                <?php if ($pedido['fecha_entrega']): ?>
-                                                    <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
-                                                <?php endif; ?>
-                                                <?php if ($pedido['hora_entrega']): ?>
-                                                    <?= substr($pedido['hora_entrega'], 0, 5) ?>
-                                                <?php endif; ?>
-                                                <?php if ($pedido['notas_horario']): ?>
-                                                    (<?= htmlspecialchars($pedido['notas_horario']) ?>)
-                                                <?php endif; ?>
-                                            </div>
-                                            <?php endif; ?>
                                         </div>
                                     </div>
+                                    
+                                    <!-- Observaciones si existen -->
+                                    <?php if ($pedido['observaciones']): ?>
+                                    <div class="text-xs text-gray-600 bg-gray-50 p-2 rounded mb-2">
+                                        <i class="fas fa-comment mr-1"></i>
+                                        <?= htmlspecialchars($pedido['observaciones']) ?>
+                                    </div>
+                                    <?php endif; ?>
                                 </div>
                                 
-                                <!-- Estado y urgencia -->
-                                <div class="ml-4 text-right">
-                                    <?php if ($minutos > 60): ?>
-                                        <div class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium mb-2">
-                                            🚨 URGENTE
-                                        </div>
-                                    <?php elseif ($minutos > 30): ?>
-                                        <div class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium mb-2">
-                                            ⚠️ PRIORIDAD
-                                        </div>
-                                    <?php endif; ?>
+                                <!-- Panel derecho: Estado, precio y acciones -->
+                                <div class="ml-4 text-right flex flex-col items-end space-y-2">
+                                    <!-- Precio -->
+                                    <div class="text-lg font-bold text-green-600">
+                                        $<?= number_format($pedido['precio'], 0, ',', '.') ?>
+                                    </div>
                                     
-                                    <form method="POST" class="inline-block">
+                                    <!-- Estado -->
+                                    <form method="POST" class="no-print">
                                         <input type="hidden" name="accion" value="cambiar_estado">
                                         <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
                                         <select name="estado" onchange="this.form.submit()" 
-                                                class="px-3 py-2 border rounded text-sm font-medium">
+                                                class="text-xs rounded-full px-2 py-1 font-medium border-0 focus:ring-2 focus:ring-blue-500
+                                                <?php 
+                                                    switch($pedido['estado']) {
+                                                        case 'Pendiente': echo 'bg-orange-100 text-orange-800'; break;
+                                                        case 'Preparando': echo 'bg-yellow-100 text-yellow-800'; break;
+                                                        case 'Listo': echo 'bg-green-100 text-green-800'; break;
+                                                        case 'Entregado': echo 'bg-gray-100 text-gray-800'; break;
+                                                    }
+                                                ?>">
                                             <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>⏳ Pendiente</option>
                                             <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>🔥 Preparando</option>
                                             <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>✅ Listo</option>
                                             <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>📦 Entregado</option>
                                         </select>
                                     </form>
-                                </div>
-                            </div>
-                            
-                            <!-- Producto y precio -->
-                            <div class="bg-gray-50 rounded-lg p-4 mb-4">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <h3 class="text-lg font-semibold text-gray-800">
-                                            <?= htmlspecialchars($pedido['producto']) ?>
-                                        </h3>
-                                        <p class="text-gray-600">Cantidad: <?= $pedido['cantidad'] ?> unidades</p>
+                                    
+                                    <!-- Acciones -->
+                                    <div class="flex space-x-1 no-print">
+                                        <!-- Botón imprimir -->
+                                        <button onclick="imprimirPedido(<?= $pedido['id'] ?>)" 
+                                                class="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs transition btn-imprimir"
+                                                title="Imprimir comanda">
+                                            <i class="fas fa-print"></i>
+                                        </button>
+                                        
+                                        <!-- Botón WhatsApp -->
+                                        <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
+                                           target="_blank" 
+                                           class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs transition"
+                                           title="WhatsApp">
+                                            <i class="fab fa-whatsapp"></i>
+                                        </a>
                                     </div>
-                                    <div class="text-right">
-                                        <div class="text-2xl font-bold text-green-600">
-                                            <?= formatPrice($pedido['precio']) ?>
-                                        </div>
-                                        <div class="text-sm text-gray-500"><?= $pedido['forma_pago'] ?></div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Acciones para empleados -->
-                            <div class="flex justify-between items-center">
-                                <div class="flex items-center space-x-3">
-                                    <?php if ($pedido['impreso']): ?>
-                                        <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
-                                            <i class="fas fa-check-circle mr-1"></i>Comanda Impresa
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm">
-                                            <i class="fas fa-exclamation-circle mr-1"></i>Sin Imprimir
-                                        </span>
-                                    <?php endif; ?>
-
-                                    <!-- Fecha del pedido -->
-                                    <span class="text-gray-500 text-sm">
-                                        <i class="fas fa-calendar mr-1"></i>
-                                        <?= date('d/m/Y', strtotime($pedido['created_at'])) ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="flex space-x-2">
-                                    <!-- Solo WhatsApp para empleados -->
-                                    <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
-                                       target="_blank" 
-                                       class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm">
-                                        <i class="fab fa-whatsapp mr-1"></i>WhatsApp
-                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -500,39 +514,29 @@ $stats = $stats_stmt->fetch();
             <?php endif; ?>
         </div>
 
-        <!-- Footer para empleados -->
-        <div class="mt-8 text-center text-gray-500">
-            <div class="bg-white rounded-lg p-4 shadow">
-                <p class="mb-2">
-                    <i class="fas fa-sync-alt mr-1"></i>
-                    Página actualizada automáticamente cada 30 segundos
-                </p>
-                <p class="text-sm mb-2">
-                    Mostrando <?= count($pedidos) ?> pedido<?= count($pedidos) !== 1 ? 's' : '' ?> 
-                    <?php if ($filtro_fecha_desde && $filtro_fecha_hasta): ?>
-                        para el período seleccionado
-                    <?php else: ?>
-                        (usar filtros para ver otros períodos)
-                    <?php endif; ?>
-                </p>
-                <p class="text-xs text-blue-600">
-                    🔴 Más de 1 hora = Urgente | 🟠 Más de 30 min = Prioridad
-                </p>
-                <p class="text-xs mt-2 text-gray-500">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    Para impresión de comandas, contactar al administrador
-                </p>
+        <!-- Info adicional -->
+        <div class="mt-6 no-print">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="font-semibold text-blue-800 mb-2">
+                    <i class="fas fa-info-circle mr-2"></i>Información
+                </h3>
+                <div class="text-sm text-blue-700 space-y-1">
+                    <p>• Los pedidos se muestran ordenados por estado y fecha de creación</p>
+                    <p>• 🔴 Pedidos urgentes (más de 1 hora) | 🟠 Pedidos con prioridad (más de 30 min)</p>
+                    <p>• Use los filtros rápidos para navegar por fechas específicas</p>
+                    <p>• La impresión funciona directamente con su impresora USB conectada</p>
+                </div>
             </div>
         </div>
     </main>
 
     <script>
-        // FILTROS RÁPIDOS PARA EMPLEADOS
+        // FILTROS RÁPIDOS - CORREGIDOS
         function setFiltroRapido(tipo) {
+            console.log('Aplicando filtro:', tipo);
+            
             const hoy = new Date();
             let desde, hasta;
-            
-            console.log(`Empleado aplicando filtro: ${tipo}`);
             
             switch(tipo) {
                 case 'hoy':
@@ -549,7 +553,7 @@ $stats = $stats_stmt->fetch();
                     // Esta semana desde el lunes
                     const inicioSemana = new Date(hoy);
                     const diaSemana = inicioSemana.getDay();
-                    const diasAtras = diaSemana === 0 ? 6 : diaSemana - 1; // Si es domingo (0), retroceder 6 días
+                    const diasAtras = diaSemana === 0 ? 6 : diaSemana - 1;
                     inicioSemana.setDate(hoy.getDate() - diasAtras);
                     desde = formatDate(inicioSemana);
                     hasta = formatDate(hoy);
@@ -568,33 +572,33 @@ $stats = $stats_stmt->fetch();
                     break;
             }
             
-            // Verificar que los campos existen antes de asignar valores
+            console.log('Fechas calculadas:', {desde, hasta});
+            
+            // Actualizar campos de forma más robusta
             const fechaDesdeInput = document.querySelector('input[name="fecha_desde"]');
             const fechaHastaInput = document.querySelector('input[name="fecha_hasta"]');
             
-            if (fechaDesdeInput) {
+            if (fechaDesdeInput && fechaHastaInput) {
                 fechaDesdeInput.value = desde;
-                console.log(`Fecha desde: ${desde}`);
-            } else {
-                console.error('Campo fecha_desde no encontrado');
-                return;
-            }
-            
-            if (fechaHastaInput) {
                 fechaHastaInput.value = hasta;
-                console.log(`Fecha hasta: ${hasta}`);
+                
+                console.log('Campos actualizados:', {
+                    desde: fechaDesdeInput.value,
+                    hasta: fechaHastaInput.value
+                });
+                
+                // Enviar formulario
+                const form = document.getElementById('filtrosForm');
+                if (form) {
+                    console.log('Enviando formulario...');
+                    form.submit();
+                } else {
+                    console.error('Formulario no encontrado');
+                }
             } else {
-                console.error('Campo fecha_hasta no encontrado');
-                return;
-            }
-            
-            // Auto-submit form
-            const form = document.getElementById('filtrosForm');
-            if (form) {
-                console.log('Enviando formulario...');
-                form.submit();
-            } else {
-                console.error('Formulario filtrosForm no encontrado');
+                console.error('No se encontraron los campos de fecha');
+                console.log('fechaDesdeInput:', fechaDesdeInput);
+                console.log('fechaHastaInput:', fechaHastaInput);
             }
         }
         
@@ -605,6 +609,243 @@ $stats = $stats_stmt->fetch();
             return `${año}-${mes}-${dia}`;
         }
 
+        // FUNCIONES DE IMPRESIÓN LOCAL - FORMATO COMANDERA
+        function imprimirPedido(pedidoId) {
+            console.log('Intentando imprimir pedido:', pedidoId);
+            
+            // Buscar los datos del pedido en la tabla
+            const fila = document.getElementById('pedido-' + pedidoId);
+            if (!fila) {
+                console.error('No se encontró la fila para pedido:', pedidoId);
+                alert('Error: No se encontró el pedido #' + pedidoId);
+                return;
+            }
+            
+            // Extraer datos de la fila de manera más robusta
+            let nombre = 'Sin nombre';
+            let producto = 'Sin producto';
+            let precio = '$0';
+            
+            try {
+                // Buscar nombre en diferentes posibles ubicaciones
+                const nombreElement = fila.querySelector('.font-semibold') || 
+                                    fila.querySelector('[class*="font-bold"]');
+                if (nombreElement) {
+                    // Extraer solo el nombre, quitando el # del pedido
+                    const textoCompleto = nombreElement.textContent.trim();
+                    const match = textoCompleto.match(/#\d+\s+(.+)/);
+                    nombre = match ? match[1] : textoCompleto.replace(/^#\d+\s*/, '');
+                }
+                
+                // Buscar producto
+                const productoElement = fila.querySelector('.font-medium.text-gray-800') ||
+                                      fila.querySelector('.text-gray-800');
+                if (productoElement) {
+                    producto = productoElement.textContent.trim();
+                }
+                
+                // Buscar precio
+                const precioElement = fila.querySelector('.text-green-600') ||
+                                    fila.querySelector('[class*="green"]');
+                if (precioElement) {
+                    precio = precioElement.textContent.trim();
+                }
+            } catch (e) {
+                console.error('Error extrayendo datos:', e);
+            }
+            
+            console.log('Datos extraídos:', {nombre, producto, precio});
+            
+            // Determinar turno
+            const ahora = new Date();
+            let turno = 'T';
+            const hora = ahora.getHours();
+            
+            // Buscar turno específico en observaciones
+            try {
+                const obsElement = fila.querySelector('.text-gray-600') ||
+                                 fila.querySelector('[class*="gray-6"]');
+                if (obsElement && obsElement.textContent.includes('Turno delivery:')) {
+                    const textoObs = obsElement.textContent.toLowerCase();
+                    if (textoObs.includes('mañana')) turno = 'M';
+                    else if (textoObs.includes('siesta')) turno = 'S';
+                    else if (textoObs.includes('tarde')) turno = 'T';
+                }
+            } catch (e) {
+                console.log('No se pudo extraer turno de observaciones');
+            }
+            
+            // Determinar turno por hora si no se encontró en observaciones
+            if (turno === 'T') {
+                if (hora >= 8 && hora < 12) turno = 'M';
+                else if (hora >= 12 && hora < 16) turno = 'S';
+                else turno = 'T';
+            }
+            
+            // Formatear fecha
+            const fecha = ahora.getDate() + '-' + ahora.toLocaleDateString('es', {month: 'short'});
+            
+            // Crear HTML para impresión
+            const htmlComanda = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Comanda #${pedidoId}</title>
+                    <meta charset="UTF-8">
+                    <style>
+                        @page { 
+                            size: 80mm auto; 
+                            margin: 2mm; 
+                        }
+                        body { 
+                            font-family: 'Courier New', monospace; 
+                            font-size: 12px; 
+                            margin: 0; 
+                            padding: 5px;
+                            width: 75mm;
+                            line-height: 1.1;
+                            color: #000;
+                        }
+                        .header {
+                            border: 2px solid #000;
+                            padding: 5px;
+                            margin-bottom: 8px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .fecha {
+                            font-weight: bold;
+                            font-size: 11px;
+                        }
+                        .turno {
+                            font-size: 16px;
+                            font-weight: bold;
+                        }
+                        .nombre {
+                            font-size: 14px;
+                            font-weight: bold;
+                            text-align: center;
+                            margin: 8px 0;
+                            word-wrap: break-word;
+                        }
+                        .producto {
+                            font-size: 16px;
+                            font-weight: bold;
+                            text-align: center;
+                            margin: 12px 0;
+                            word-wrap: break-word;
+                        }
+                        .precio-box {
+                            border: 2px solid #000;
+                            padding: 4px 8px;
+                            margin-top: 8px;
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .precio-principal {
+                            font-size: 14px;
+                            font-weight: bold;
+                        }
+                        .precio-numerico {
+                            font-size: 11px;
+                        }
+                        @media print {
+                            body { 
+                                width: auto; 
+                                -webkit-print-color-adjust: exact;
+                                color-adjust: exact;
+                            }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <span class="fecha">${fecha}</span>
+                        <span class="turno">${turno}</span>
+                    </div>
+                    
+                    <div class="nombre">${nombre}</div>
+                    
+                    <div class="producto">${producto.replace(/(\d+)\s+/, '$1')}</div>
+                    
+                    <div class="precio-box">
+                        <span class="precio-principal">${precio}</span>
+                        <span class="precio-numerico">${precio.replace(', '').replace(/\./g, '')}</span>
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            // Crear nueva ventana para impresión
+            const ventanaImpresion = window.open('', '_blank', 'width=320,height=500,scrollbars=no,resizable=no');
+            
+            if (!ventanaImpresion) {
+                alert('No se pudo abrir la ventana de impresión. Verifica que no esté bloqueada por el navegador.');
+                return;
+            }
+            
+            try {
+                ventanaImpresion.document.write(htmlComanda);
+                ventanaImpresion.document.close();
+                
+                // Esperar a que cargue completamente
+                ventanaImpresion.onload = function() {
+                    setTimeout(() => {
+                        ventanaImpresion.print();
+                        // Cerrar después de un delay para dar tiempo a la impresión
+                        setTimeout(() => {
+                            ventanaImpresion.close();
+                        }, 1000);
+                    }, 500);
+                };
+                
+                // Fallback si onload no funciona
+                setTimeout(() => {
+                    try {
+                        ventanaImpresion.print();
+                        setTimeout(() => {
+                            ventanaImpresion.close();
+                        }, 1000);
+                    } catch (e) {
+                        console.error('Error en fallback de impresión:', e);
+                    }
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Error durante la impresión:', error);
+                alert('Error al preparar la impresión: ' + error.message);
+                ventanaImpresion.close();
+            }
+        }
+        
+        function imprimirTodos() {
+            console.log('Iniciando impresión de todos los pedidos');
+            
+            const filas = document.querySelectorAll('[id^="pedido-"]');
+            console.log('Encontradas', filas.length, 'filas para imprimir');
+            
+            if (filas.length === 0) {
+                alert('No hay pedidos para imprimir');
+                return;
+            }
+            
+            // Confirmar impresión múltiple
+            if (!confirm(`¿Imprimir ${filas.length} comandas individuales?`)) {
+                return;
+            }
+            
+            filas.forEach((fila, index) => {
+                const pedidoId = fila.id.replace('pedido-', '');
+                console.log('Programando impresión del pedido', pedidoId, 'con delay', index * 1500);
+                
+                setTimeout(() => {
+                    imprimirPedido(pedidoId);
+                }, index * 1500); // Delay de 1.5 segundos entre cada impresión
+            });
+        }
+
         // Auto refresh cada 30 segundos (importante para empleados)
         setInterval(function() {
             // Solo hacer refresh si no hay un formulario siendo editado
@@ -613,8 +854,31 @@ $stats = $stats_stmt->fetch();
             }
         }, 30000);
 
-        // Efectos visuales para empleados
+        // Efectos visuales y debugging para empleados
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== DASHBOARD EMPLEADOS CARGADO ===');
+            
+            // Verificar que las funciones están disponibles
+            console.log('Función imprimirPedido:', typeof window.imprimirPedido);
+            console.log('Función imprimirTodos:', typeof window.imprimirTodos);
+            console.log('Función setFiltroRapido:', typeof window.setFiltroRapido);
+            
+            // Verificar formulario
+            const form = document.getElementById('filtrosForm');
+            console.log('Formulario filtrosForm encontrado:', !!form);
+            
+            // Verificar campos de fecha
+            const fechaDesde = document.querySelector('input[name="fecha_desde"]');
+            const fechaHasta = document.querySelector('input[name="fecha_hasta"]');
+            console.log('Campo fecha_desde encontrado:', !!fechaDesde);
+            console.log('Campo fecha_hasta encontrado:', !!fechaHasta);
+            
+            // Contar pedidos y botones
+            const pedidos = document.querySelectorAll('[id^="pedido-"]');
+            const botonesImprimir = document.querySelectorAll('button[onclick*="imprimirPedido"]');
+            console.log('Pedidos encontrados:', pedidos.length);
+            console.log('Botones imprimir encontrados:', botonesImprimir.length);
+            
             // Highlight de pedidos urgentes
             const urgentes = document.querySelectorAll('.border-r-red-500');
             urgentes.forEach(el => {
@@ -622,166 +886,42 @@ $stats = $stats_stmt->fetch();
             });
 
             // Mostrar notificación de pedidos urgentes
-            const pedidosUrgentes = document.querySelectorAll('.border-r-red-500').length;
+            const pedidosUrgentes = urgentes.length;
             if (pedidosUrgentes > 0) {
                 console.log(`⚠️ Hay ${pedidosUrgentes} pedido(s) urgente(s)`);
-                
-                // Opcional: mostrar una notificación discreta
-                if (pedidosUrgentes > 2) {
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-                    notification.innerHTML = `<i class="fas fa-exclamation-triangle mr-2"></i>${pedidosUrgentes} pedidos urgentes`;
-                    document.body.appendChild(notification);
-                    
-                    // Auto-remove después de 5 segundos
-                    setTimeout(() => {
-                        notification.remove();
-                    }, 5000);
-                }
-            }
-
-            // Animación sutil para las estadísticas
-            const statsCards = document.querySelectorAll('.bg-white.p-4.rounded-lg.shadow.text-center');
-            statsCards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.style.transform = 'scale(1.05)';
-                    setTimeout(() => {
-                        card.style.transform = 'scale(1)';
-                        card.style.transition = 'transform 0.2s ease';
-                    }, 100);
-                }, index * 50);
-            });
-
-            // Destacar pedidos del día actual
-            const hoy = new Date().toISOString().split('T')[0];
-            const fechaDesde = document.querySelector('input[name="fecha_desde"]').value;
-            const fechaHasta = document.querySelector('input[name="fecha_hasta"]').value;
-            
-            if (fechaDesde === hoy && fechaHasta === hoy) {
-                document.body.classList.add('hoy-mode');
-                console.log('Modo "HOY" activo - Mostrando pedidos de hoy');
-            }
-        });
-
-        // Función para destacar visualmente los cambios de estado
-        function highlightEstadoChange(pedidoId) {
-            const pedidoCard = document.querySelector(`[data-pedido-id="${pedidoId}"]`);
-            if (pedidoCard) {
-                pedidoCard.style.backgroundColor = '#f0f9ff';
-                setTimeout(() => {
-                    pedidoCard.style.backgroundColor = '';
-                }, 2000);
-            }
-        }
-
-        // Keyboard shortcuts útiles para empleados
-        document.addEventListener('keydown', function(e) {
-            // Ctrl + H = Filtro HOY
-            if (e.ctrlKey && e.key === 'h') {
-                e.preventDefault();
-                setFiltroRapido('hoy');
             }
             
-            // Ctrl + R = Refresh manual
-            if (e.ctrlKey && e.key === 'r') {
-                e.preventDefault();
-                location.reload();
-            }
-        });
-
-        // Mostrar tiempo real en la esquina (útil para empleados)
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('es-AR', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                second: '2-digit'
+            // Test rápido de botones
+            console.log('=== TEST DE BOTONES ===');
+            botonesImprimir.forEach((btn, index) => {
+                console.log(`Botón ${index + 1}:`, btn.getAttribute('onclick'));
             });
             
-            // Solo mostrar si no existe ya
-            let clockElement = document.getElementById('live-clock');
-            if (!clockElement) {
-                clockElement = document.createElement('div');
-                clockElement.id = 'live-clock';
-                clockElement.className = 'fixed bottom-4 left-4 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-mono shadow-lg';
-                document.body.appendChild(clockElement);
+            console.log('===========================');
+        });
+        
+        // Función de test manual
+        function testImpresion() {
+            console.log('Test manual de impresión');
+            const primerPedido = document.querySelector('[id^="pedido-"]');
+            if (primerPedido) {
+                const pedidoId = primerPedido.id.replace('pedido-', '');
+                console.log('Probando con pedido:', pedidoId);
+                imprimirPedido(pedidoId);
+            } else {
+                console.log('No hay pedidos para probar');
             }
-            
-            clockElement.textContent = timeString;
         }
-
-        // Actualizar reloj cada segundo
-        setInterval(updateClock, 1000);
-        updateClock(); // Mostrar inmediatamente
-
-        // Debug para empleados
-        function mostrarInfoDebug() {
-            const totalPedidos = document.querySelectorAll('.bg-white.rounded-lg.shadow.border-l-4').length;
-            const urgentes = document.querySelectorAll('.border-r-red-500').length;
-            const prioridad = document.querySelectorAll('.border-r-orange-500').length;
-            
-            console.log('=== INFO PARA EMPLEADO ===');
-            console.log(`Total pedidos mostrados: ${totalPedidos}`);
-            console.log(`Pedidos urgentes (>1h): ${urgentes}`);
-            console.log(`Pedidos prioridad (>30min): ${prioridad}`);
-            console.log(`Última actualización: ${new Date().toLocaleString()}`);
-            console.log('========================');
+        
+        // Función de test de filtros
+        function testFiltros() {
+            console.log('Test manual de filtros');
+            setFiltroRapido('hoy');
         }
-
-        // Mostrar info debug cada vez que se carga
-        setTimeout(mostrarInfoDebug, 1000);
+        
+        // Exponer funciones de test
+        window.testImpresion = testImpresion;
+        window.testFiltros = testFiltros;
     </script>
-
-    <style>
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        /* Estilo especial para el modo "HOY" */
-        .hoy-mode .bg-blue-50 {
-            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        }
-
-        /* Mejorar la legibilidad de estados urgentes */
-        .border-r-red-500 {
-            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
-        }
-
-        .border-r-orange-500 {
-            box-shadow: 0 0 5px rgba(245, 158, 11, 0.3);
-        }
-
-        /* Hover suave para los botones de filtro rápido */
-        button[onclick^="setFiltroRapido"] {
-            transition: all 0.2s ease;
-        }
-
-        button[onclick^="setFiltroRapido"]:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        /* Estilo para el reloj en vivo */
-        #live-clock {
-            z-index: 40;
-            font-family: 'Courier New', monospace;
-        }
-
-        /* Responsive mejoras */
-        @media (max-width: 768px) {
-            .grid.md\\:grid-cols-2 {
-                grid-template-columns: 1fr;
-            }
-            
-            #live-clock {
-                bottom: 60px; /* Evitar superposición en móviles */
-                right: 4px;
-                left: auto;
-                font-size: 12px;
-                padding: 8px;
-            }
-        }
-    </style>
 </body>
 </html>
