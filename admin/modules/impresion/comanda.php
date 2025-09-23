@@ -1,104 +1,148 @@
 <?php
-// admin/modules/impresion/comanda.php
+// admin/modules/impresion/comanda.php - VERSIÓN ACTUALIZADA CON FECHA DE ENTREGA
 require_once '../../config.php';
 requireLogin();
 
-$pedido_id = isset($_GET['pedido']) ? (int)$_GET['pedido'] : 0;
+// Validar parámetros
+$pedido_id = (int)($_GET['pedido'] ?? 0);
+$es_admin = isset($_GET['admin']) && $_GET['admin'] === '1';
+$auto_print = isset($_GET['auto']) && $_GET['auto'] === '1';
 
-if (!$pedido_id) {
-    die('ID de pedido requerido');
+if ($pedido_id <= 0) {
+    die('Error: ID de pedido no válido');
 }
 
 $pdo = getConnection();
 
-// Obtener datos completos del pedido
+// CONSULTA MEJORADA - Incluye información de clientes fijos y detalles del pedido
 $stmt = $pdo->prepare("
-    SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido 
-    FROM pedidos p 
-    LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
+    SELECT p.*,
+           cf.nombre as cliente_fijo_nombre,
+           cf.apellido as cliente_fijo_apellido,
+           cf.telefono as cliente_fijo_telefono,
+           cf.direccion as cliente_fijo_direccion
+    FROM pedidos p
+    LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
     WHERE p.id = ?
 ");
+
 $stmt->execute([$pedido_id]);
 $pedido = $stmt->fetch();
 
 if (!$pedido) {
-    die('Pedido no encontrado');
+    die('Error: Pedido no encontrado');
 }
 
-// Calcular urgencia
-$minutos_transcurridos = round((time() - strtotime($pedido['created_at'])) / 60);
-$urgencia = '';
-$urgencia_class = '';
-
-if ($minutos_transcurridos > 60) {
-    $urgencia = '🚨 URGENTE';
-    $urgencia_class = 'urgente';
-} elseif ($minutos_transcurridos > 30) {
-    $urgencia = '⚠️ PRIORIDAD';
-    $urgencia_class = 'prioridad';
-}
-
-// Determinar si es cliente fijo
-$es_cliente_fijo = !empty($pedido['cliente_fijo_nombre']);
+// Determinar datos del cliente
+$es_cliente_fijo = !empty($pedido['cliente_fijo_id']);
 $nombre_completo = $es_cliente_fijo 
     ? $pedido['cliente_fijo_nombre'] . ' ' . $pedido['cliente_fijo_apellido']
     : $pedido['nombre'] . ' ' . $pedido['apellido'];
 
+// Calcular tiempo transcurrido
+$fecha_pedido = new DateTime($pedido['fecha_pedido']);
+$ahora = new DateTime();
+$diferencia = $fecha_pedido->diff($ahora);
+$minutos_transcurridos = ($diferencia->h * 60) + $diferencia->i;
+
+// Determinar urgencia
+$urgencia = '';
+if ($minutos_transcurridos > 120) {
+    $urgencia = '🔥 URGENTE - ' . round($minutos_transcurridos/60, 1) . 'h';
+} elseif ($minutos_transcurridos > 60) {
+    $urgencia = '⚠️ PRIORIDAD - ' . round($minutos_transcurridos/60, 1) . 'h';
+}
+
+// ANALIZAR EL PRODUCTO PARA MOSTRAR CORRECTAMENTE
+$producto_display = $pedido['producto'];
+$sabores_info = '';
+
+// Si es personalizado, extraer información de las observaciones
+if (strpos($pedido['producto'], 'Personalizado') !== false) {
+    // Buscar información específica en las observaciones
+    $observaciones = $pedido['observaciones'];
+    
+    // Detectar J y Q
+    if (preg_match('/J\s*y\s*Q|J\s*\+\s*Q|JyQ|J&Q/i', $observaciones)) {
+        $planchas = ceil($pedido['cantidad'] / 8);
+        $producto_display = $pedido['cantidad'] . ' sándwiches J y Q (' . $planchas . ' plancha' . ($planchas > 1 ? 's' : '') . ')';
+    }
+    // Buscar otros sabores
+    elseif (preg_match('/Sabores:\s*(.+)(?:\n|$)/i', $observaciones, $matches)) {
+        $sabores_info = trim($matches[1]);
+        $planchas = ceil($pedido['cantidad'] / 8);
+        $producto_display = $pedido['cantidad'] . ' sándwiches personalizados (' . $planchas . ' plancha' . ($planchas > 1 ? 's' : '') . ')';
+    }
+    // Si no hay información específica, usar el producto original
+}
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comanda #<?= $pedido['id'] ?> - Santa Catalina</title>
     <style>
-        /* Configuración para impresora térmica 80mm */
-        @page {
-            size: 80mm auto;
-            margin: 0;
+        @page { 
+            size: 80mm auto; 
+            margin: 0; 
         }
         
         body {
             font-family: 'Courier New', monospace;
-            font-size: 10px;
+            font-size: 11px;
             line-height: 1.3;
             width: 80mm;
             margin: 0;
-            padding: 2mm;
+            padding: 3mm;
             background: white;
             color: black;
         }
         
         .comanda-header {
             text-align: center;
-            border-bottom: 1px solid #000;
-            padding-bottom: 5px;
-            margin-bottom: 8px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
         }
         
         .comanda-header h1 {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
-            margin: 0;
+            margin: 0 0 2px 0;
             letter-spacing: 1px;
         }
         
         .comanda-header p {
-            margin: 2px 0;
+            margin: 1px 0;
             font-size: 9px;
         }
         
         .pedido-numero {
-            font-size: 12px;
-            font-weight: bold;
             text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            background: #000;
+            color: #fff;
+            padding: 4px;
             margin: 8px 0;
-            padding: 3px;
-            border: 1px solid #000;
+        }
+        
+        .urgencia {
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            background: #ff4444;
+            color: #fff;
+            padding: 2px;
+            margin: 2px 0;
         }
         
         .seccion {
             margin: 6px 0;
-            padding: 3px 0;
+            border-bottom: 1px dashed #ccc;
+            padding-bottom: 4px;
         }
         
         .seccion-titulo {
@@ -108,65 +152,54 @@ $nombre_completo = $es_cliente_fijo
         }
         
         .seccion-contenido {
-            font-size: 9px;
-            margin-left: 2px;
+            font-size: 11px;
+            padding-left: 4px;
         }
         
         .producto-principal {
-            background: #f0f0f0;
-            padding: 4px;
-            margin: 6px 0;
+            background: #f8f8f8;
+            padding: 6px;
+            margin: 8px 0;
             border: 1px solid #000;
             text-align: center;
-        }
-        
-        .separador {
-            text-align: center;
             font-weight: bold;
-            margin: 6px 0;
-            letter-spacing: 1px;
+            font-size: 12px;
         }
         
-        .urgencia {
-            background: #000;
-            color: white;
+        .sabores {
+            background: #e8f4f8;
+            padding: 4px;
+            margin: 4px 0;
+            border-left: 3px solid #007acc;
+            font-size: 10px;
+        }
+        
+        .precio {
             text-align: center;
-            padding: 3px;
+            font-size: 14px;
             font-weight: bold;
-            margin: 5px 0;
-        }
-        
-        .footer {
-            border-top: 1px solid #000;
-            padding-top: 5px;
-            margin-top: 8px;
-            text-align: center;
-            font-size: 8px;
+            background: #f0f0f0;
+            padding: 6px;
+            margin: 8px 0;
+            border: 1px solid #000;
         }
         
         .cliente-fijo {
-            font-size: 8px;
-            background: #000;
-            color: white;
-            padding: 1px 3px;
-            margin-left: 5px;
+            background: #d4edda;
+            color: #155724;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: bold;
+            margin-left: 4px;
         }
         
-        /* Ocultar en pantalla */
-        .no-print {
-            display: block;
-        }
-        
-        /* Solo mostrar en impresión */
-        @media print {
-            .no-print {
-                display: none !important;
-            }
-            
-            body {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
+        .footer {
+            text-align: center;
+            margin-top: 10px;
+            padding-top: 6px;
+            border-top: 1px dashed #000;
+            font-size: 9px;
         }
         
         /* Estilos para vista previa en pantalla */
@@ -178,6 +211,23 @@ $nombre_completo = $es_cliente_fijo
                 padding: 10px;
                 box-shadow: 0 0 10px rgba(0,0,0,0.3);
             }
+            
+            .no-print {
+                display: block !important;
+            }
+        }
+        
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            
+            body {
+                margin: 0;
+                padding: 3mm;
+                border: none;
+                box-shadow: none;
+            }
         }
     </style>
 </head>
@@ -185,14 +235,26 @@ $nombre_completo = $es_cliente_fijo
     <!-- Botones de control (solo en pantalla) -->
     <div class="no-print" style="text-align: center; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
         <h3 style="margin: 0 0 10px 0;">🖨️ Comanda Lista para Imprimir</h3>
+        
+        <?php if ($es_admin): ?>
+            <div style="background: #e3f2fd; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 12px;">
+                <i class="fas fa-user-shield" style="color: #1976d2;"></i>
+                <strong>Modo Administrador</strong> - Con fecha de entrega opcional
+            </div>
+        <?php endif; ?>
+        
         <button onclick="imprimirYCerrar()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-size: 14px;">
             🖨️ IMPRIMIR COMANDA
         </button>
         <button onclick="window.close()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px;">
             ❌ Cancelar
         </button>
+        
         <div style="margin-top: 10px; font-size: 12px; color: #666;">
-            <strong>Impresora:</strong> 3nstar RPT006S 80mm | <strong>Pedido:</strong> #<?= $pedido['id'] ?>
+            <strong>Impresora:</strong> POS80-CX 80mm | <strong>Pedido:</strong> #<?= $pedido['id'] ?>
+            <?php if ($es_admin): ?>
+                | <strong>Origen:</strong> Admin Panel
+            <?php endif; ?>
         </div>
     </div>
 
@@ -226,132 +288,132 @@ $nombre_completo = $es_cliente_fijo
         <div class="seccion-contenido"><?= htmlspecialchars($pedido['telefono']) ?></div>
     </div>
 
-    <?php if ($pedido['modalidad'] === 'Delivery'): ?>
-        <div class="seccion">
-            <div class="seccion-titulo">🚚 DELIVERY:</div>
-            <div class="seccion-contenido">
-                <?= htmlspecialchars($pedido['direccion'] ?: 'SIN DIRECCION - CONFIRMAR') ?>
-            </div>
-        </div>
-    <?php else: ?>
-        <div class="seccion">
-            <div class="seccion-titulo">🏪 MODALIDAD:</div>
-            <div class="seccion-contenido">RETIRA EN LOCAL</div>
-        </div>
-    <?php endif; ?>
-
-    <div class="separador">================================</div>
-
-    <div class="producto-principal">
-        <div style="font-weight: bold; font-size: 11px; margin-bottom: 3px;">
-            <?= htmlspecialchars($pedido['producto']) ?>
-        </div>
-        <div style="font-size: 10px;">
-            CANTIDAD: <?= $pedido['cantidad'] ?> unidades
-        </div>
-        <div style="font-size: 10px; margin-top: 2px;">
-            PRECIO: <?= formatPrice($pedido['precio']) ?>
-        </div>
-    </div>
-
     <div class="seccion">
-        <div class="seccion-titulo">FORMA DE PAGO:</div>
-        <div class="seccion-contenido"><?= htmlspecialchars($pedido['forma_pago']) ?></div>
+        <div class="seccion-titulo">MODALIDAD:</div>
+        <div class="seccion-contenido">
+            <?= htmlspecialchars($pedido['modalidad']) ?>
+            <?php if ($pedido['modalidad'] === 'Delivery' && $pedido['direccion']): ?>
+                <br><strong>Dirección:</strong> <?= htmlspecialchars($pedido['direccion']) ?>
+            <?php endif; ?>
+        </div>
     </div>
 
-    <?php if ($pedido['observaciones']): ?>
-        <div class="separador">--------------------------------</div>
-        <div class="seccion">
-            <div class="seccion-titulo">OBSERVACIONES:</div>
-            <div class="seccion-contenido"><?= htmlspecialchars($pedido['observaciones']) ?></div>
+    <!-- PRODUCTO PRINCIPAL -->
+    <div class="producto-principal">
+        <?= htmlspecialchars($producto_display) ?>
+    </div>
+
+    <?php if ($sabores_info): ?>
+        <div class="sabores">
+            <strong>SABORES:</strong> <?= htmlspecialchars($sabores_info) ?>
         </div>
     <?php endif; ?>
 
-    <?php if ($pedido['fecha_entrega'] || $pedido['hora_entrega'] || $pedido['notas_horario']): ?>
-        <div class="separador">--------------------------------</div>
+    <!-- PRECIO -->
+    <div class="precio">
+        TOTAL: $<?= number_format($pedido['precio'], 0, ',', '.') ?>
+        <div style="font-size: 10px; font-weight: normal; margin-top: 2px;">
+            <?= htmlspecialchars($pedido['forma_pago']) ?>
+        </div>
+    </div>
+
+    <!-- FECHA DE ENTREGA (SOLO PARA ADMIN) -->
+    <?php if ($es_admin && ($pedido['fecha_entrega'] || $pedido['hora_entrega'])): ?>
         <div class="seccion">
-            <div class="seccion-titulo">⏰ HORARIO DE ENTREGA:</div>
+            <div class="seccion-titulo">📅 FECHA DE ENTREGA:</div>
             <div class="seccion-contenido">
                 <?php if ($pedido['fecha_entrega']): ?>
-                    Fecha: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?><br>
+                    <strong><?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></strong>
                 <?php endif; ?>
                 <?php if ($pedido['hora_entrega']): ?>
-                    Hora: <?= substr($pedido['hora_entrega'], 0, 5) ?><br>
+                    a las <strong><?= date('H:i', strtotime($pedido['hora_entrega'])) ?>hs</strong>
                 <?php endif; ?>
                 <?php if ($pedido['notas_horario']): ?>
-                    Notas: <?= htmlspecialchars($pedido['notas_horario']) ?>
+                    <br><small><?= htmlspecialchars($pedido['notas_horario']) ?></small>
                 <?php endif; ?>
             </div>
         </div>
     <?php endif; ?>
 
+    <!-- OBSERVACIONES -->
+    <?php if ($pedido['observaciones'] && !$sabores_info): ?>
+        <div class="seccion">
+            <div class="seccion-titulo">OBSERVACIONES:</div>
+            <div class="seccion-contenido">
+                <?= nl2br(htmlspecialchars($pedido['observaciones'])) ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <!-- FOOTER -->
     <div class="footer">
-        <div class="separador">================================</div>
-        <p>Pedido tomado: <?= date('d/m/Y H:i', strtotime($pedido['created_at'])) ?></p>
-        <p>Por: <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Sistema') ?></p>
-        <p>Estado: <?= $pedido['estado'] ?></p>
+        <p><strong>Hora del pedido:</strong> <?= date('d/m/Y H:i', strtotime($pedido['fecha_pedido'])) ?></p>
         <?php if ($minutos_transcurridos > 0): ?>
-            <p>Hace: <?= $minutos_transcurridos ?> minutos</p>
+            <p><strong>Tiempo transcurrido:</strong> <?= $minutos_transcurridos ?> minutos</p>
         <?php endif; ?>
-        <div class="separador">================================</div>
-        <p style="font-size: 7px; margin-top: 5px;">
-            Sistema Santa Catalina v1.0<br>
-            Comanda generada automáticamente
-        </p>
+        <p style="margin-top: 6px;">¡Gracias por elegirnos!</p>
+        <?php if ($es_admin): ?>
+            <p style="font-size: 8px; color: #666; margin-top: 4px;">Impreso desde Admin Panel</p>
+        <?php endif; ?>
     </div>
 
     <script>
         function imprimirYCerrar() {
-            // Configurar para impresión
-            window.focus();
+            // Ocultar botones de control
+            const controles = document.querySelector('.no-print');
+            if (controles) {
+                controles.style.display = 'none';
+            }
             
             // Imprimir
             window.print();
             
-            // Marcar como impreso en el sistema
-            marcarComoImpreso();
-            
-            // Cerrar ventana después de un delay
+            // Mostrar mensaje de confirmación
             setTimeout(() => {
-                window.close();
+                if (confirm('¿Se imprimió correctamente la comanda?')) {
+                    // Marcar como impreso si viene del admin
+                    <?php if ($es_admin): ?>
+                    if (window.opener && typeof window.opener.marcarComoImpreso === 'function') {
+                        window.opener.marcarComoImpreso(<?= $pedido_id ?>);
+                    }
+                    <?php endif; ?>
+                    
+                    window.close();
+                } else {
+                    // Mostrar controles nuevamente si no se imprimió
+                    if (controles) {
+                        controles.style.display = 'block';
+                    }
+                }
             }, 1000);
         }
-        
-        function marcarComoImpreso() {
-            fetch('../pedidos/ver_pedidos.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'accion=marcar_impreso&id=<?= $pedido['id'] ?>'
-            }).then(response => {
-                console.log('Pedido marcado como impreso');
-            }).catch(error => {
-                console.error('Error marcando como impreso:', error);
-            });
-        }
-        
-        // Auto-imprimir si se pasa el parámetro
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('auto') === '1') {
-            setTimeout(imprimirYCerrar, 500);
-        }
-        
-        // Manejar eventos de teclado
+
+        // Auto-imprimir si se especifica
+        <?php if ($auto_print): ?>
+        setTimeout(() => {
+            imprimirYCerrar();
+        }, 800);
+        <?php endif; ?>
+
+        // Atajos de teclado
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
                 imprimirYCerrar();
             } else if (e.key === 'Escape') {
                 window.close();
             }
         });
-        
-        // Información de debug
-        console.log('🖨️ Módulo de Impresión de Comandas');
-        console.log('Pedido ID:', <?= $pedido['id'] ?>);
-        console.log('Impresora objetivo: 3nstar RPT006S 80mm');
-        console.log('Urgencia: <?= $urgencia ?: "Normal" ?>');
-        console.log('Minutos transcurridos:', <?= $minutos_transcurridos ?>);
+
+        // Log de información
+        console.log('🖨️ Comanda cargada correctamente');
+        console.log('📋 Pedido #<?= $pedido_id ?>');
+        console.log('👤 Cliente: <?= addslashes($nombre_completo) ?>');
+        console.log('🏪 Modalidad: <?= $pedido['modalidad'] ?>');
+        <?php if ($es_admin): ?>
+        console.log('👨‍💼 Origen: Admin Panel');
+        <?php endif; ?>
+        console.log('⏱️ Tiempo transcurrido: <?= $minutos_transcurridos ?> minutos');
     </script>
 </body>
 </html>

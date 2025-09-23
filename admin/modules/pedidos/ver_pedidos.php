@@ -642,61 +642,55 @@ $stats = $pdo->query($stats_sql)->fetch();
             window.location.search = params.toString();
         }
 
-        // FUNCIÓN PARA LOCAL 1 - ABRIR COMANDA PARA IMPRIMIR/PDF
-        function imprimirLocal1(pedidoId) {
-            console.log('🏪 Abriendo comanda Local 1 - Pedido #' + pedidoId);
-            
-            // URL para abrir comanda en nueva ventana
-            const url = `../impresion/generar_pdf.php?pedido=${pedidoId}&ubicacion=Local%201`;
-            
-            // Abrir en nueva ventana
-            const ventana = window.open(url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
-            
-            if (!ventana) {
-                alert('❌ Error: No se pudo abrir la ventana.\n\n' +
-                      'Por favor, permite ventanas emergentes y vuelve a intentar.');
-                return false;
-            }
-            
-            // Focus en la nueva ventana
-            ventana.focus();
-            
-            // Marcar como impreso automáticamente
-            setTimeout(() => {
-                marcarPedidoComoImpreso(pedidoId);
-            }, 2000);
-            
-            console.log('✅ Comanda Local 1 abierta - usar Ctrl+P para imprimir/guardar PDF');
-            return true;
-        }
+        // FUNCIÓN PARA LOCAL 1 - Usar la nueva comanda simple del admin
+function imprimirLocal1(pedidoId) {
+    console.log('🏪 Imprimiendo Local 1 - Pedido #' + pedidoId);
+    
+    // Usar la nueva comanda simple en el módulo de impresión del admin
+    const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
+    const ventana = window.open(url, '_blank', 'width=400,height=600,scrollbars=yes');
+    
+    if (!ventana) {
+        alert('❌ Error: No se pudo abrir la ventana de impresión.\n\n' +
+              'Por favor, permite ventanas emergentes y vuelve a intentar.');
+        return false;
+    }
+    
+    ventana.focus();
+    
+    // Marcar como impreso automáticamente
+    setTimeout(() => {
+        marcarPedidoComoImpreso(pedidoId);
+    }, 2000);
+    
+    console.log('✅ Comanda Local 1 - desde módulo admin');
+    return true;
+}
 
-        // FUNCIÓN PARA FÁBRICA - ABRIR COMANDA PARA IMPRIMIR/PDF
-        function imprimirComanda(pedidoId) {
-            console.log('🏭 Abriendo comanda Fábrica - Pedido #' + pedidoId);
-            
-            // URL para abrir comanda en nueva ventana
-            const url = `../impresion/generar_pdf.php?pedido=${pedidoId}&ubicacion=Fábrica`;
-            
-            // Abrir en nueva ventana
-            const ventana = window.open(url, '_blank', 'width=400,height=700,scrollbars=yes,resizable=yes');
-            
-            if (!ventana) {
-                alert('❌ Error: No se pudo abrir la ventana.\n\n' +
-                      'Por favor, permite ventanas emergentes y vuelve a intentar.');
-                return false;
-            }
-            
-            // Focus en la nueva ventana
-            ventana.focus();
-            
-            // Marcar como impreso automáticamente
-            setTimeout(() => {
-                marcarPedidoComoImpreso(pedidoId);
-            }, 2000);
-            
-            console.log('🖨️ Comanda Fábrica abierta - usar Ctrl+P para imprimir/guardar PDF');
-            return true;
-        }
+       // FUNCIÓN PARA FÁBRICA - También usar la misma comanda simple
+function imprimirComanda(pedidoId) {
+    console.log('🏭 Imprimiendo Fábrica - Pedido #' + pedidoId);
+    
+    // Usar la misma comanda simple (funcionará para ambas ubicaciones)
+    const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
+    const ventana = window.open(url, '_blank', 'width=400,height=600,scrollbars=yes');
+    
+    if (!ventana) {
+        alert('❌ Error: No se pudo abrir la ventana.\n\n' +
+              'Por favor, permite ventanas emergentes y vuelve a intentar.');
+        return false;
+    }
+    
+    ventana.focus();
+    
+    // Marcar como impreso automáticamente
+    setTimeout(() => {
+        marcarPedidoComoImpreso(pedidoId);
+    }, 2000);
+    
+    console.log('✅ Comanda Fábrica - desde módulo admin');
+    return true;
+}
 
         // Función auxiliar para marcar pedido como impreso
         function marcarPedidoComoImpreso(pedidoId) {
