@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos Express - Local 1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .modal { 
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .btn-express {
+            transition: all 0.2s ease;
+            transform: scale(1);
+        }
+        .btn-express:hover {
+            transform: scale(1.02);
+        }
+        .btn-express:active {
+            transform: scale(0.98);
+        }
+        
+        /* ESTILOS MEJORADOS PARA SELECCIÓN VISUAL */
+        .pedido-card {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .pedido-card.seleccionado {
+            border-color: #3b82f6 !important;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4) !important;
+            transform: scale(1.05);
+        }
+        .pedido-card.seleccionado::after {
+            content: '✓ SELECCIONADO';
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #10b981;
+            color: white;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+        }
+        
+        .seccion-bloqueada {
+            opacity: 0.3 !important;
+            pointer-events: none !important;
+            filter: grayscale(80%) !important;
+            transform: scale(0.98) !important;
+        }
+        
+        .turno-card {
+            transition: all 0.2s ease;
+        }
+        .turno-card.seleccionado {
+            border-color: #3b82f6 !important;
+            background: #dbeafe !important;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+            transform: scale(1.02);
+        }
+        .turno-card.seleccionado::after {
+            content: '✓';
+            position: absolute;
+            top: 4px;
+            right: 8px;
+            color: #3b82f6;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .sabor-checkbox {
+            appearance: none;
+            background: #f3f4f6;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        .sabor-checkbox:checked {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+<!-- BOTÓN EXPRESS EN EL DASHBOARD (para agregar al dashboard existente) -->
+<div class="fixed bottom-4 right-4 z-50">
+    <button onclick="abrirPedidoExpress()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-full shadow-lg btn-express">
+        <i class="fas fa-plus-circle mr-2"></i>
+        Pedido Express
+    </button>
+</div>
+
+<!-- MODAL DE PEDIDO EXPRESS -->
+<div id="modalPedidoExpress" class="modal fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
+        
+        <!-- Header -->
+        <div class="bg-green-600 text-white p-4 rounded-t-xl flex justify-between items-center">
+            <h2 class="text-xl font-bold">
+                <i class="fas fa-tachometer-alt mr-2"></i>
+                Pedido Express - Local 1
+            </h2>
+            <button onclick="cerrarPedidoExpress()" class="text-white hover:text-gray-200">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Formulario -->
+        <form id="formPedidoExpress" class="p-6">
+            
+            <!-- Datos del Cliente + TURNOS -->
+            <div class="bg-blue-50 rounded-lg p-4 mb-6">
+                <h3 class="font-bold text-blue-900 mb-3">
+                    <i class="fas fa-user mr-2"></i>Datos del Cliente
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                        <input type="text" id="nombre" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg" placeholder="Juan">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                        <input type="tel" id="telefono" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg" placeholder="11 1234-5678">
+                    </div>
+                </div>
+                
+                <!-- TURNOS -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">¿Para qué turno? *</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="turno-card relative cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('M', this)">
+                            <i class="fas fa-sun text-yellow-500 text-2xl mb-2"></i>
+                            <div class="font-bold">Mañana</div>
+                            <div class="text-xs text-gray-500">6am - 2pm</div>
+                            <input type="radio" name="turno" value="M" class="hidden">
+                        </div>
+                        <div class="turno-card relative cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('S', this)">
+                            <i class="fas fa-cloud-sun text-orange-500 text-2xl mb-2"></i>
+                            <div class="font-bold">Siesta</div>
+                            <div class="text-xs text-gray-500">2pm - 6pm</div>
+                            <input type="radio" name="turno" value="S" class="hidden">
+                        </div>
+                        <div class="turno-card relative cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('T', this)">
+                            <i class="fas fa-moon text-purple-500 text-2xl mb-2"></i>
+                            <div class="font-bold">Tarde</div>
+                            <div class="text-xs text-gray-500">6pm - 11pm</div>
+                            <input type="radio" name="turno" value="T" class="hidden">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PEDIDOS COMUNES -->
+            <div id="seccionComunes" class="bg-yellow-50 rounded-lg p-4 mb-6 transition-all duration-300">
+                <h3 class="font-bold text-yellow-900 mb-4">
+                    <i class="fas fa-star mr-2"></i>¿Qué va a llevar?
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    <!-- J y Q x24 -->
+                    <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('jyq24')" data-tipo="comun">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-lg">Jamón y Queso x24</h4>
+                                <p class="text-sm text-gray-600">3 planchas - Clásico</p>
+                                <p class="font-bold text-green-600 text-xl">$18.000</p>
+                            </div>
+                            <div class="text-yellow-500">
+                                <i class="fas fa-bread-slice text-4xl"></i>
+                            </div>
+                        </div>
+                        <input type="radio" name="pedido_tipo" value="jyq24" class="hidden">
+                    </div>
+
+                    <!-- J y Q x48 -->
+                    <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('jyq48')" data-tipo="comun">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-lg">Jamón y Queso x48</h4>
+                                <p class="text-sm text-gray-600">6 planchas - Clásico</p>
+                                <p class="font-bold text-green-600 text-xl">$22.000</p>
+                            </div>
+                            <div class="text-yellow-500">
+                                <i class="fas fa-hamburger text-4xl"></i>
+                            </div>
+                        </div>
+                        <input type="radio" name="pedido_tipo" value="jyq48" class="hidden">
+                    </div>
+
+                    <!-- Surtido Clásico x48 -->
+                    <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('surtido_clasico48')" data-tipo="comun">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-lg">Surtido Clásico x48</h4>
+                                <p class="text-sm text-gray-600">J y Q, Lechuga, Tomate, Huevo</p>
+                                <p class="font-bold text-green-600 text-xl">$20.000</p>
+                            </div>
+                            <div class="text-orange-500">
+                                <i class="fas fa-layer-group text-4xl"></i>
+                            </div>
+                        </div>
+                        <input type="radio" name="pedido_tipo" value="surtido_clasico48" class="hidden">
+                    </div>
+
+                    <!-- Surtido Especial x48 -->
+                    <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('surtido_especial48')" data-tipo="comun">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="font-bold text-gray-800 text-lg">Surtido Especial x48</h4>
+                                <p class="text-sm text-gray-600">Con sabores premium</p>
+                                <p class="font-bold text-green-600 text-xl">$25.000</p>
+                            </div>
+                            <div class="text-purple-500">
+                                <i class="fas fa-crown text-4xl"></i>
+                            </div>
+                        </div>
+                        <input type="radio" name="pedido_tipo" value="surtido_especial48" class="hidden">
+                    </div>
+                </div>
+            </div>
+
+            <!-- PERSONALIZADO -->
+            <div id="seccionPersonalizado" class="bg-purple-50 rounded-lg p-4 mb-6 transition-all duration-300">
+                <h3 class="font-bold text-purple-900 mb-4">
+                    <i class="fas fa-palette mr-2"></i>¿Algo Diferente?
+                </h3>
+                
+                <div class="pedido-card bg-white rounded-lg border-2 border-purple-200 p-4 hover:border-purple-400 cursor-pointer transition-all" onclick="seleccionarPersonalizado()" data-tipo="personalizado">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-gray-800 text-lg">Personalizado</h4>
+                            <p class="text-sm text-gray-600">Elegí cantidad y sabores</p>
+                        </div>
+                        <div class="text-purple-500">
+                            <i class="fas fa-sliders-h text-4xl"></i>
+                        </div>
+                    </div>
+                    <input type="radio" name="pedido_tipo" value="personalizado" class="hidden">
+                </div>
+
+                <!-- Panel personalizado (oculto por defecto) -->
+                <div id="panelPersonalizado" class="mt-4 hidden">
+                    
+                    <!-- Cantidad -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad de sándwiches</label>
+                        <div class="flex items-center gap-4">
+                            <button type="button" onclick="cambiarCantidad(-8)" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">-8</button>
+                            <button type="button" onclick="cambiarCantidad(-1)" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">-1</button>
+                            <input type="number" id="cantidadPersonalizada" value="24" min="1" max="200" class="w-20 text-center p-2 border border-gray-300 rounded-lg" onchange="actualizarPlanchas()">
+                            <button type="button" onclick="cambiarCantidad(1)" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">+1</button>
+                            <button type="button" onclick="cambiarCantidad(8)" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">+8</button>
+                            <span class="text-sm text-gray-600">(<span id="planchasInfo">3</span> planchas)</span>
+                        </div>
+                    </div>
+
+                    <!-- Sabores -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar Sabores</label>
+                        
+                        <!-- Sabores Comunes -->
+                        <h5 class="font-semibold text-gray-800 mb-2">Comunes</h5>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-4">
+                            <label><input type="checkbox" value="Jamón y Queso" class="sabor-checkbox">Jamón y Queso</label>
+                            <label><input type="checkbox" value="Lechuga" class="sabor-checkbox">Lechuga</label>
+                            <label><input type="checkbox" value="Tomate" class="sabor-checkbox">Tomate</label>
+                            <label><input type="checkbox" value="Huevo" class="sabor-checkbox">Huevo</label>
+                            <label><input type="checkbox" value="Choclo" class="sabor-checkbox">Choclo</label>
+                            <label><input type="checkbox" value="Aceitunas" class="sabor-checkbox">Aceitunas</label>
+                        </div>
+
+                        <!-- Sabores Premium -->
+                        <h5 class="font-semibold text-gray-800 mb-2">Premium (+$100 c/u)</h5>
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            <label><input type="checkbox" value="Ananá" class="sabor-checkbox premium">Ananá</label>
+                            <label><input type="checkbox" value="Atún" class="sabor-checkbox premium">Atún</label>
+                            <label><input type="checkbox" value="Berenjena" class="sabor-checkbox premium">Berenjena</label>
+                            <label><input type="checkbox" value="Durazno" class="sabor-checkbox premium">Durazno</label>
+                            <label><input type="checkbox" value="Jamón Crudo" class="sabor-checkbox premium">Jamón Crudo</label>
+                            <label><input type="checkbox" value="Morrón" class="sabor-checkbox premium">Morrón</label>
+                            <label><input type="checkbox" value="Palmito" class="sabor-checkbox premium">Palmito</label>
+                            <label><input type="checkbox" value="Panceta" class="sabor-checkbox premium">Panceta</label>
+                            <label><input type="checkbox" value="Pollo" class="sabor-checkbox premium">Pollo</label>
+                            <label><input type="checkbox" value="Roquefort" class="sabor-checkbox premium">Roquefort</label>
+                            <label><input type="checkbox" value="Salame" class="sabor-checkbox premium">Salame</label>
+                        </div>
+                    </div>
+
+                    <!-- Precio estimado -->
+                    <div class="bg-green-100 rounded-lg p-3">
+                        <p class="font-bold text-green-800">Precio estimado: $<span id="precioEstimado">18000</span></p>
+                        <p class="text-sm text-green-600">*Precio final puede variar según sabores premium seleccionados</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forma de pago -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 class="font-bold text-gray-900 mb-3">
+                    <i class="fas fa-credit-card mr-2"></i>Forma de Pago
+                </h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
+                        <input type="radio" name="forma_pago" value="Efectivo" class="mr-2">
+                        <i class="fas fa-money-bill-wave text-green-500 mr-2"></i>
+                        Efectivo
+                    </label>
+                    <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
+                        <input type="radio" name="forma_pago" value="Transferencia" class="mr-2">
+                        <i class="fas fa-exchange-alt text-blue-500 mr-2"></i>
+                        Transferencia
+                    </label>
+                    <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
+                        <input type="radio" name="forma_pago" value="Tarjeta" class="mr-2">
+                        <i class="fas fa-credit-card text-purple-500 mr-2"></i>
+                        Tarjeta
+                    </label>
+                    <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
+                        <input type="radio" name="forma_pago" value="MercadoPago" class="mr-2">
+                        <i class="fas fa-mobile-alt text-cyan-500 mr-2"></i>
+                        MercadoPago
+                    </label>
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
+                <textarea id="observaciones" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observaciones adicionales del pedido..."></textarea>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex gap-4 justify-end">
+                <button type="button" onclick="cerrarPedidoExpress()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                    <i class="fas fa-times mr-2"></i>Cancelar
+                </button>
+                <button type="submit" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold">
+                    <i class="fas fa-check mr-2"></i>Crear Pedido Express
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Área de prueba -->
+<div class="container mx-auto p-8">
+    <h1 class="text-2xl font-bold mb-4">Dashboard Empleado - Local 1</h1>
+    <p>Aquí iría el contenido del dashboard normal...</p>
+    <p class="mt-4 text-gray-600">El botón de "Pedido Express" está fijo en la esquina inferior derecha</p>
+</div>
+
+<script>
+// Variables globales
+let pedidoSeleccionado = null;
+let precioBase = 0;
+let turnoSeleccionado = null;
+
+// Precios predefinidos
+const precios = {
+    'jyq24': 18000,
+    'jyq48': 22000,
+    'surtido_clasico48': 20000,
+    'surtido_especial48': 25000,
+    'personalizado_base': 750 // por sándwich
+};
+
+// Funciones del modal
+function abrirPedidoExpress() {
+    document.getElementById('modalPedidoExpress').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function cerrarPedidoExpress() {
+    document.getElementById('modalPedidoExpress').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+    resetearFormulario();
+}
+
+function resetearFormulario() {
+    document.getElementById('formPedidoExpress').reset();
+    
+    // Limpiar todas las selecciones visuales
+    document.querySelectorAll('.pedido-card').forEach(card => {
+        card.classList.remove('seleccionado');
+    });
+    document.querySelectorAll('.turno-card').forEach(card => {
+        card.classList.remove('seleccionado');
+    });
+    document.querySelectorAll('.seccion-bloqueada').forEach(seccion => {
+        seccion.classList.remove('seccion-bloqueada');
+    });
+    
+    document.getElementById('panelPersonalizado').classList.add('hidden');
+    pedidoSeleccionado = null;
+    turnoSeleccionado = null;
+}
+
+// SELECCIÓN DE TURNOS
+function seleccionarTurno(turno, elemento) {
+    // Limpiar selecciones anteriores
+    document.querySelectorAll('.turno-card').forEach(card => {
+        card.classList.remove('seleccionado');
+    });
+    
+    // Marcar el seleccionado
+    elemento.classList.add('seleccionado');
+    elemento.querySelector('input[type="radio"]').checked = true;
+    
+    turnoSeleccionado = turno;
+    console.log(`✅ TURNO SELECCIONADO: ${turno}`);
+}
+
+// SELECCIÓN DE PEDIDOS COMUNES - SÚPER VISUAL
+function seleccionarComun(tipo) {
+    // Bloquear sección personalizada
+    document.getElementById('seccionPersonalizado').classList.add('seccion-bloqueada');
+    document.getElementById('seccionComunes').classList.remove('seccion-bloqueada');
+    
+    // Limpiar todas las selecciones
+    document.querySelectorAll('.pedido-card').forEach(card => {
+        card.classList.remove('seleccionado');
+    });
+    
+    // Ocultar panel personalizado
+    document.getElementById('panelPersonalizado').classList.add('hidden');
+    
+    // Marcar el seleccionado con efectos súper visuales
+    event.currentTarget.classList.add('seleccionado');
+    event.currentTarget.querySelector('input[type="radio"]').checked = true;
+    
+    pedidoSeleccionado = tipo;
+    precioBase = precios[tipo];
+    
+    console.log(`✅ COMÚN SELECCIONADO: ${tipo} - $${precioBase.toLocaleString()}`);
+}
+
+// SELECCIÓN PERSONALIZADO - SÚPER VISUAL
+function seleccionarPersonalizado() {
+    // Bloquear sección comunes
+    document.getElementById('seccionComunes').classList.add('seccion-bloqueada');
+    document.getElementById('seccionPersonalizado').classList.remove('seccion-bloqueada');
+    
+    // Limpiar todas las selecciones
+    document.querySelectorAll('.pedido-card').forEach(card => {
+        card.classList.remove('seleccionado');
+    });
+    
+    // Marcar personalizado con efectos súper visuales
+    event.currentTarget.classList.add('seleccionado');
+    event.currentTarget.querySelector('input[type="radio"]').checked = true;
+    
+    // Mostrar panel personalizado
+    document.getElementById('panelPersonalizado').classList.remove('hidden');
+    
+    pedidoSeleccionado = 'personalizado';
+    actualizarPrecioPersonalizado();
+    
+    console.log('✅ PERSONALIZADO SELECCIONADO');
+}
+
+// Funciones para cantidad personalizada
+function cambiarCantidad(delta) {
+    const input = document.getElementById('cantidadPersonalizada');
+    const nuevaCantidad = parseInt(input.value) + delta;
+    if (nuevaCantidad >= 1 && nuevaCantidad <= 200) {
+        input.value = nuevaCantidad;
+        actualizarPlanchas();
+        actualizarPrecioPersonalizado();
+    }
+}
+
+function actualizarPlanchas() {
+    const cantidad = parseInt(document.getElementById('cantidadPersonalizada').value) || 0;
+    const planchas = Math.ceil(cantidad / 8);
+    document.getElementById('planchasInfo').textContent = planchas;
+}
+
+function actualizarPrecioPersonalizado() {
+    const cantidad = parseInt(document.getElementById('cantidadPersonalizada').value) || 0;
+    const saboresPremium = document.querySelectorAll('.sabor-checkbox.premium:checked').length;
+    
+    let precio = cantidad * precios.personalizado_base;
+    precio += saboresPremium * 100; // $100 extra por cada sabor premium
+    
+    document.getElementById('precioEstimado').textContent = precio.toLocaleString();
+    precioBase = precio;
+}
+
+// Envío del formulario - CON TURNOS
+document.getElementById('formPedidoExpress').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Validaciones esenciales
+    const nombre = document.getElementById('nombre').value.trim();
+    const turno = document.querySelector('input[name="turno"]:checked')?.value;
+    const formaPago = document.querySelector('input[name="forma_pago"]:checked')?.value;
+    
+    if (!nombre) {
+        alert('🏃‍♂️ Solo necesito el nombre para el pedido');
+        document.getElementById('nombre').focus();
+        return;
+    }
+    
+    if (!turno) {
+        alert('⏰ ¿Para qué turno es el pedido?');
+        return;
+    }
+    
+    if (!formaPago) {
+        alert('💳 ¿Cómo va a pagar?');
+        return;
+    }
+    
+    if (!pedidoSeleccionado) {
+        alert('🍞 ¿Qué va a llevar?');
+        return;
+    }
+    
+    // Construir pedido súper rápido
+    const pedido = {
+        nombre: nombre,
+        apellido: '', // Simplificado
+        telefono: document.getElementById('telefono').value.trim(),
+        modalidad: 'Retiro', // Fijo para Local 1
+        forma_pago: formaPago,
+        observaciones: `Turno: ${turno}\n${document.getElementById('observaciones').value.trim()}`,
+        tipo_pedido: pedidoSeleccionado,
+        precio: precioBase
+    };
+    
+    // Si es personalizado, agregar detalles
+    if (pedidoSeleccionado === 'personalizado') {
+        const cantidad = parseInt(document.getElementById('cantidadPersonalizada').value);
+        const saboresSeleccionados = Array.from(document.querySelectorAll('.sabor-checkbox:checked')).map(cb => cb.value);
+        
+        pedido.cantidad = cantidad;
+        pedido.sabores = saboresSeleccionados;
+        pedido.producto = `Personalizado x${cantidad} (${Math.ceil(cantidad/8)} plancha${cantidad > 8 ? 's' : ''})`;
+        
+        if (saboresSeleccionados.length > 0) {
+            pedido.observaciones += `\nSabores: ${saboresSeleccionados.join(', ')}`;
+        }
+    } else {
+        // Pedidos comunes
+        const productos = {
+            'jyq24': 'Jamón y Queso x24',
+            'jyq48': 'Jamón y Queso x48', 
+            'surtido_clasico48': 'Surtido Clásico x48',
+            'surtido_especial48': 'Surtido Especial x48'
+        };
+        pedido.producto = productos[pedidoSeleccionado];
+        pedido.cantidad = pedidoSeleccionado.includes('24') ? 24 : 48;
+    }
+    
+    procesarPedidoExpress(pedido);
+});
+
+function procesarPedidoExpress(pedido) {
+    // Mostrar indicador de carga
+    const submitBtn = document.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creando...';
+    submitBtn.disabled = true;
+    
+    // Enviar pedido al servidor
+    fetch('procesar_pedido_express.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pedido)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostrar confirmación exitosa
+            alert(`✅ Pedido Express #${data.pedido_id} creado exitosamente!\n\n👤 Cliente: ${data.data.cliente}\n🍞 Producto: ${data.data.producto}\n💰 Precio: ${data.data.precio.toLocaleString()}\n📍 Modalidad: ${data.data.modalidad}`);
+            
+            // Cerrar modal
+            cerrarPedidoExpress();
+            
+            // Recargar la página para mostrar el nuevo pedido
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+            
+        } else {
+            alert('❌ Error al crear pedido: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error de conexión. Verifique su conexión a internet.');
+    })
+    .finally(() => {
+        // Restaurar botón
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+}
+
+// Inicializar eventos
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.sabor-checkbox.premium').forEach(checkbox => {
+        checkbox.addEventListener('change', actualizarPrecioPersonalizado);
+    });
+    
+    // Inicializar precio personalizado
+    actualizarPlanchas();
+    actualizarPrecioPersonalizado();
+});
+
+// Cerrar modal con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        cerrarPedidoExpress();
+    }
+});
+</script>
+
+</body>
+</html>
