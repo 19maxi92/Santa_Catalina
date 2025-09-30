@@ -160,8 +160,8 @@ $stats = $pdo->query($stats_sql)->fetch();
                 <i class="fas fa-list-alt text-blue-500 mr-2"></i>Pedidos
             </h1>
             <div class="flex space-x-3">
-                <a href="../impresion/config.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-print mr-2"></i>Config Impresora
+                <a href="https://santacatalina.online/admin/" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+                    <i class="fas fa-home mr-2"></i>Volver al Inicio
                 </a>
                 <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
                     <i class="fas fa-plus mr-2"></i>Nuevo Pedido

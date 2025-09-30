@@ -21,7 +21,7 @@ $sabores_comunes = [
 ];
 
 $sabores_premium = [
-    'Ananá', 'Atún', 'Berenjena', 'Durazno', 'Jamón Crudo', 'Morrón', 
+    'Ananá', 'Atún', 'Berenjena', 'Durazno', 'Jamón Crudo', 'Morrón',
     'Palmito', 'Panceta', 'Pollo', 'Roquefort', 'Salame'
 ];
 
@@ -42,9 +42,9 @@ if ($_POST) {
         $turno_delivery = $_POST['turno_delivery'] ?? null;
         $observaciones = trim($_POST['observaciones'] ?? '');
         
-        // Agregar turno a observaciones si es delivery
-        if ($modalidad === 'Delivery' && $turno_delivery) {
-            $observaciones .= "\nTurno delivery: " . ucfirst($turno_delivery);
+        // Agregar turno a observaciones si hay
+        if ($turno_delivery) {
+            $observaciones .= "\nTurno: " . ucfirst($turno_delivery);
         }
         
         // Campos de fecha y hora
@@ -57,14 +57,14 @@ if ($_POST) {
             throw new Exception('Todos los campos obligatorios deben completarse');
         }
         
-        // Validar dirección y turno si es delivery
-        if ($modalidad === 'Delivery') {
-            if (empty(trim($direccion))) {
-                throw new Exception('La dirección es obligatoria para pedidos de delivery');
-            }
-            if (empty($turno_delivery)) {
-                throw new Exception('Debe seleccionar un turno para delivery');
-            }
+        // Dirección obligatoria solo si es Delivery
+        if ($modalidad === 'Delivery' && empty(trim($direccion))) {
+            throw new Exception('La dirección es obligatoria para pedidos de delivery');
+        }
+        
+        // Turno obligatorio para ambos casos (Retira o Delivery)
+        if (empty($turno_delivery)) {
+            throw new Exception('Debe seleccionar un turno de entrega');
         }
         
         // Validar fecha de entrega
@@ -79,7 +79,7 @@ if ($_POST) {
         $precio = 0;
         
         if ($tipo_pedido === 'predefinido') {
-            // PRODUCTOS PREDEFINIDOS - LÓGICA DEL SEGUNDO CÓDIGO QUE FUNCIONA
+            // PRODUCTOS PREDEFINIDOS
             $producto_id = (int)($_POST['producto_id'] ?? 0);
             if (!$producto_id) {
                 throw new Exception('Debe seleccionar un producto');
@@ -93,12 +93,11 @@ if ($_POST) {
                 throw new Exception('Producto no encontrado');
             }
             
-            // Usar directamente el nombre del producto tal como está en la BD
             $producto = $prod_data['nombre'];
             $precio = ($forma_pago === 'Efectivo') ? 
                      $prod_data['precio_efectivo'] : $prod_data['precio_transferencia'];
             
-            // Extraer cantidad del nombre del producto (ej: "48 Jamón y Queso" -> 48)
+            // Extraer cantidad del nombre del producto si corresponde
             preg_match('/^(\d+)/', $producto, $matches);
             $cantidad = isset($matches[1]) ? (int)$matches[1] : 1;
             
@@ -111,7 +110,7 @@ if ($_POST) {
             }
             
         } elseif ($tipo_pedido === 'personalizado') {
-            // PEDIDOS PERSONALIZADOS - LÓGICA COMPLETA DEL PRIMER CÓDIGO
+            // PEDIDOS PERSONALIZADOS
             $cantidad_personalizada = (int)($_POST['cantidad_personalizada'] ?? 8);
             if ($cantidad_personalizada < 8) {
                 throw new Exception('La cantidad mínima es 8 sándwiches');
@@ -121,9 +120,7 @@ if ($_POST) {
             $precio_total = 0;
             $detalles_planchas = [];
             $sabores_todos = [];
-            $es_solo_jyq = true; // Flag para detectar si es solo J y Q
             
-            // Procesar cada plancha
             for ($i = 1; $i <= $planchas; $i++) {
                 $tipo_plancha = $_POST["plancha_{$i}_tipo"] ?? 'comun';
                 $sabores_plancha = trim($_POST["plancha_{$i}_sabores"] ?? '');
@@ -138,54 +135,13 @@ if ($_POST) {
                 
                 if ($sabores_plancha) {
                     $sabores_todos[] = $sabores_plancha;
-                    
-                    // Verificar si NO es solo J y Q
-                    if (!preg_match('/^(J\s*y\s*Q|J\s*\+\s*Q|JyQ|J&Q)$/i', trim($sabores_plancha))) {
-                        $es_solo_jyq = false;
-                    }
-                } else {
-                    $es_solo_jyq = false;
                 }
             }
             
-            // LÓGICA MEJORADA PARA EL NOMBRE DEL PRODUCTO PERSONALIZADO
-            if ($es_solo_jyq && count($sabores_todos) === $planchas && $planchas >= 1) {
-                // Si todas las planchas son J y Q, mostrar como pedido específico
-                $producto = "$cantidad_personalizada sándwiches J y Q ($planchas plancha" . ($planchas > 1 ? 's' : '') . ")";
-                $observaciones .= "\nTipo: J y Q exclusivamente";
-                $observaciones .= "\nPlanchas: $planchas (todas J y Q)";
-            } else {
-                // Si es mixto o personalizado complejo, crear nombre más descriptivo
-                $tipos_planchas = [];
-                $sabores_resumen = [];
-                
-                for ($j = 1; $j <= $planchas; $j++) {
-                    $tipo_plancha_j = $_POST["plancha_{$j}_tipo"] ?? 'comun';
-                    $sabores_plancha_j = trim($_POST["plancha_{$j}_sabores"] ?? '');
-                    
-                    $tipos_planchas[] = ucfirst($tipo_plancha_j);
-                    if ($sabores_plancha_j) {
-                        $sabores_resumen[] = "P$j: $sabores_plancha_j";
-                    }
-                }
-                
-                // Crear nombre descriptivo del producto
-                $tipos_unicos = array_unique($tipos_planchas);
-                if (count($tipos_unicos) == 1) {
-                    $producto = "Personalizado " . $tipos_unicos[0] . " x$cantidad_personalizada ($planchas plancha" . ($planchas > 1 ? 's' : '') . ")";
-                } else {
-                    $producto = "Personalizado Mixto x$cantidad_personalizada ($planchas plancha" . ($planchas > 1 ? 's' : '') . ")";
-                }
-                
-                // Agregar resumen de sabores al nombre del producto si hay espacio
-                if (!empty($sabores_resumen) && strlen(implode(', ', $sabores_resumen)) < 50) {
-                    $producto .= " - " . implode(', ', $sabores_resumen);
-                }
-                
-                $observaciones .= "\nDetalle de planchas:\n" . implode("\n", $detalles_planchas);
-                if (!empty($sabores_todos)) {
-                    $observaciones .= "\nSabores: " . implode(" | ", $sabores_todos);
-                }
+            $producto = "Personalizado x$cantidad_personalizada ($planchas plancha" . ($planchas > 1 ? 's' : '') . ")";
+            $observaciones .= "\nDetalle de planchas:\n" . implode("\n", $detalles_planchas);
+            if (!empty($sabores_todos)) {
+                $observaciones .= "\nSabores: " . implode(" | ", $sabores_todos);
             }
             
             $cantidad = $cantidad_personalizada;
@@ -363,12 +319,13 @@ if ($_POST) {
                             </div>
                         </div>
                         
-                        <!-- Turno de Delivery - Solo visible para delivery -->
-                        <div id="turno-delivery-container" class="hidden">
-                            <label class="block text-gray-700 mb-2 font-medium">Turno de Delivery <span class="text-red-500">*</span></label>
+                        <!-- Turno de Entrega - SIEMPRE VISIBLE y requerido -->
+                        <div id="turno-delivery-container">
+                            <label class="block text-gray-700 mb-2 font-medium">Turno de Entrega <span class="text-red-500">*</span></label>
                             <div class="grid grid-cols-3 gap-2">
                                 <label class="flex items-center p-2 border rounded-lg cursor-pointer hover:bg-blue-50">
-                                    <input type="radio" name="turno_delivery" value="mañana" class="mr-2">
+                                    <input type="radio" name="turno_delivery" value="mañana" class="mr-2" required
+                                           <?= (($_POST['turno_delivery'] ?? '') === 'mañana') ? 'checked' : '' ?>>
                                     <div class="text-center w-full">
                                         <i class="fas fa-sun text-yellow-500 block mb-1"></i>
                                         <span class="text-sm font-medium">Mañana</span>
@@ -376,7 +333,8 @@ if ($_POST) {
                                     </div>
                                 </label>
                                 <label class="flex items-center p-2 border rounded-lg cursor-pointer hover:bg-orange-50">
-                                    <input type="radio" name="turno_delivery" value="siesta" class="mr-2">
+                                    <input type="radio" name="turno_delivery" value="siesta" class="mr-2" required
+                                           <?= (($_POST['turno_delivery'] ?? '') === 'siesta') ? 'checked' : '' ?>>
                                     <div class="text-center w-full">
                                         <i class="fas fa-cloud-sun text-orange-500 block mb-1"></i>
                                         <span class="text-sm font-medium">Siesta</span>
@@ -384,7 +342,8 @@ if ($_POST) {
                                     </div>
                                 </label>
                                 <label class="flex items-center p-2 border rounded-lg cursor-pointer hover:bg-purple-50">
-                                    <input type="radio" name="turno_delivery" value="tarde" class="mr-2">
+                                    <input type="radio" name="turno_delivery" value="tarde" class="mr-2" required
+                                           <?= (($_POST['turno_delivery'] ?? '') === 'tarde') ? 'checked' : '' ?>>
                                     <div class="text-center w-full">
                                         <i class="fas fa-moon text-purple-500 block mb-1"></i>
                                         <span class="text-sm font-medium">Tarde</span>
@@ -472,9 +431,9 @@ if ($_POST) {
                         <div class="space-y-3 max-h-96 overflow-y-auto">
                             <?php foreach ($productos as $producto): ?>
                                 <div class="producto-card border rounded-lg p-4" 
-                                     onclick="seleccionarProducto(<?= $producto['id'] ?>, '<?= htmlspecialchars($producto['nombre']) ?>', <?= $producto['precio_efectivo'] ?>, <?= $producto['precio_transferencia'] ?>)">
+                                     onclick="seleccionarProducto(<?= $producto['id'] ?>, '<?= htmlspecialchars(addslashes($producto['nombre'])) ?>', <?= $producto['precio_efectivo'] ?>, <?= $producto['precio_transferencia'] ?>, this)">
                                     
-                                    <input type="radio" name="producto_id" value="<?= $producto['id'] ?>" class="hidden">
+                                    <input type="radio" name="producto_id" value="<?= $producto['id'] ?>" class="hidden" <?= (isset($_POST['producto_id']) && $_POST['producto_id'] == $producto['id']) ? 'checked' : '' ?>>
                                     
                                     <div class="flex justify-between items-start">
                                         <div class="flex-1">
@@ -500,7 +459,7 @@ if ($_POST) {
                             <div class="grid grid-cols-2 gap-2 text-sm">
                                 <?php foreach ($sabores_premium as $sabor): ?>
                                     <label class="flex items-center">
-                                        <input type="checkbox" name="sabores_premium[]" value="<?= $sabor ?>" class="mr-2">
+                                        <input type="checkbox" name="sabores_premium[]" value="<?= $sabor ?>" class="mr-2" <?= (isset($_POST['sabores_premium']) && in_array($sabor, $_POST['sabores_premium'])) ? 'checked' : '' ?>>
                                         <?= $sabor ?>
                                     </label>
                                 <?php endforeach; ?>
@@ -517,7 +476,7 @@ if ($_POST) {
                                 <div class="flex items-center space-x-4">
                                     <button type="button" onclick="cambiarCantidad(-8)" class="bg-red-500 text-white px-3 py-2 rounded">-8</button>
                                     <input type="number" name="cantidad_personalizada" id="cantidad_personalizada" 
-                                           value="8" min="8" step="8" onchange="generarPlanchas()" 
+                                           value="<?= $_POST['cantidad_personalizada'] ?? 8 ?>" min="8" step="8" onchange="generarPlanchas()" 
                                            class="w-20 text-center border rounded px-2 py-1">
                                     <button type="button" onclick="cambiarCantidad(8)" class="bg-green-500 text-white px-3 py-2 rounded">+8</button>
                                     <span id="planchas-info" class="text-gray-600">1 plancha</span>
@@ -615,15 +574,16 @@ if ($_POST) {
             }
         }
         
-        function seleccionarProducto(id, nombre, precioEfectivo, precioTransferencia) {
+        function seleccionarProducto(id, nombre, precioEfectivo, precioTransferencia, elemento) {
             productoSeleccionado = { id, nombre, precioEfectivo, precioTransferencia };
             
             // Marcar visualmente
             document.querySelectorAll('.producto-card').forEach(card => card.classList.remove('selected'));
-            event.currentTarget.classList.add('selected');
+            if (elemento) elemento.classList.add('selected');
             
             // Marcar radio
-            document.querySelector(`input[name="producto_id"][value="${id}"]`).checked = true;
+            const radio = document.querySelector(`input[name="producto_id"][value="${id}"]`);
+            if (radio) radio.checked = true;
             
             // Mostrar sabores premium si aplica
             const saboresDiv = document.getElementById('sabores-premium');
@@ -683,45 +643,33 @@ if ($_POST) {
             const direccionInput = document.getElementById('direccion-input');
             const direccionRequired = document.getElementById('direccion-required');
             const direccionHelp = document.getElementById('direccion-help');
-            const turnoContainer = document.getElementById('turno-delivery-container');
             const horaLabel = document.getElementById('hora-label');
             const horaHelp = document.getElementById('hora-help');
-            const turnoInputs = document.querySelectorAll('input[name="turno_delivery"]');
             
             if (modalidadDelivery) {
-                // DELIVERY: Mostrar dirección, turnos y cambiar etiqueta de hora
+                // DELIVERY: Dirección obligatoria visualmente
                 direccionContainer.style.display = 'block';
                 direccionInput.required = true;
                 direccionRequired.classList.remove('hidden');
                 direccionHelp.classList.remove('hidden');
                 direccionContainer.classList.add('bg-yellow-50', 'border', 'border-yellow-200', 'rounded-lg', 'p-3');
                 
-                // Mostrar turnos
-                turnoContainer.classList.remove('hidden');
-                turnoInputs.forEach(input => input.required = true);
-                
                 // Cambiar etiquetas de hora
                 horaLabel.textContent = 'Hora Específica (dentro del turno)';
                 horaHelp.textContent = 'Opcional - Solo si necesitas una hora específica dentro del turno seleccionado';
-                
             } else {
-                // RETIRA: Ocultar turnos, cambiar etiquetas
+                // RETIRA: Dirección opcional
                 direccionInput.required = false;
                 direccionRequired.classList.add('hidden');
                 direccionHelp.classList.add('hidden');
                 direccionContainer.classList.remove('bg-yellow-50', 'border', 'border-yellow-200', 'rounded-lg', 'p-3');
                 
-                // Ocultar turnos
-                turnoContainer.classList.add('hidden');
-                turnoInputs.forEach(input => {
-                    input.required = false;
-                    input.checked = false;
-                });
-                
                 // Cambiar etiquetas de hora
                 horaLabel.textContent = 'Hora de Retiro';
                 horaHelp.textContent = 'Opcional - Hora que prefiere retirar el pedido';
             }
+            
+            // Nota: el bloque de turno queda siempre visible y requerido (no lo ocultamos)
         }
         
         function actualizarPrecios() {
@@ -775,6 +723,20 @@ if ($_POST) {
         document.addEventListener('DOMContentLoaded', function() {
             generarPlanchas();
             toggleDireccion();
+            
+            // Si hubo producto seleccionado en POST, marcar visualmente
+            const prodId = <?= json_encode($_POST['producto_id'] ?? null) ?>;
+            if (prodId) {
+                const el = document.querySelector(`.producto-card input[name="producto_id"][value="${prodId}"]`);
+                if (el) {
+                    const parent = el.closest('.producto-card');
+                    if (parent) parent.classList.add('selected');
+                }
+            }
+            
+            // Si el usuario ya viene con tab personalizado, mostrarlo
+            const tipoPedido = '<?= $_POST['tipo_pedido'] ?? 'predefinido' ?>';
+            mostrarTab(tipoPedido);
         });
     </script>
 </body>
