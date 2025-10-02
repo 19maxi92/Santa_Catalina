@@ -155,20 +155,27 @@ $stats = $pdo->query($stats_sql)->fetch();
 <body class="bg-gray-100">
     <div class="container mx-auto px-4 py-6">
         
-            <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">
-                <i class="fas fa-list-alt text-blue-500 mr-2"></i>Pedidos
-            </h1>
-            <div class="flex space-x-3">
-                <a href="https://santacatalina.online/admin/" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-home mr-2"></i>Volver al Inicio
-                </a>
-                <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-plus mr-2"></i>Nuevo Pedido
-                </a>
-            </div>
-        </div>
-
+   <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-gray-800">
+        <i class="fas fa-list-alt text-blue-500 mr-2"></i>Pedidos
+    </h1>
+    <div class="flex space-x-3">
+        <!-- NUEVO: Botón Vista Ejecutiva -->
+        <a href="vista_ejecutiva.php" 
+           class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+           title="Vista simple para directivos">
+            <i class="fas fa-table mr-2"></i>Vista Ejecutiva
+        </a>
+        
+        <a href="../../index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
+            <i class="fas fa-home mr-2"></i>Volver al Inicio
+        </a>
+        
+        <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+            <i class="fas fa-plus mr-2"></i>Nuevo Pedido
+        </a>
+    </div>
+</div>
         <!-- Mensajes -->
         <?php if (isset($_SESSION['mensaje'])): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">

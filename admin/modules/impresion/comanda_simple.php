@@ -1,5 +1,5 @@
 <?php
-// admin/modules/impresion/comanda_simple.php - Copia adaptada de empleados
+// admin/modules/impresion/comanda_simple.php - VERSIÓN CON FUENTES MÁS GRANDES
 require_once '../../config.php';
 requireLogin();
 
@@ -11,7 +11,7 @@ if (!$pedido_id) {
 
 $pdo = getConnection();
 
-// Obtener datos del pedido (SIN filtro de ubicación para que funcione para todas)
+// Obtener datos del pedido
 $stmt = $pdo->prepare("
     SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido 
     FROM pedidos p 
@@ -35,16 +35,15 @@ $nombre_completo = $es_cliente_fijo
 $hora_pedido = date('H', strtotime($pedido['created_at']));
 $turno = '';
 if ($hora_pedido >= 6 && $hora_pedido < 14) {
-    $turno = 'M'; // Mañana
+    $turno = 'M';
 } elseif ($hora_pedido >= 14 && $hora_pedido < 18) {
-    $turno = 'S'; // Siesta
+    $turno = 'S';
 } else {
-    $turno = 'T'; // Tarde/Noche
+    $turno = 'T';
 }
 
 // Formatear fecha
 $fecha_formatted = date('d-M', strtotime($pedido['created_at']));
-// Convertir mes a español
 $meses = [
     'Jan' => 'ene', 'Feb' => 'feb', 'Mar' => 'mar', 'Apr' => 'abr',
     'May' => 'may', 'Jun' => 'jun', 'Jul' => 'jul', 'Aug' => 'ago',
@@ -63,7 +62,7 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comanda #<?= $pedido['id'] ?> - <?= $pedido['ubicacion'] ?></title>
+    <title>Comanda #<?= $pedido['id'] ?></title>
     <style>
         @page { 
             size: 80mm auto; 
@@ -72,8 +71,8 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
         
         body {
             font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.3;
+            font-size: 14px;  /* Aumentado de 12px */
+            line-height: 1.4;
             width: 80mm;
             margin: 0;
             padding: 5mm;
@@ -82,8 +81,8 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
         }
         
         .comanda-ticket {
-            border: 2px solid #000;
-            padding: 8px;
+            border: 2px solid #000;  /* Aumentado de 1px */
+            padding: 10px;  /* Aumentado de 8px */
             text-align: center;
             background: white;
         }
@@ -92,55 +91,60 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 1px solid #000;
-            padding-bottom: 3px;
-            margin-bottom: 5px;
+            border-bottom: 2px solid #000;  /* Aumentado */
+            padding-bottom: 5px;  /* Aumentado */
+            margin-bottom: 8px;  /* Aumentado */
             font-weight: bold;
+            font-size: 14px;
         }
         
         .cliente-nombre {
-            font-size: 14px;
+            font-size: 18px;  /* Aumentado de 14px */
             font-weight: bold;
-            margin: 8px 0;
+            margin: 10px 0;  /* Aumentado */
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .producto-info {
-            font-size: 11px;
-            margin: 6px 0;
+            font-size: 16px;  /* Aumentado de 11px */
+            margin: 8px 0;  /* Aumentado */
             font-weight: bold;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .precio-box {
-            border: 1px solid #000;
-            padding: 4px;
-            margin-top: 5px;
+            border: 2px solid #000;  /* Aumentado */
+            padding: 8px;  /* Aumentado */
+            margin-top: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         
         .precio-final {
-            font-size: 14px;
+            font-size: 18px;  /* Aumentado de 14px */
             font-weight: bold;
         }
         
         .numero-pedido {
-            font-size: 10px;
+            font-size: 13px;  /* Aumentado de 10px */
             color: #666;
-            margin-top: 5px;
+            margin-top: 6px;
         }
         
         .ubicacion-badge {
             background: #007bff;
             color: white;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 9px;
+            padding: 3px 8px;  /* Aumentado */
+            border-radius: 4px;
+            font-size: 11px;  /* Aumentado de 9px */
             font-weight: bold;
         }
         
-        /* Estilos para pantalla */
         @media screen {
             body {
                 margin: 20px auto;
@@ -167,7 +171,7 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
 <body>
     <!-- Botones de control (solo en pantalla) -->
     <div class="no-print">
-        <h3 style="margin: 0 0 10px 0;">🎫 Comanda Simple - <?= $pedido['ubicacion'] ?></h3>
+        <h3 style="margin: 0 0 10px 0;">🎫 Comanda - <?= $pedido['ubicacion'] ?></h3>
         <button onclick="imprimirYCerrar()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-size: 14px;">
             🖨️ IMPRIMIR
         </button>
@@ -186,55 +190,146 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
         <!-- Fecha y turno -->
         <div class="fecha-turno">
             <span><?= $fecha_formatted ?></span>
-            <span><?= $turno ?></span>
+            <span class="ubicacion-badge"><?= $turno ?></span>
         </div>
         
         <!-- Nombre del cliente -->
         <div class="cliente-nombre">
             <?= htmlspecialchars($nombre_completo) ?>
             <?php if ($es_cliente_fijo): ?>
-                <div style="font-size: 10px; color: #666;">(CLIENTE FIJO)</div>
+                <div style="font-size: 12px; color: #666; margin-top: 3px;">(CLIENTE FIJO)</div>
             <?php endif; ?>
         </div>
         
         <!-- Producto -->
         <div class="producto-info">
-            <?= htmlspecialchars($pedido['producto']) ?>
+            <?php 
+            // Si es personalizado, mostrar solo la cantidad total
+            if (strpos($pedido['producto'], 'Personalizado') !== false): 
+                preg_match('/Personalizado x(\d+)/', $pedido['producto'], $match);
+                $cantidad_total = $match[1] ?? '?';
+                echo "Personalizado x{$cantidad_total}";
+            else:
+                echo htmlspecialchars($pedido['producto']);
+            endif;
+            ?>
+            
+            <?php if (strpos($pedido['producto'], 'Personalizado') !== false && !empty($pedido['observaciones'])): ?>
+                <div style="font-size: 15px; margin-top: 8px; text-align: center; line-height: 1.8; font-weight: bold;">
+                <?php
+                $obs = $pedido['observaciones'];
+                
+                // NUEVO FORMATO (con JSON y === SABORES PERSONALIZADOS ===)
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===\n(.*?)(?=\n\n|Turno:|$)/s', $obs, $matches)) {
+                    $sabores_texto = trim($matches[1]);
+                    $lineas = explode("\n", $sabores_texto);
+                    
+                    foreach ($lineas as $linea) {
+                        if (preg_match('/•\s*([^:]+):\s*(\d+)\s*plancha/i', $linea, $m)) {
+                            $sabor = trim($m[1]);
+                            $cant = trim($m[2]);
+                            
+                            // Abreviar
+                            $abrev = $sabor;
+                            if (stripos($sabor, 'jamón y queso') !== false || stripos($sabor, 'jamon y queso') !== false) $abrev = 'J y Q';
+                            elseif (stripos($sabor, 'zanahoria y queso') !== false) $abrev = 'Z y Q';
+                            elseif (stripos($sabor, 'zanahoria y huevo') !== false) $abrev = 'Z y H';
+                            elseif (stripos($sabor, 'huevo') !== false) $abrev = 'Huevo';
+                            elseif (stripos($sabor, 'lechuga') !== false) $abrev = 'Lechuga';
+                            elseif (stripos($sabor, 'tomate') !== false) $abrev = 'Tomate';
+                            elseif (stripos($sabor, 'choclo') !== false) $abrev = 'Choclo';
+                            elseif (stripos($sabor, 'aceitunas') !== false) $abrev = 'Aceitunas';
+                            
+                            echo htmlspecialchars($abrev) . ' x' . $cant . '<br>';
+                        }
+                    }
+                }
+                // FORMATO VIEJO (Sabores: 8jyg | 8lechuga)
+                elseif (preg_match('/Sabores:\s*(.+?)(?=\n|$)/i', $obs, $matches)) {
+                    $sabores_raw = trim($matches[1]);
+                    $sabores_array = explode('|', $sabores_raw);
+                    
+                    foreach ($sabores_array as $sabor_item) {
+                        $sabor_item = trim($sabor_item);
+                        // Formato: 8jyg, 8lechuga, etc
+                        if (preg_match('/(\d+)(.+)/', $sabor_item, $m)) {
+                            $cant_sandwiches = (int)$m[1];
+                            $sabor_codigo = trim($m[2]);
+                            $planchas = ceil($cant_sandwiches / 8);
+                            
+                            // Decodificar códigos comunes
+                            $sabor_texto = $sabor_codigo;
+                            if (stripos($sabor_codigo, 'jyg') !== false || stripos($sabor_codigo, 'jyq') !== false) $sabor_texto = 'J y Q';
+                            elseif (stripos($sabor_codigo, 'lechuga') !== false) $sabor_texto = 'Lechuga';
+                            elseif (stripos($sabor_codigo, 'tomate') !== false) $sabor_texto = 'Tomate';
+                            elseif (stripos($sabor_codigo, 'huevo') !== false) $sabor_texto = 'Huevo';
+                            elseif (stripos($sabor_codigo, 'choclo') !== false) $sabor_texto = 'Choclo';
+                            elseif (stripos($sabor_codigo, 'aceitunas') !== false) $sabor_texto = 'Aceitunas';
+                            
+                            echo htmlspecialchars($sabor_texto) . ' x' . $planchas . '<br>';
+                        }
+                    }
+                }
+                // FORMATO MUY VIEJO (Detalle de planchas: ...)
+                elseif (preg_match('/Detalle de planchas:(.+?)(?=Sabores:|$)/is', $obs, $matches)) {
+                    $detalle = $matches[1];
+                    preg_match_all('/Plancha\s+\d+:.*?-\s*([^\n]+)/i', $detalle, $planchas_matches);
+                    
+                    $sabores_count = [];
+                    foreach ($planchas_matches[1] as $sabor_raw) {
+                        $sabor_raw = trim($sabor_raw);
+                        // Extraer sabor limpio
+                        if (preg_match('/(\d+)(.+)/', $sabor_raw, $m)) {
+                            $sabor_codigo = trim($m[2]);
+                            
+                            // Decodificar
+                            $sabor_texto = $sabor_codigo;
+                            if (stripos($sabor_codigo, 'jyg') !== false || stripos($sabor_codigo, 'jyq') !== false) $sabor_texto = 'J y Q';
+                            elseif (stripos($sabor_codigo, 'lechuga') !== false) $sabor_texto = 'Lechuga';
+                            elseif (stripos($sabor_codigo, 'tomate') !== false) $sabor_texto = 'Tomate';
+                            
+                            if (!isset($sabores_count[$sabor_texto])) $sabores_count[$sabor_texto] = 0;
+                            $sabores_count[$sabor_texto]++;
+                        }
+                    }
+                    
+                    foreach ($sabores_count as $sabor => $cant) {
+                        echo htmlspecialchars($sabor) . ' x' . $cant . '<br>';
+                    }
+                }
+                ?>
+                </div>
+            <?php endif; ?>
         </div>
         
         <!-- Precio -->
         <div class="precio-box">
-            <span><?= $precio_formatted ?></span>
-            <span style="font-size: 10px;"><?= number_format($pedido['precio'], 0, ',', '.') ?></span>
+            <span class="precio-final">TOTAL:</span>
+            <span class="precio-final"><?= $precio_formatted ?></span>
         </div>
         
-        <!-- Número de pedido y ubicación -->
+        <!-- Número de pedido -->
         <div class="numero-pedido">
-            Pedido #<?= $pedido['id'] ?> - <span class="ubicacion-badge"><?= $pedido['ubicacion'] ?></span>
+            Pedido #<?= $pedido['id'] ?>
         </div>
     </div>
 
     <script>
         function imprimirYCerrar() {
-            // Configurar para impresión
             window.focus();
-            
-            // Imprimir
             window.print();
-            
-            // Cerrar ventana después de un delay
             setTimeout(() => {
                 window.close();
             }, 1000);
         }
         
-        // Auto-imprimir si se pasa el parámetro
+        // Auto-imprimir si viene el parámetro
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('auto') === '1') {
             setTimeout(imprimirYCerrar, 500);
         }
         
-        // Manejar eventos de teclado
+        // Atajos de teclado
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 imprimirYCerrar();
@@ -243,13 +338,12 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
             }
         });
         
-        // Log de información
-        console.log('🎫 Comanda Simple desde Admin');
-        console.log('Pedido ID:', <?= $pedido['id'] ?>);
-        console.log('Cliente:', '<?= addslashes($nombre_completo) ?>');
-        console.log('Ubicación:', '<?= $pedido['ubicacion'] ?>');
-        console.log('Turno:', '<?= $turno ?>');
-        console.log('Fecha:', '<?= $fecha_formatted ?>');
+        // Confirmar impresión
+        setTimeout(() => {
+            if (confirm('¿Imprimir comanda ahora?')) {
+                imprimirYCerrar();
+            }
+        }, 300);
     </script>
 </body>
 </html>
