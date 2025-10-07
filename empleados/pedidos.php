@@ -1,12 +1,7 @@
 <?php
-// Habilitar errores para debug
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-require_once '../config.php';
+require_once '../admin/config.php';
 session_start();
 
-// Verificar acceso de empleado
 if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== true) {
     header('Location: login.php');
     exit;
@@ -14,548 +9,410 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 
 $pdo = getConnection();
 
-// Funciones auxiliares (por si no están en config.php)
-if (!function_exists('sanitize')) {
-    function sanitize($input) {
-        return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
-    }
-}
-
-if (!function_exists('formatPrice')) {
-    function formatPrice($precio) {
-        return '$' . number_format($precio, 0, ',', '.');
-    }
-}
-
-// Manejar acciones
-$mensaje = '';
-$error = '';
-
-if ($_POST) {
-    if (isset($_POST['accion']) && $_POST['accion'] === 'cambiar_estado') {
-        $id = (int)$_POST['id'];
-        $estado = $_POST['estado'];
-        $estados_validos = ['Pendiente', 'Preparando', 'Listo', 'Entregado'];
-        
-        if (in_array($estado, $estados_validos)) {
-            try {
-                $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
-                $stmt->execute([$estado, $id]);
-                $mensaje = 'Estado actualizado correctamente';
-            } catch (Exception $e) {
-                $error = 'Error al actualizar estado: ' . $e->getMessage();
-            }
-        } else {
-            $error = 'Estado no válido';
-        }
-    }
-    
-    // Acción para marcar como impreso
-    if (isset($_POST['accion']) && $_POST['accion'] === 'marcar_impreso') {
-        $id = (int)$_POST['id'];
-        try {
-            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, updated_at = NOW() WHERE id = ?");
+// Procesar acciones
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
+    switch ($_POST['accion']) {
+        case 'cambiar_estado':
+            $id = (int)$_POST['id'];
+            $estado = htmlspecialchars(trim($_POST['estado']));
+            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ?");
+            $stmt->execute([$estado, $id]);
+            header('Location: pedidos.php');
+            exit;
+            
+        case 'marcar_impreso':
+            $id = (int)$_POST['id'];
+            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
             $stmt->execute([$id]);
-            $mensaje = 'Comanda marcada como impresa';
-        } catch (Exception $e) {
-            $error = 'Error al marcar como impreso: ' . $e->getMessage();
-        }
+            header('Location: pedidos.php');
+            exit;
     }
 }
 
 // Filtros
-$filtro_estado = isset($_GET['estado']) ? sanitize($_GET['estado']) : '';
-$filtro_fecha_desde = isset($_GET['fecha_desde']) ? sanitize($_GET['fecha_desde']) : '';
-$filtro_fecha_hasta = isset($_GET['fecha_hasta']) ? sanitize($_GET['fecha_hasta']) : '';
-$buscar = isset($_GET['buscar']) ? sanitize($_GET['buscar']) : '';
+$filtro_estado = $_GET['estado'] ?? '';
+$filtro_fecha_desde = $_GET['fecha_desde'] ?? date('Y-m-d');
+$filtro_fecha_hasta = $_GET['fecha_hasta'] ?? date('Y-m-d');
+$filtro_buscar = $_GET['buscar'] ?? '';
 
-// Para empleados: mostrar solo hoy por defecto
-if (empty($filtro_fecha_desde) && empty($filtro_fecha_hasta) && empty($buscar) && empty($filtro_estado)) {
-    $filtro_fecha_desde = date('Y-m-d');
-    $filtro_fecha_hasta = date('Y-m-d');
-}
+// Query base
+$sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
+               observaciones, telefono, forma_pago, cantidad, impreso,
+               created_at, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
+        FROM pedidos 
+        WHERE ubicacion = 'Local 1'
+        AND DATE(created_at) BETWEEN :fecha_desde AND :fecha_hasta";
 
-// Construir consulta - Solo Local 1 para empleados
-$sql = "SELECT p.*, cf.nombre as cliente_nombre, cf.apellido as cliente_apellido 
-        FROM pedidos p 
-        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
-        WHERE p.ubicacion = 'Local 1'";
-$params = [];
-
-// Aplicar filtros
-if ($filtro_fecha_desde && $filtro_fecha_hasta) {
-    $sql .= " AND DATE(p.created_at) BETWEEN ? AND ?";
-    $params[] = $filtro_fecha_desde;
-    $params[] = $filtro_fecha_hasta;
-} elseif ($filtro_fecha_desde) {
-    $sql .= " AND DATE(p.created_at) >= ?";
-    $params[] = $filtro_fecha_desde;
-} elseif ($filtro_fecha_hasta) {
-    $sql .= " AND DATE(p.created_at) <= ?";
-    $params[] = $filtro_fecha_hasta;
-}
+$params = [
+    'fecha_desde' => $filtro_fecha_desde,
+    'fecha_hasta' => $filtro_fecha_hasta
+];
 
 if ($filtro_estado) {
-    $sql .= " AND p.estado = ?";
-    $params[] = $filtro_estado;
+    $sql .= " AND estado = :estado";
+    $params['estado'] = $filtro_estado;
 }
 
-if ($buscar) {
-    $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ?)";
-    $params[] = "%$buscar%";
-    $params[] = "%$buscar%";
-    $params[] = "%$buscar%";
-    $params[] = "%$buscar%";
+if ($filtro_buscar) {
+    $sql .= " AND (nombre LIKE :buscar OR apellido LIKE :buscar OR producto LIKE :buscar OR CAST(id AS CHAR) LIKE :buscar)";
+    $params['buscar'] = "%$filtro_buscar%";
 }
 
-$sql .= " ORDER BY p.created_at DESC";
+$sql .= " ORDER BY created_at DESC";
 
-try {
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    $pedidos = $stmt->fetchAll();
-} catch (Exception $e) {
-    $error = 'Error al cargar pedidos: ' . $e->getMessage();
-    $pedidos = [];
-}
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$pedidos = $stmt->fetchAll();
 
-// Calcular tiempo transcurrido
-foreach ($pedidos as &$pedido) {
-    $tiempo_creacion = new DateTime($pedido['created_at']);
-    $tiempo_actual = new DateTime();
-    $diferencia = $tiempo_actual->diff($tiempo_creacion);
-    $pedido['minutos_transcurridos'] = ($diferencia->h * 60) + $diferencia->i;
-}
+// Stats
+$total = count($pedidos);
+$pendientes = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Pendiente'));
+$preparando = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Preparando'));
+$listos = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Listo'));
+$entregados = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Entregado'));
+$sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Santa Catalina - Panel Empleados - Local 1</title>
+    <title>Ver Pedidos - Local 1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @keyframes pulse-warning {
-            0%, 100% { background-color: #fef3c7; }
-            50% { background-color: #fde68a; }
+        body { font-family: 'Arial', sans-serif; }
+        
+        .pedido-item {
+            transition: all 0.2s ease;
+            border-left: 4px solid #ccc;
         }
-        .urgente-warning {
-            animation: pulse-warning 2s infinite;
+        .pedido-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateX(2px);
+        }
+        .pedido-pendiente { border-left-color: #f59e0b; background: #fffbeb; }
+        .pedido-preparando { border-left-color: #3b82f6; background: #eff6ff; }
+        .pedido-listo { border-left-color: #10b981; background: #f0fdf4; }
+        .pedido-entregado { border-left-color: #6b7280; background: #f9fafb; }
+        
+        .urgente { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
+        
+        .filter-tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .filter-tab.active {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.3);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .btn-compact {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-compact:hover { transform: scale(1.05); }
+        
+        .pedidos-container {
+            max-height: calc(100vh - 200px); /* AUMENTADO: antes era 280px */
+            overflow-y: auto;
+            padding-bottom: 20px; /* Un poco de espacio al final */
+        }
+        .pedidos-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .pedidos-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .pedidos-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .pedidos-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Eliminar espacios innecesarios al final */
+        body {
+            overflow-x: hidden;
+        }
+        main {
+            min-height: calc(100vh - 200px);
         }
     </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Header -->
-    <header class="bg-blue-600 text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-4">
-                <h1 class="text-xl font-bold">
-                    <i class="fas fa-store mr-2"></i>Santa Catalina - Local 1
-                </h1>
-                <span class="bg-blue-500 px-3 py-1 rounded-full text-sm">Panel Empleados</span>
+    
+    <!-- HEADER COMPACTO -->
+    <header class="bg-green-600 text-white p-3 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-bold">📋 VER PEDIDOS - LOCAL 1</h1>
             </div>
-            <div class="flex items-center space-x-4">
-                <a href="dashboard.php" class="bg-blue-500 hover:bg-blue-400 px-3 py-2 rounded text-sm">
-                    <i class="fas fa-tachometer-alt mr-1"></i>Dashboard
+            
+            <!-- STATS COMPACTOS -->
+            <div class="flex space-x-4 text-xs">
+                <div class="text-center">
+                    <div class="text-lg font-bold"><?= $total ?></div>
+                    <div class="text-green-200">Total</div>
+                </div>
+                <div class="text-center text-yellow-300">
+                    <div class="text-lg font-bold"><?= $pendientes ?></div>
+                    <div>Pend.</div>
+                </div>
+                <div class="text-center text-blue-200">
+                    <div class="text-lg font-bold"><?= $preparando ?></div>
+                    <div>Prep.</div>
+                </div>
+                <div class="text-center text-green-200">
+                    <div class="text-lg font-bold"><?= $listos ?></div>
+                    <div>Listos</div>
+                </div>
+                <div class="text-center text-gray-200">
+                    <div class="text-lg font-bold"><?= $entregados ?></div>
+                    <div>Entre.</div>
+                </div>
+                <?php if ($sin_imprimir > 0): ?>
+                <div class="text-center text-red-200">
+                    <div class="text-lg font-bold"><?= $sin_imprimir ?></div>
+                    <div>Sin Imp.</div>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <a href="dashboard.php" class="bg-green-500 hover:bg-green-400 px-3 py-1.5 rounded text-xs">
+                    <i class="fas fa-arrow-left mr-1"></i>Dashboard
                 </a>
-                <a href="logout.php" class="bg-red-500 hover:bg-red-400 px-3 py-2 rounded text-sm">
+                <a href="logout.php" class="bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded text-xs">
                     <i class="fas fa-sign-out-alt mr-1"></i>Salir
                 </a>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-6">
-        <!-- Mensajes -->
-        <?php if ($mensaje): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                <i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($mensaje) ?>
+    <!-- FILTROS COMPACTOS -->
+    <div class="bg-white border-b p-3 sticky top-14 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto">
+            <!-- TABS DE FILTRO POR ESTADO -->
+            <div class="flex space-x-2 mb-3">
+                <a href="?fecha_desde=<?= $filtro_fecha_desde ?>&fecha_hasta=<?= $filtro_fecha_hasta ?>" 
+                   class="filter-tab <?= empty($filtro_estado) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+                    Todos (<?= $total ?>)
+                </a>
+                <a href="?estado=Pendiente&fecha_desde=<?= $filtro_fecha_desde ?>&fecha_hasta=<?= $filtro_fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Pendiente' ? 'active' : 'bg-yellow-100 text-yellow-800' ?>">
+                    Pendientes (<?= $pendientes ?>)
+                </a>
+                <a href="?estado=Preparando&fecha_desde=<?= $filtro_fecha_desde ?>&fecha_hasta=<?= $filtro_fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Preparando' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
+                    Preparando (<?= $preparando ?>)
+                </a>
+                <a href="?estado=Listo&fecha_desde=<?= $filtro_fecha_desde ?>&fecha_hasta=<?= $filtro_fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Listo' ? 'active' : 'bg-green-100 text-green-800' ?>">
+                    Listos (<?= $listos ?>)
+                </a>
+                <a href="?estado=Entregado&fecha_desde=<?= $filtro_fecha_desde ?>&fecha_hasta=<?= $filtro_fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Entregado' ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+                    Entregados (<?= $entregados ?>)
+                </a>
             </div>
-        <?php endif; ?>
-
-        <?php if ($error): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                <i class="fas fa-exclamation-triangle mr-2"></i><?= htmlspecialchars($error) ?>
-            </div>
-        <?php endif; ?>
-
-        <!-- Filtros -->
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 class="text-lg font-semibold mb-4">
-                <i class="fas fa-filter mr-2 text-blue-500"></i>Filtros - Local 1
-            </h2>
             
-            <form method="GET" class="space-y-4">
-                <!-- Botones rápidos -->
-                <div class="flex flex-wrap gap-2 mb-4">
-                    <button type="button" onclick="setFiltroRapido('hoy')" 
-                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm">
-                        <i class="fas fa-calendar-day mr-1"></i>Hoy
-                    </button>
-                    <button type="button" onclick="setFiltroRapido('ayer')" 
-                            class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm">
-                        <i class="fas fa-calendar-minus mr-1"></i>Ayer
-                    </button>
-                    <button type="button" onclick="setFiltroRapido('semana')" 
-                            class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded text-sm">
-                        <i class="fas fa-calendar-week mr-1"></i>Esta Semana
-                    </button>
-                    <button type="button" onclick="limpiarFiltros()" 
-                            class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm">
-                        <i class="fas fa-eraser mr-1"></i>Limpiar
-                    </button>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Desde:</label>
-                        <input type="date" name="fecha_desde" value="<?= htmlspecialchars($filtro_fecha_desde) ?>" 
-                               class="w-full border rounded px-3 py-2">
+            <!-- FILTROS ADICIONALES (COLAPSABLE) -->
+            <details class="text-sm">
+                <summary class="cursor-pointer text-gray-600 hover:text-gray-800 font-medium">
+                    <i class="fas fa-filter mr-1"></i>Filtros avanzados
+                </summary>
+                <form method="GET" class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <input type="text" name="buscar" value="<?= htmlspecialchars($filtro_buscar) ?>" 
+                           placeholder="Buscar por nombre, #ID o producto..." 
+                           class="px-3 py-2 border rounded text-sm">
+                    
+                    <input type="date" name="fecha_desde" value="<?= $filtro_fecha_desde ?>" 
+                           class="px-3 py-2 border rounded text-sm">
+                    
+                    <input type="date" name="fecha_hasta" value="<?= $filtro_fecha_hasta ?>" 
+                           class="px-3 py-2 border rounded text-sm">
+                    
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded text-sm">
+                            <i class="fas fa-search mr-1"></i>Buscar
+                        </button>
+                        <a href="pedidos.php" class="flex-1 text-center bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">
+                            <i class="fas fa-times"></i>
+                        </a>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Hasta:</label>
-                        <input type="date" name="fecha_hasta" value="<?= htmlspecialchars($filtro_fecha_hasta) ?>" 
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Estado:</label>
-                        <select name="estado" class="w-full border rounded px-3 py-2">
-                            <option value="">Todos los estados</option>
-                            <option value="Pendiente" <?= $filtro_estado === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                            <option value="Preparando" <?= $filtro_estado === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
-                            <option value="Listo" <?= $filtro_estado === 'Listo' ? 'selected' : '' ?>>Listo</option>
-                            <option value="Entregado" <?= $filtro_estado === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">Buscar:</label>
-                        <input type="text" name="buscar" value="<?= htmlspecialchars($buscar) ?>" 
-                               placeholder="Nombre, teléfono, producto..." 
-                               class="w-full border rounded px-3 py-2">
-                    </div>
-                </div>
-                
-                <div class="flex gap-2">
-                    <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded">
-                        <i class="fas fa-search mr-2"></i>Filtrar
-                    </button>
-                    <a href="?" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded">
-                        <i class="fas fa-times mr-2"></i>Limpiar filtros
-                    </a>
-                </div>
-            </form>
-        </div>
-
-        <!-- Lista de pedidos -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b">
-                <h2 class="text-xl font-semibold">
-                    <i class="fas fa-list mr-2 text-green-500"></i>
-                    Pedidos Local 1 
-                    (<?= count($pedidos) ?> pedidos)
-                </h2>
-            </div>
-
-            <?php if (empty($pedidos)): ?>
-                <div class="p-6 text-center text-gray-500">
-                    <i class="fas fa-inbox text-4xl mb-4"></i>
-                    <p class="text-lg">No hay pedidos que mostrar</p>
-                    <p class="text-sm">Intenta ajustar los filtros</p>
-                </div>
-            <?php else: ?>
-                <div class="space-y-3 p-4">
-                    <?php foreach ($pedidos as $pedido): ?>
-                        <div class="border rounded-lg p-4 hover:bg-gray-50 
-                                    <?= $pedido['minutos_transcurridos'] > 60 ? 'border-red-300 urgente-warning' : '' ?>
-                                    <?= $pedido['minutos_transcurridos'] > 30 && $pedido['minutos_transcurridos'] <= 60 ? 'border-yellow-300 bg-yellow-50' : '' ?>">
-                            
-                            <div class="flex justify-between items-start">
-                                <div class="flex-1">
-                                    <!-- Encabezado -->
-                                    <div class="flex items-center justify-between mb-2">
-                                        <h3 class="font-bold text-lg text-gray-800">
-                                            <i class="fas fa-hashtag text-blue-500 mr-1"></i>
-                                            Pedido #<?= $pedido['id'] ?>
-                                        </h3>
-                                        
-                                        <!-- Cambiar estado -->
-                                        <form method="POST" class="inline">
-                                            <input type="hidden" name="accion" value="cambiar_estado">
-                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
-                                            <select name="estado" onchange="this.form.submit()" 
-                                                    class="border rounded px-2 py-1 text-sm">
-                                                <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                                                <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
-                                                <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>Listo</option>
-                                                <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
-                                            </select>
-                                        </form>
-                                    </div>
-
-                                    <!-- Cliente -->
-                                    <div class="mb-2">
-                                        <span class="font-medium">
-                                            <i class="fas fa-user mr-1 text-gray-500"></i>
-                                            <?= $pedido['cliente_nombre'] ? 
-                                                htmlspecialchars($pedido['cliente_nombre'] . ' ' . $pedido['cliente_apellido']) . ' (Cliente Fijo)' : 
-                                                htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) 
-                                            ?>
-                                        </span>
-                                        <span class="text-gray-600 ml-3">
-                                            <i class="fas fa-phone mr-1"></i>
-                                            <?= htmlspecialchars($pedido['telefono']) ?>
-                                        </span>
-                                    </div>
-
-                                    <!-- Producto y precio -->
-                                    <div class="mb-2">
-                                        <div class="flex items-center justify-between">
-                                            <span class="font-medium text-green-700">
-                                                <i class="fas fa-sandwich mr-1"></i>
-                                                <?= htmlspecialchars($pedido['producto']) ?>
-                                            </span>
-                                            <span class="text-xl font-bold text-green-600">
-                                                <?= formatPrice($pedido['precio']) ?>
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center text-sm text-gray-600 mt-1">
-                                            <span class="mr-4">
-                                                <i class="fas fa-credit-card mr-1"></i>
-                                                <?= htmlspecialchars($pedido['forma_pago']) ?>
-                                            </span>
-                                            <span>
-                                                <?php if ($pedido['modalidad'] === 'Delivery'): ?>
-                                                    <i class="fas fa-truck text-green-600 mr-1"></i>Delivery
-                                                <?php else: ?>
-                                                    <i class="fas fa-store text-blue-600 mr-1"></i>Retira
-                                                <?php endif; ?>
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Dirección si es delivery -->
-                                    <?php if ($pedido['modalidad'] === 'Delivery' && $pedido['direccion']): ?>
-                                        <div class="text-sm text-gray-600 mb-2">
-                                            <i class="fas fa-map-marker-alt text-red-500 mr-1"></i>
-                                            <?= htmlspecialchars($pedido['direccion']) ?>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <!-- Observaciones -->
-                                    <?php if ($pedido['observaciones']): ?>
-                                        <div class="text-sm text-gray-600 mb-2">
-                                            <i class="fas fa-comment text-yellow-500 mr-1"></i>
-                                            <strong>Obs:</strong> <?= htmlspecialchars($pedido['observaciones']) ?>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <!-- Tiempo transcurrido -->
-                                    <div class="flex justify-between items-center">
-                                        <div class="text-sm text-gray-500">
-                                            <i class="fas fa-clock mr-1"></i>
-                                            Hace <?= $pedido['minutos_transcurridos'] ?> min
-                                            (<?= date('H:i', strtotime($pedido['created_at'])) ?>)
-                                            <span class="ml-2">
-                                                <i class="fas fa-calendar mr-1"></i>
-                                                <?= date('d/m/Y', strtotime($pedido['created_at'])) ?>
-                                            </span>
-                                        </div>
-                                        
-                                        <!-- Indicadores de urgencia -->
-                                        <div class="flex items-center space-x-2">
-                                            <?php if ($pedido['minutos_transcurridos'] > 60): ?>
-                                                <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">
-                                                    <i class="fas fa-exclamation-triangle mr-1"></i>URGENTE
-                                                </span>
-                                            <?php elseif ($pedido['minutos_transcurridos'] > 30): ?>
-                                                <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                                                    <i class="fas fa-clock mr-1"></i>PRIORIDAD
-                                                </span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Acciones -->
-                                <div class="flex flex-col space-y-2 ml-4">
-                                    <!-- Impresión -->
-                                    <?php if ($pedido['impreso']): ?>
-                                        <div class="flex flex-col items-center space-y-1">
-                                            <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs">
-                                                <i class="fas fa-check-circle mr-1"></i>Impresa
-                                            </span>
-                                            <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
-                                                    class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-xs">
-                                                <i class="fas fa-print mr-1"></i>Re-imprimir
-                                            </button>
-                                        </div>
-                                    <?php else: ?>
-                                        <div class="flex flex-col items-center space-y-1">
-                                            <span class="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs">
-                                                <i class="fas fa-exclamation-circle mr-1"></i>Sin Imprimir
-                                            </span>
-                                            <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
-                                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs">
-                                                <i class="fas fa-print mr-1"></i>Imprimir
-                                            </button>
-                                        </div>
-                                    <?php endif; ?>
-                                    
-                                    <!-- WhatsApp -->
-                                    <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($pedido['nombre']) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
-                                       target="_blank"
-                                       class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs text-center">
-                                        <i class="fab fa-whatsapp mr-1"></i>WhatsApp
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <!-- Footer -->
-        <div class="mt-8 text-center text-gray-500">
-            <div class="bg-white rounded-lg p-4 shadow">
-                <p class="mb-2">
-                    <i class="fas fa-sync-alt mr-1"></i>
-                    Página actualizada automáticamente cada 30 segundos
-                </p>
-                <p class="text-sm">
-                    🔴 Más de 1 hora = Urgente | 🟠 Más de 30 min = Prioridad
-                </p>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modal de impresión -->
-    <div id="impresionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h3 class="text-xl font-bold mb-4">
-                <i class="fas fa-print text-blue-500 mr-2"></i>Imprimir Comanda Simple
-            </h3>
-            <div id="impresionContent">
-                <p>Preparando impresión...</p>
-            </div>
-            <div class="flex justify-end space-x-2 mt-6">
-                <button onclick="cerrarModal()" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-                    Cancelar
-                </button>
-                <button onclick="confirmarImpresion()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                    <i class="fas fa-print mr-1"></i>Confirmar Impresión
-                </button>
-            </div>
+                </form>
+            </details>
         </div>
     </div>
 
+    <!-- LISTA DE PEDIDOS -->
+    <main class="max-w-7xl mx-auto p-3"> <!-- REDUCIDO: antes era p-4 -->
+        <?php if (empty($pedidos)): ?>
+            <div class="bg-white rounded-lg shadow p-12 text-center">
+                <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                <h2 class="text-2xl text-gray-500 mb-2">No hay pedidos</h2>
+                <p class="text-gray-400 mb-4">Intenta ajustar los filtros</p>
+                <a href="pedidos.php" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg">
+                    <i class="fas fa-list mr-2"></i>Ver Todos
+                </a>
+            </div>
+        <?php else: ?>
+            <div class="pedidos-container space-y-2"> <!-- REDUCIDO: antes era space-y-2, ahora más compacto -->
+                <?php foreach ($pedidos as $pedido): ?>
+                    <div class="pedido-item pedido-<?= strtolower($pedido['estado']) ?> 
+                                <?= $pedido['minutos_transcurridos'] > 60 && $pedido['estado'] !== 'Entregado' ? 'urgente' : '' ?>
+                                bg-white rounded-lg shadow p-3"> <!-- REDUCIDO: antes era p-4 -->
+                        
+                        <div class="flex items-start justify-between gap-4">
+                            <!-- INFO PRINCIPAL (70%) -->
+                            <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <!-- COLUMNA 1: CLIENTE -->
+                                <div>
+                                    <div class="font-bold text-sm text-gray-800 mb-1">
+                                        #<?= $pedido['id'] ?> - <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
+                                    </div>
+                                    <div class="text-xs text-gray-600">
+                                        <i class="fas fa-phone"></i> <?= htmlspecialchars($pedido['telefono']) ?>
+                                    </div>
+                                    <div class="text-xs text-gray-500 mt-1">
+                                        <i class="fas fa-clock"></i> <?= $pedido['minutos_transcurridos'] ?>min
+                                        <?php if ($pedido['minutos_transcurridos'] > 60 && $pedido['estado'] !== 'Entregado'): ?>
+                                            <span class="badge bg-red-500 text-white ml-1">URGENTE</span>
+                                        <?php endif; ?>
+                                        <?php if (!$pedido['impreso']): ?>
+                                            <span class="badge bg-orange-500 text-white ml-1">SIN IMP</span>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                                
+                                <!-- COLUMNA 2: PRODUCTO -->
+                                <div>
+                                    <div class="font-bold text-sm text-gray-800"><?= htmlspecialchars($pedido['producto']) ?></div>
+                                    <div class="text-xs text-gray-600 mt-1">
+                                        <span><i class="fas fa-<?= $pedido['modalidad'] === 'Retiro' ? 'store' : 'motorcycle' ?>"></i> <?= $pedido['modalidad'] ?></span>
+                                        <span class="ml-2"><i class="fas fa-money-bill"></i> <?= $pedido['forma_pago'] ?></span>
+                                    </div>
+                                    <div class="text-green-600 font-bold text-lg mt-1">
+                                        $<?= number_format($pedido['precio'], 0, ',', '.') ?>
+                                    </div>
+                                </div>
+                                
+                                <!-- COLUMNA 3: OBSERVACIONES -->
+                                <div>
+                                    <?php if ($pedido['observaciones']): ?>
+                                        <details>
+                                            <summary class="text-xs text-blue-600 cursor-pointer hover:underline">
+                                                <i class="fas fa-sticky-note"></i> Ver observaciones
+                                            </summary>
+                                            <div class="text-xs bg-blue-50 p-2 mt-1 rounded max-h-20 overflow-y-auto">
+                                                <?= nl2br(htmlspecialchars($pedido['observaciones'])) ?>
+                                            </div>
+                                        </details>
+                                    <?php else: ?>
+                                        <span class="text-xs text-gray-400">Sin observaciones</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            
+                            <!-- ACCIONES (30%) -->
+                            <div class="flex flex-col gap-2 items-end">
+                                <!-- CAMBIAR ESTADO -->
+                                <form method="POST" class="w-full">
+                                    <input type="hidden" name="accion" value="cambiar_estado">
+                                    <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                    <select name="estado" onchange="if(confirm('¿Cambiar estado?')) this.form.submit()" 
+                                            class="w-full text-xs border rounded px-2 py-1">
+                                        <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>🔴 Pendiente</option>
+                                        <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>🔵 Preparando</option>
+                                        <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>🟢 Listo</option>
+                                        <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>⚫ Entregado</option>
+                                    </select>
+                                </form>
+                                
+                                <!-- BOTONES -->
+                                <div class="flex gap-1 w-full">
+                                    <!-- IMPRIMIR -->
+                                    <button onclick="imprimir(<?= $pedido['id'] ?>)" 
+                                            class="btn-compact flex-1" style="background: #f59e0b; color: white;"
+                                            title="Imprimir comanda">
+                                        <i class="fas fa-print"></i>
+                                    </button>
+                                    
+                                    <!-- MARCAR IMPRESO -->
+                                    <?php if (!$pedido['impreso']): ?>
+                                        <form method="POST" class="flex-1">
+                                            <input type="hidden" name="accion" value="marcar_impreso">
+                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                            <button type="submit" class="btn-compact w-full" style="background: #10b981; color: white;"
+                                                    title="Marcar como impreso">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                    
+                                    <!-- WHATSAPP -->
+                                    <?php if ($pedido['telefono']): ?>
+                                        <a href="https://wa.me/54<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>" 
+                                           target="_blank"
+                                           class="btn-compact flex-1" style="background: #25D366; color: white;"
+                                           title="Enviar WhatsApp">
+                                            <i class="fab fa-whatsapp"></i>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </main>
+
     <script>
-        let pedidoAImprimir = null;
-
-        // Filtros rápidos
-        function setFiltroRapido(tipo) {
-            const hoy = new Date();
-            let desde, hasta;
-            
-            switch(tipo) {
-                case 'hoy':
-                    desde = hasta = formatDate(hoy);
-                    break;
-                    
-                case 'ayer':
-                    const ayer = new Date(hoy);
-                    ayer.setDate(ayer.getDate() - 1);
-                    desde = hasta = formatDate(ayer);
-                    break;
-                    
-                case 'semana':
-                    const inicioSemana = new Date(hoy);
-                    const diaSemana = inicioSemana.getDay();
-                    const diasAtras = diaSemana === 0 ? 6 : diaSemana - 1;
-                    inicioSemana.setDate(inicioSemana.getDate() - diasAtras);
-                    desde = formatDate(inicioSemana);
-                    hasta = formatDate(hoy);
-                    break;
-            }
-            
-            if (desde && hasta) {
-                document.querySelector('input[name="fecha_desde"]').value = desde;
-                document.querySelector('input[name="fecha_hasta"]').value = hasta;
-                document.querySelector('form').submit();
-            }
+    // FUNCIÓN UNIFICADA - USA COMANDA_SIMPLE.PHP
+    function imprimir(pedidoId) {
+        console.log('🖨️ Imprimiendo comanda simple - Pedido #' + pedidoId);
+        
+        const url = `comanda_simple.php?pedido=${pedidoId}`;
+        const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
+        
+        if (!ventana) {
+            alert('❌ Error: No se pudo abrir la ventana.\nPermite ventanas emergentes.');
+            return false;
         }
         
-        function limpiarFiltros() {
-            window.location.href = '?';
-        }
-        
-        function formatDate(date) {
-            const año = date.getFullYear();
-            const mes = String(date.getMonth() + 1).padStart(2, '0');
-            const dia = String(date.getDate()).padStart(2, '0');
-            return `${año}-${mes}-${dia}`;
-        }
+        ventana.focus();
+        console.log('✅ Comanda abierta exitosamente');
+        return true;
+    }
 
-        // Funciones de impresión
-        function imprimirComanda(pedidoId) {
-            pedidoAImprimir = pedidoId;
-            
-            document.getElementById('impresionContent').innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-print text-4xl text-blue-500 mb-3"></i>
-                    <p class="mb-2">Se imprimirá una comanda simple del pedido <strong>#${pedidoId}</strong> para Local 1.</p>
-                    <p class="text-sm text-gray-600">Formato: Nombre, Pedido, Fecha, Turno (M/S/T), Precio</p>
-                    <p class="text-xs text-gray-500 mt-2">Asegúrate de que la impresora esté encendida.</p>
-                </div>
-            `;
-            
-            document.getElementById('impresionModal').classList.remove('hidden');
-        }
-
-        function confirmarImpresion() {
-            if (pedidoAImprimir) {
-                // Abrir comanda simple
-                const url = `comanda_simple.php?pedido=${pedidoAImprimir}`;
-                const ventana = window.open(url, '_blank', 'width=400,height=600,scrollbars=yes');
-                
-                if (!ventana) {
-                    alert('Error: No se pudo abrir la ventana de impresión.\nVerifica que no esté bloqueada por el navegador.');
-                    cerrarModal();
-                    return;
-                }
-                
-                // Marcar como impreso
-                fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `accion=marcar_impreso&id=${pedidoAImprimir}`
-                }).then(() => {
-                    console.log('Pedido marcado como impreso');
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
-                });
-                
-                ventana.focus();
-            }
-            cerrarModal();
-        }
-
-        function cerrarModal() {
-            document.getElementById('impresionModal').classList.add('hidden');
-            pedidoAImprimir = null;
-        }
-
-        // Auto refresh cada 30 segundos
-        setInterval(function() {
-            if (!document.activeElement || document.activeElement.tagName !== 'SELECT') {
-                location.reload();
-            }
-        }, 30000);
+    console.log('📋 Ver Pedidos cargado - Total: <?= $total ?> pedidos');
     </script>
+
 </body>
 </html>

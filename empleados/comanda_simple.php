@@ -1,5 +1,5 @@
 <?php
-// empleados/comanda_simple.php - VERSIÓN CON FUENTES MÁS GRANDES
+// empleados/comanda_simple.php - VERSIÓN OPTIMIZADA 80mm
 require_once '../admin/config.php';
 
 $pedido_id = isset($_GET['pedido']) ? (int)$_GET['pedido'] : 0;
@@ -55,7 +55,6 @@ foreach ($meses as $eng => $esp) {
 // Formatear precio
 $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -63,285 +62,300 @@ $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comanda #<?= $pedido['id'] ?></title>
     <style>
-        @page { 
-            size: 80mm auto; 
-            margin: 0; 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
         body {
             font-family: 'Courier New', monospace;
-            font-size: 14px;  /* Aumentado de 12px */
-            line-height: 1.4;
-            width: 80mm;
-            margin: 0;
-            padding: 5mm;
-            background: white;
-            color: black;
+            background: #f5f5f5;
+            padding: 10px;
         }
         
+        /* CONTENEDOR OPTIMIZADO 80mm */
+        .comanda-container {
+            width: 302px; /* 80mm @ 96dpi */
+            max-width: 80mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* TICKET OPTIMIZADO */
         .comanda-ticket {
-            border: 2px solid #000;  /* Aumentado de 1px */
-            padding: 10px;  /* Aumentado de 8px */
-            text-align: center;
+            padding: 5px 8px; /* Márgenes mínimos como el Excel */
             background: white;
         }
         
+        /* FECHA Y TURNO - COMPACTO */
         .fecha-turno {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-bottom: 2px solid #000;  /* Aumentado */
-            padding-bottom: 5px;  /* Aumentado */
-            margin-bottom: 8px;  /* Aumentado */
+            border-bottom: 2px solid #000;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .ubicacion-badge {
+            background: #000;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
             font-weight: bold;
             font-size: 14px;
         }
         
+        /* NOMBRE CLIENTE - DESTACADO */
         .cliente-nombre {
-            font-size: 18px;  /* Aumentado de 14px */
+            text-align: center;
+            font-size: 18px; /* Reducido de 22px */
             font-weight: bold;
-            margin: 10px 0;  /* Aumentado */
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            padding: 4px 0;
+            border-bottom: 1px dashed #000;
         }
         
+        /* PRODUCTO - COMPACTO */
         .producto-info {
-            font-size: 16px;  /* Aumentado de 11px */
-            margin: 8px 0;  /* Aumentado */
+            text-align: center;
+            font-size: 16px; /* Reducido de 20px */
             font-weight: bold;
-            min-height: 50px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            margin-bottom: 6px;
+            padding: 4px 0;
         }
         
-        .precio-box {
-            border: 2px solid #000;  /* Aumentado */
-            padding: 8px;  /* Aumentado */
-            margin-top: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .precio-final {
-            font-size: 18px;  /* Aumentado de 14px */
-            font-weight: bold;
-        }
-        
-        .numero-pedido {
-            font-size: 13px;  /* Aumentado de 10px */
-            color: #666;
+        /* SABORES PERSONALIZADOS - MÁS COMPACTO */
+        .sabores-detalle {
+            font-size: 14px; /* Reducido de 15px */
             margin-top: 6px;
-        }
-        
-        .ubicacion-badge {
-            background: #007bff;
-            color: white;
-            padding: 3px 8px;  /* Aumentado */
-            border-radius: 4px;
-            font-size: 11px;  /* Aumentado de 9px */
+            text-align: center;
+            line-height: 1.4; /* Reducido de 1.8 */
             font-weight: bold;
+            padding: 4px 0;
         }
         
-        @media screen {
+        /* PRECIO - DESTACADO PERO COMPACTO */
+        .precio-total {
+            text-align: center;
+            font-size: 20px; /* Reducido de 24px */
+            font-weight: bold;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 2px solid #000;
+        }
+        
+        /* BOTONES COMPACTOS - NO IMPRIMIR */
+        .controles {
+            text-align: center;
+            padding: 8px;
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            margin: 0 4px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-print {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-print:hover {
+            background: #218838;
+        }
+        
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+        
+        /* OCULTAR EN IMPRESIÓN */
+        @media print {
             body {
-                margin: 20px auto;
-                border: 2px solid #333;
-                box-shadow: 0 0 10px rgba(0,0,0,0.3);
+                background: white;
+                padding: 0;
             }
             
-            .no-print {
-                text-align: center;
-                margin-bottom: 15px;
-                padding: 10px;
-                background: #f8f9fa;
-                border-radius: 5px;
+            .controles {
+                display: none !important;
             }
-        }
-        
-        @media print {
-            .no-print {
-                display: none;
+            
+            .comanda-container {
+                box-shadow: none;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .comanda-ticket {
+                padding: 2mm 3mm; /* Márgenes ultra mínimos para impresión */
+            }
+            
+            /* Optimizar para papel de 80mm */
+            @page {
+                size: 80mm auto;
+                margin: 0;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Botones de control (solo en pantalla) -->
-    <div class="no-print">
-        <h3 style="margin: 0 0 10px 0;">🎫 Comanda Local 1</h3>
-        <button onclick="imprimirYCerrar()" style="background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; font-size: 14px;">
+
+    <!-- CONTROLES (NO SE IMPRIMEN) -->
+    <div class="controles">
+        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
+            <strong>Pedido:</strong> #<?= $pedido['id'] ?> | 
+            <strong>Turno:</strong> <?= $turno ?> |
+            <strong>Papel:</strong> 80mm
+        </div>
+        <button onclick="imprimirYCerrar()" class="btn btn-print">
             🖨️ IMPRIMIR
         </button>
-        <button onclick="window.close()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 14px;">
+        <button onclick="window.close()" class="btn btn-cancel">
             ❌ Cancelar
         </button>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
-            <strong>Pedido:</strong> #<?= $pedido['id'] ?> | 
-            <strong>Turno:</strong> <?= $turno ?>
-        </div>
     </div>
 
-    <!-- COMANDA SIMPLE -->
-    <div class="comanda-ticket">
-        <!-- Fecha y turno -->
-        <div class="fecha-turno">
-            <span><?= $fecha_formatted ?></span>
-            <span class="ubicacion-badge"><?= $turno ?></span>
-        </div>
-        
-        <!-- Nombre del cliente -->
-        <div class="cliente-nombre">
-            <?= htmlspecialchars($nombre_completo) ?>
-            <?php if ($es_cliente_fijo): ?>
-                <div style="font-size: 12px; color: #666; margin-top: 3px;">(CLIENTE FIJO)</div>
-            <?php endif; ?>
-        </div>
-        
-        <!-- Producto -->
-        <div class="producto-info">
-            <?php 
-            // Si es personalizado, mostrar solo la cantidad total
-            if (strpos($pedido['producto'], 'Personalizado') !== false): 
-                preg_match('/Personalizado x(\d+)/', $pedido['producto'], $match);
-                $cantidad_total = $match[1] ?? '?';
-                echo "Personalizado x{$cantidad_total}";
-            else:
-                echo htmlspecialchars($pedido['producto']);
-            endif;
-            ?>
+    <!-- COMANDA OPTIMIZADA 80mm -->
+    <div class="comanda-container">
+        <div class="comanda-ticket">
             
+            <!-- FECHA Y TURNO -->
+            <div class="fecha-turno">
+                <span><?= $fecha_formatted ?></span>
+                <span class="ubicacion-badge"><?= $turno ?></span>
+            </div>
+            
+            <!-- NOMBRE DEL CLIENTE -->
+            <div class="cliente-nombre">
+                <?= htmlspecialchars($nombre_completo) ?>
+                <?php if ($es_cliente_fijo): ?>
+                    <div style="font-size: 11px; color: #666; margin-top: 2px; font-weight: normal;">(CLIENTE FIJO)</div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- PRODUCTO -->
+            <div class="producto-info">
+                <?php 
+                // Si es personalizado, mostrar solo la cantidad total
+                if (strpos($pedido['producto'], 'Personalizado') !== false): 
+                    preg_match('/Personalizado x(\d+)/', $pedido['producto'], $match);
+                    $cantidad_total = $match[1] ?? '?';
+                    echo "Personalizado x{$cantidad_total}";
+                else:
+                    echo htmlspecialchars($pedido['producto']);
+                endif;
+                ?>
+            </div>
+            
+            <!-- SABORES PERSONALIZADOS (SI APLICA) -->
             <?php if (strpos($pedido['producto'], 'Personalizado') !== false && !empty($pedido['observaciones'])): ?>
-                <div style="font-size: 15px; margin-top: 8px; text-align: center; line-height: 1.8; font-weight: bold;">
+                <div class="sabores-detalle">
                 <?php
                 $obs = $pedido['observaciones'];
                 
                 // NUEVO FORMATO (con JSON y === SABORES PERSONALIZADOS ===)
-                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===\n(.*?)(?=\n\n|Turno:|$)/s', $obs, $matches)) {
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===\n(.*?)(?:\n---|$)/s', $obs, $matches)) {
                     $sabores_texto = trim($matches[1]);
                     $lineas = explode("\n", $sabores_texto);
                     
                     foreach ($lineas as $linea) {
-                        if (preg_match('/•\s*([^:]+):\s*(\d+)\s*plancha/i', $linea, $m)) {
-                            $sabor = trim($m[1]);
-                            $cant = trim($m[2]);
+                        if (preg_match('/•\s*(.+?):\s*(\d+)\s*plancha/i', $linea, $match)) {
+                            $sabor = trim($match[1]);
+                            $planchas = (int)$match[2];
+                            $sandwiches = $planchas * 8;
                             
-                            // Abreviar
-                            $abrev = $sabor;
-                            if (stripos($sabor, 'jamón y queso') !== false || stripos($sabor, 'jamon y queso') !== false) $abrev = 'J y Q';
-                            elseif (stripos($sabor, 'zanahoria y queso') !== false) $abrev = 'Z y Q';
-                            elseif (stripos($sabor, 'zanahoria y huevo') !== false) $abrev = 'Z y H';
-                            elseif (stripos($sabor, 'huevo') !== false) $abrev = 'Huevo';
-                            elseif (stripos($sabor, 'lechuga') !== false) $abrev = 'Lechuga';
-                            elseif (stripos($sabor, 'tomate') !== false) $abrev = 'Tomate';
-                            elseif (stripos($sabor, 'choclo') !== false) $abrev = 'Choclo';
-                            elseif (stripos($sabor, 'aceitunas') !== false) $abrev = 'Aceitunas';
+                            // Abreviar nombres largos
+                            $sabor_abrev = str_replace(
+                                ['Jamón y Queso', 'Clásico', 'Zanahoria y Queso', 'Zanahoria y Huevo'],
+                                ['jyq', 'cl', 'zq', 'zh'],
+                                $sabor
+                            );
+                            $sabor_abrev = strtolower($sabor_abrev);
                             
-                            echo htmlspecialchars($abrev) . ' x' . $cant . '<br>';
+                            echo "{$sandwiches}{$sabor_abrev}<br>";
                         }
                     }
-                }
-                // FORMATO VIEJO (Sabores: 8jyg | 8lechuga)
-                elseif (preg_match('/Sabores:\s*(.+?)(?=\n|$)/i', $obs, $matches)) {
-                    $sabores_raw = trim($matches[1]);
-                    $sabores_array = explode('|', $sabores_raw);
-                    
-                    foreach ($sabores_array as $sabor_item) {
-                        $sabor_item = trim($sabor_item);
-                        // Formato: 8jyg, 8lechuga, etc
-                        if (preg_match('/(\d+)(.+)/', $sabor_item, $m)) {
-                            $cant_sandwiches = (int)$m[1];
-                            $sabor_codigo = trim($m[2]);
-                            $planchas = ceil($cant_sandwiches / 8);
-                            
-                            // Decodificar códigos comunes
-                            $sabor_texto = $sabor_codigo;
-                            if (stripos($sabor_codigo, 'jyg') !== false || stripos($sabor_codigo, 'jyq') !== false) $sabor_texto = 'J y Q';
-                            elseif (stripos($sabor_codigo, 'lechuga') !== false) $sabor_texto = 'Lechuga';
-                            elseif (stripos($sabor_codigo, 'tomate') !== false) $sabor_texto = 'Tomate';
-                            elseif (stripos($sabor_codigo, 'huevo') !== false) $sabor_texto = 'Huevo';
-                            elseif (stripos($sabor_codigo, 'choclo') !== false) $sabor_texto = 'Choclo';
-                            elseif (stripos($sabor_codigo, 'aceitunas') !== false) $sabor_texto = 'Aceitunas';
-                            
-                            echo htmlspecialchars($sabor_texto) . ' x' . $planchas . '<br>';
-                        }
-                    }
-                }
-                // FORMATO MUY VIEJO (Detalle de planchas: ...)
-                elseif (preg_match('/Detalle de planchas:(.+?)(?=Sabores:|$)/is', $obs, $matches)) {
-                    $detalle = $matches[1];
-                    preg_match_all('/Plancha\s+\d+:.*?-\s*([^\n]+)/i', $detalle, $planchas_matches);
-                    
-                    $sabores_count = [];
-                    foreach ($planchas_matches[1] as $sabor_raw) {
-                        $sabor_raw = trim($sabor_raw);
-                        // Extraer sabor limpio
-                        if (preg_match('/(\d+)(.+)/', $sabor_raw, $m)) {
-                            $sabor_codigo = trim($m[2]);
-                            
-                            // Decodificar
-                            $sabor_texto = $sabor_codigo;
-                            if (stripos($sabor_codigo, 'jyg') !== false || stripos($sabor_codigo, 'jyq') !== false) $sabor_texto = 'J y Q';
-                            elseif (stripos($sabor_codigo, 'lechuga') !== false) $sabor_texto = 'Lechuga';
-                            elseif (stripos($sabor_codigo, 'tomate') !== false) $sabor_texto = 'Tomate';
-                            
-                            if (!isset($sabores_count[$sabor_texto])) $sabores_count[$sabor_texto] = 0;
-                            $sabores_count[$sabor_texto]++;
-                        }
-                    }
-                    
-                    foreach ($sabores_count as $sabor => $cant) {
-                        echo htmlspecialchars($sabor) . ' x' . $cant . '<br>';
+                } 
+                // FORMATO ANTIGUO (sin JSON)
+                elseif (preg_match_all('/(\d+)\s*-\s*(.+?)(?=\d+\s*-|\$|$)/s', $obs, $matches, PREG_SET_ORDER)) {
+                    foreach ($matches as $match) {
+                        $cantidad = trim($match[1]);
+                        $sabor = trim($match[2]);
+                        
+                        // Abreviar nombres
+                        $sabor_abrev = str_replace(
+                            ['Jamón y Queso', 'Clásico', 'Zanahoria y Queso', 'Zanahoria y Huevo', 'Jamón Crudo'],
+                            ['jyq', 'cl', 'zq', 'zh', 'jc'],
+                            $sabor
+                        );
+                        $sabor_abrev = strtolower($sabor_abrev);
+                        
+                        echo "{$cantidad}{$sabor_abrev}<br>";
                     }
                 }
                 ?>
                 </div>
             <?php endif; ?>
-        </div>
-        
-        <!-- Precio -->
-        <div class="precio-box">
-            <span class="precio-final">TOTAL:</span>
-            <span class="precio-final"><?= $precio_formatted ?></span>
-        </div>
-        
-        <!-- Número de pedido -->
-        <div class="numero-pedido">
-            Pedido #<?= $pedido['id'] ?>
+            
+            <!-- PRECIO TOTAL -->
+            <div class="precio-total">
+                <?= $precio_formatted ?>
+            </div>
+            
         </div>
     </div>
 
     <script>
-        function imprimirYCerrar() {
-            window.focus();
+    function imprimirYCerrar() {
+        // Ocultar controles antes de imprimir
+        document.querySelector('.controles').style.display = 'none';
+        
+        // Pequeña pausa para que se aplique el cambio
+        setTimeout(() => {
             window.print();
+            
+            // Cerrar automáticamente después de imprimir
             setTimeout(() => {
                 window.close();
-            }, 1000);
+            }, 500);
+        }, 200);
+    }
+
+    // Atajos de teclado
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            imprimirYCerrar();
+        } else if (e.key === 'Escape') {
+            window.close();
         }
-        
-        // Auto-imprimir si viene el parámetro
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('auto') === '1') {
-            setTimeout(imprimirYCerrar, 500);
-        }
-        
-        // Atajos de teclado
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                imprimirYCerrar();
-            } else if (e.key === 'Escape') {
-                window.close();
-            }
-        });
-        
-        // Confirmar impresión
-        setTimeout(() => {
-            if (confirm('¿Imprimir comanda ahora?')) {
-                imprimirYCerrar();
-            }
-        }, 300);
+    });
+
+    // Auto-focus para imprimir rápido con Enter
+    window.focus();
+    
+    console.log('🎫 Comanda optimizada 80mm cargada');
+    console.log('📋 Pedido #<?= $pedido_id ?>');
+    console.log('📐 Dimensiones: 302px (80mm) optimizado');
     </script>
+
 </body>
 </html>

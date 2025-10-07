@@ -1,8 +1,8 @@
 <?php
 /*
 === PROCESADOR DE PEDIDOS EXPRESS - LOCAL 1 ===
+VERSIÓN CON SISTEMA DE PLANCHAS - IGUAL AL ADMIN
 Procesa pedidos rápidos creados desde el dashboard de empleados
-Optimizado para atención presencial en el local
 */
 
 header('Content-Type: application/json');
@@ -32,17 +32,17 @@ try {
         throw new Exception('Datos JSON inválidos');
     }
     
-    // Validar campos obligatorios
-    $required_fields = ['nombre', 'apellido', 'modalidad', 'forma_pago', 'tipo_pedido', 'precio'];
+    // Validar campos obligatorios básicos
+    $required_fields = ['nombre', 'modalidad', 'forma_pago', 'tipo_pedido', 'precio'];
     foreach ($required_fields as $field) {
-        if (!isset($data[$field]) || empty(trim($data[$field]))) {
+        if (!isset($data[$field])) {
             throw new Exception("Campo obligatorio faltante: $field");
         }
     }
     
-    // Sanitizar datos
+    // Sanitizar datos básicos
     $nombre = trim($data['nombre']);
-    $apellido = trim($data['apellido']);
+    $apellido = trim($data['apellido'] ?? '');
     $telefono = trim($data['telefono'] ?? '');
     $modalidad = $data['modalidad'];
     $forma_pago = $data['forma_pago'];
@@ -53,6 +53,10 @@ try {
     $cantidad = (int)($data['cantidad'] ?? 1);
     
     // Validaciones específicas
+    if (empty($nombre)) {
+        throw new Exception('El nombre es obligatorio');
+    }
+    
     if (!in_array($modalidad, ['Retiro', 'Delivery'])) {
         throw new Exception('Modalidad inválida');
     }
@@ -65,29 +69,57 @@ try {
         throw new Exception('Precio inválido');
     }
     
-    // Determinar producto si no está definido
-    if (empty($producto)) {
-        $productos_predefinidos = [
-            'jyq24' => 'Jamón y Queso x24',
-            'jyq48' => 'Jamón y Queso x48',
-            'surtido_clasico48' => 'Surtido Clásico x48',
-            'surtido_especial48' => 'Surtido Especial x48'
-        ];
+    // MANEJO ESPECIAL PARA PERSONALIZADO CON PLANCHAS - IGUAL AL ADMIN
+    if ($tipo_pedido === 'personalizado' && isset($data['sabores_personalizados_json'])) {
+        $sabores_json = $data['sabores_personalizados_json'];
         
-        $producto = $productos_predefinidos[$tipo_pedido] ?? 'Personalizado';
+        // Validar que tenga el JSON de planchas
+        if (empty($sabores_json)) {
+            throw new Exception('Debe seleccionar al menos un sabor');
+        }
+        
+        $sabores_array = json_decode($sabores_json, true);
+        if (empty($sabores_array)) {
+            throw new Exception('Error al procesar los sabores seleccionados');
+        }
+        
+        // Calcular cantidad y planchas
+        $total_planchas = array_sum($sabores_array);
+        $cantidad = $total_planchas * 8;
+        
+        // El producto ya viene formateado desde el frontend
+        // Ejemplo: "Personalizado x48 (6 planchas)"
+        
+        // Las observaciones ya vienen con el detalle formateado de sabores
+        // No necesitamos procesarlo aquí, ya está en formato correcto
+        
+    } else if ($tipo_pedido === 'personalizado') {
+        // Personalizado sin el nuevo sistema (legacy - no debería pasar)
+        if ($cantidad <= 0) {
+            throw new Exception('Cantidad inválida para pedido personalizado');
+        }
+    } else {
+        // Determinar producto si no está definido (pedidos comunes)
+        if (empty($producto)) {
+            $productos_predefinidos = [
+                'jyq24' => 'Jamón y Queso x24',
+                'jyq48' => 'Jamón y Queso x48',
+                'surtido_clasico48' => 'Surtido Clásico x48',
+                'surtido_especial48' => 'Surtido Especial x48'
+            ];
+            
+            $producto = $productos_predefinidos[$tipo_pedido] ?? 'Pedido Express';
+        }
     }
     
     // Agregar información del empleado a observaciones
-    $empleado_info = "Pedido Express - Empleado ID: " . $_SESSION['empleado_id'];
+    $empleado_info = "\n\n--- Info del Sistema ---";
+    $empleado_info .= "\nPedido Express - Empleado ID: " . $_SESSION['empleado_id'];
     if (isset($_SESSION['empleado_nombre'])) {
         $empleado_info .= " (" . $_SESSION['empleado_nombre'] . ")";
     }
-    $observaciones = trim($observaciones . "\n" . $empleado_info);
-    
-    // Si es personalizado y tiene sabores, agregarlos
-    if (isset($data['sabores']) && is_array($data['sabores']) && count($data['sabores']) > 0) {
-        $observaciones .= "\nSabores seleccionados: " . implode(', ', $data['sabores']);
-    }
+    $empleado_info .= "\nFecha/Hora: " . date('d/m/Y H:i:s');
+    $observaciones = trim($observaciones . $empleado_info);
     
     // Insertar en base de datos
     $stmt = $pdo->prepare("
@@ -103,8 +135,15 @@ try {
     ");
     
     $result = $stmt->execute([
-        $nombre, $apellido, $telefono, $producto, $cantidad, $precio,
-        $modalidad, $forma_pago, $observaciones
+        $nombre, 
+        $apellido, 
+        $telefono, 
+        $producto, 
+        $cantidad, 
+        $precio,
+        $modalidad, 
+        $forma_pago, 
+        $observaciones
     ]);
     
     if (!$result) {
@@ -113,8 +152,23 @@ try {
     
     $pedido_id = $pdo->lastInsertId();
     
-    // Log del pedido express
-    error_log("PEDIDO EXPRESS CREADO: ID #$pedido_id - $nombre $apellido - $producto - $" . number_format($precio, 0, ',', '.') . " - Empleado: " . $_SESSION['empleado_id']);
+    // Log detallado del pedido express
+    $log_msg = "PEDIDO EXPRESS CREADO: ID #$pedido_id";
+    $log_msg .= " | Cliente: $nombre" . ($apellido ? " $apellido" : "");
+    $log_msg .= " | Producto: $producto";
+    $log_msg .= " | Precio: $" . number_format($precio, 0, ',', '.');
+    $log_msg .= " | Cantidad: $cantidad";
+    $log_msg .= " | Modalidad: $modalidad";
+    $log_msg .= " | Pago: $forma_pago";
+    $log_msg .= " | Empleado: " . $_SESSION['empleado_id'];
+    
+    if ($tipo_pedido === 'personalizado' && isset($data['sabores_personalizados_json'])) {
+        $log_msg .= " | PERSONALIZADO CON PLANCHAS";
+        $sabores_count = count(json_decode($data['sabores_personalizados_json'], true));
+        $log_msg .= " | Sabores: $sabores_count";
+    }
+    
+    error_log($log_msg);
     
     // Respuesta exitosa
     echo json_encode([
@@ -123,8 +177,9 @@ try {
         'mensaje' => 'Pedido Express creado exitosamente',
         'data' => [
             'id' => $pedido_id,
-            'cliente' => "$nombre $apellido",
+            'cliente' => trim("$nombre $apellido"),
             'producto' => $producto,
+            'cantidad' => $cantidad,
             'precio' => $precio,
             'modalidad' => $modalidad,
             'forma_pago' => $forma_pago,
@@ -143,7 +198,7 @@ try {
     error_log("ERROR DB PEDIDO EXPRESS: " . $e->getMessage());
     echo json_encode([
         'success' => false,
-        'error' => 'Error de base de datos'
+        'error' => 'Error de base de datos: ' . $e->getMessage()
     ]);
 }
 ?>
