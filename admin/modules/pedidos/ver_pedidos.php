@@ -1,11 +1,13 @@
 <?php
-// admin/modules/pedidos/ver_pedidos.php
+// admin/modules/pedidos/ver_pedidos.php - VERSIÓN COMPLETA MEJORADA
 require_once '../../config.php';
 requireLogin();
 
 $pdo = getConnection();
 
-// Procesar acciones POST
+// ============================================
+// PROCESAR ACCIONES POST
+// ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
     $id = (int)($_POST['id'] ?? 0);
@@ -15,9 +17,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'cambiar_estado':
                 $estado = $_POST['estado'] ?? '';
                 if ($id && $estado) {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ?");
+                    $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
                     $stmt->execute([$estado, $id]);
-                    $_SESSION['mensaje'] = "Estado actualizado correctamente";
+                    $_SESSION['mensaje'] = "✅ Estado actualizado";
                 }
                 break;
                 
@@ -25,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id) {
                     $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id = ?");
                     $stmt->execute([$id]);
-                    $_SESSION['mensaje'] = "Pedido eliminado correctamente";
+                    $_SESSION['mensaje'] = "✅ Pedido eliminado";
                 }
                 break;
                 
@@ -33,45 +35,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id) {
                     $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, fecha_impresion = NOW() WHERE id = ?");
                     $stmt->execute([$id]);
-                    $_SESSION['mensaje'] = "Pedido marcado como impreso";
+                    $_SESSION['mensaje'] = "✅ Marcado como impreso";
                 }
                 break;
                 
-            case 'reimprimir':
-                if ($id) {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, fecha_impresion = NOW() WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $_SESSION['mensaje'] = "Pedido reimpreso correctamente";
+            // ACCIONES MASIVAS
+            case 'accion_masiva':
+                $pedidos = $_POST['pedidos'] ?? [];
+                $tipo_accion = $_POST['tipo_accion'] ?? '';
+                
+                if (!empty($pedidos)) {
+                    $placeholders = str_repeat('?,', count($pedidos) - 1) . '?';
+                    
+                    switch ($tipo_accion) {
+                        case 'eliminar':
+                            $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id IN ($placeholders)");
+                            $stmt->execute($pedidos);
+                            $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) eliminado(s)";
+                            break;
+                            
+                        case 'cambiar_estado':
+                            $nuevo_estado = $_POST['nuevo_estado'] ?? '';
+                            if ($nuevo_estado) {
+                                $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
+                                $stmt->execute(array_merge([$nuevo_estado], $pedidos));
+                                $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
+                            }
+                            break;
+                            
+                        case 'marcar_impreso':
+                            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, fecha_impresion = NOW() WHERE id IN ($placeholders)");
+                            $stmt->execute($pedidos);
+                            $_SESSION['mensaje'] = "✅ " . count($pedidos) . " marcado(s) como impreso";
+                            break;
+                    }
                 }
                 break;
         }
         
-        // Redireccionar para evitar reenvío de formulario
         header('Location: ' . $_SERVER['REQUEST_URI']);
         exit;
         
     } catch (Exception $e) {
-        $_SESSION['error'] = "Error: " . $e->getMessage();
+        $_SESSION['error'] = "❌ Error: " . $e->getMessage();
     }
 }
 
-// Obtener parámetros de filtro (NOMBRES ORIGINALES RESTAURADOS)
+// ============================================
+// FILTROS
+// ============================================
 $filtro_estado = $_GET['estado'] ?? '';
 $filtro_modalidad = $_GET['modalidad'] ?? '';
 $filtro_ubicacion = $_GET['ubicacion'] ?? '';
 $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
-$busqueda = $_GET['buscar'] ?? ''; // Nombre original: 'buscar'
+$busqueda = $_GET['buscar'] ?? '';
 $orden = $_GET['orden'] ?? 'created_at DESC';
 
-// Si no hay filtros, mostrar pedidos de hoy por defecto
+// Por defecto: pedidos de hoy
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
     $fecha_desde = date('Y-m-d');
     $fecha_hasta = date('Y-m-d');
 }
 
-// Construir consulta SQL
-$sql = "SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido 
+// ============================================
+// CONSTRUIR SQL
+// ============================================
+$sql = "SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido,
+               TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos,
+               CASE 
+                   WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 120 THEN 'urgente'
+                   WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 60 THEN 'atencion'
+                   ELSE 'normal'
+               END as prioridad
         FROM pedidos p 
         LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
         WHERE 1=1";
@@ -104,22 +140,17 @@ if ($fecha_hasta) {
 }
 
 if ($busqueda) {
-    $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ? OR cf.nombre LIKE ? OR cf.apellido LIKE ?)";
+    $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR cf.nombre LIKE ? OR cf.apellido LIKE ?)";
     $busqueda_param = '%' . $busqueda . '%';
-    $params = array_merge($params, [$busqueda_param, $busqueda_param, $busqueda_param, $busqueda_param, $busqueda_param, $busqueda_param]);
+    $params = array_merge($params, array_fill(0, 7, $busqueda_param));
 }
 
-// Ordenamiento válido
+// Ordenamiento
 $ordenes_validos = [
-    'created_at DESC' => 'Más recientes',
-    'created_at ASC' => 'Más antiguos', 
-    'precio DESC' => 'Mayor precio',
-    'precio ASC' => 'Menor precio',
-    'estado ASC' => 'Por estado',
-    'nombre ASC' => 'Por nombre'
+    'created_at DESC', 'created_at ASC', 'precio DESC', 'precio ASC', 'estado ASC', 'nombre ASC'
 ];
 
-if (!array_key_exists($orden, $ordenes_validos)) {
+if (!in_array($orden, $ordenes_validos)) {
     $orden = 'created_at DESC';
 }
 
@@ -129,851 +160,1103 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $pedidos = $stmt->fetchAll();
 
-// Estadísticas rápidas
-$stats_sql = "SELECT 
-    COUNT(*) as total,
-    COUNT(CASE WHEN estado = 'Pendiente' THEN 1 END) as pendientes,
-    COUNT(CASE WHEN estado = 'Preparando' THEN 1 END) as preparando,
-    COUNT(CASE WHEN estado = 'Listo' THEN 1 END) as listos,
-    COUNT(CASE WHEN estado = 'Entregado' THEN 1 END) as entregados,
-    COUNT(CASE WHEN impreso = 1 THEN 1 END) as impresos,
-    SUM(precio) as total_ventas
-    FROM pedidos 
-    WHERE DATE(created_at) = CURDATE()";
-
-$stats = $pdo->query($stats_sql)->fetch();
+// ============================================
+// ESTADÍSTICAS
+// ============================================
+$total = count($pedidos);
+$pendientes = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Pendiente'));
+$preparando = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Preparando'));
+$listos = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Listo'));
+$entregados = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Entregado'));
+$impresos = count(array_filter($pedidos, fn($p) => $p['impreso'] == 1));
+$total_ventas = array_sum(array_column($pedidos, 'precio'));
+$urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente' && $p['estado'] !== 'Entregado'));
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ver Pedidos - Santa Catalina</title>
+    <title>Ver Pedidos - Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* ANIMACIONES */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .urgente {
+            animation: pulse 2s infinite;
+            background: linear-gradient(90deg, #fee2e2 0%, #fef2f2 100%) !important;
+            border-left: 4px solid #dc2626 !important;
+        }
+        
+        .atencion {
+            background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%) !important;
+            border-left: 4px solid #f59e0b !important;
+        }
+        
+        /* TARJETAS */
+        .pedido-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .pedido-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px -10px rgba(0,0,0,0.15);
+        }
+        
+        /* BADGES */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+        
+        /* BOTONES */
+        .btn {
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        /* TABS */
+        .filter-tab {
+            position: relative;
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            font-size: 13px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .filter-tab.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        
+        .filter-tab:not(.active):hover {
+            background: #f3f4f6;
+            transform: translateY(-2px);
+        }
+        
+        /* CHECKBOX CUSTOM */
+        .checkbox-custom {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #3b82f6;
+        }
+        
+        /* SCROLL SUAVE */
+        .tabla-container {
+            max-height: calc(100vh - 280px);
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        
+        .tabla-container::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .tabla-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+        
+        .tabla-container::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #94a3b8, #64748b);
+            border-radius: 10px;
+        }
+        
+        .tabla-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #64748b, #475569);
+        }
+        
+        /* SELECT MEJORADO */
+        select {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        select:hover {
+            border-color: #3b82f6;
+        }
+        
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        /* MODAL DE DETALLES */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            animation: fadeIn 0.2s;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .modal-content::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        
+        .detalle-row {
+            display: flex;
+            padding: 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        
+        .detalle-row:hover {
+            background: #f8fafc;
+        }
+        
+        .detalle-label {
+            font-weight: 600;
+            color: #475569;
+            min-width: 120px;
+        }
+        
+        .detalle-valor {
+            color: #1e293b;
+            flex: 1;
+        }
+    </style>
 </head>
-<body class="bg-gray-100">
-    <div class="container mx-auto px-4 py-6">
-        
-   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold text-gray-800">
-        <i class="fas fa-list-alt text-blue-500 mr-2"></i>Pedidos
-    </h1>
-    <div class="flex space-x-3">
-        <!-- NUEVO: Botón Vista Ejecutiva -->
-        <a href="vista_ejecutiva.php" 
-           class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
-           title="Vista simple para directivos">
-            <i class="fas fa-table mr-2"></i>Vista Ejecutiva
-        </a>
-        
-        <a href="../../index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded">
-            <i class="fas fa-home mr-2"></i>Volver al Inicio
-        </a>
-        
-        <a href="crear_pedido.php" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
-            <i class="fas fa-plus mr-2"></i>Nuevo Pedido
-        </a>
-    </div>
-</div>
-        <!-- Mensajes -->
-        <?php if (isset($_SESSION['mensaje'])): ?>
-            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-                <?= htmlspecialchars($_SESSION['mensaje']) ?>
-            </div>
-            <?php unset($_SESSION['mensaje']); ?>
-        <?php endif; ?>
-
-        <?php if (isset($_SESSION['error'])): ?>
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                <?= htmlspecialchars($_SESSION['error']) ?>
-            </div>
-            <?php unset($_SESSION['error']); ?>
-        <?php endif; ?>
-
-        <!-- Estadísticas del día -->
-        <div class="grid grid-cols-2 md:grid-cols-7 gap-4 mb-6">
-            <div class="bg-white p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-gray-700"><?= $stats['total'] ?></div>
-                <div class="text-sm text-gray-500">Total Hoy</div>
-            </div>
-            <div class="bg-yellow-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-yellow-700"><?= $stats['pendientes'] ?></div>
-                <div class="text-sm text-yellow-600">Pendientes</div>
-            </div>
-            <div class="bg-blue-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-blue-700"><?= $stats['preparando'] ?></div>
-                <div class="text-sm text-blue-600">Preparando</div>
-            </div>
-            <div class="bg-green-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-green-700"><?= $stats['listos'] ?></div>
-                <div class="text-sm text-green-600">Listos</div>
-            </div>
-            <div class="bg-gray-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-gray-700"><?= $stats['entregados'] ?></div>
-                <div class="text-sm text-gray-600">Entregados</div>
-            </div>
-            <div class="bg-purple-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-purple-700"><?= $stats['impresos'] ?></div>
-                <div class="text-sm text-purple-600">Impresos</div>
-            </div>
-            <div class="bg-emerald-100 p-4 rounded-lg shadow text-center">
-                <div class="text-2xl font-bold text-emerald-700">$<?= number_format($stats['total_ventas'], 0, ',', '.') ?></div>
-                <div class="text-sm text-emerald-600">Ventas</div>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100">
+    
+    <!-- ============================================ -->
+    <!-- HEADER MEJORADO -->
+    <!-- ============================================ -->
+    <header class="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <!-- TÍTULO -->
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold flex items-center gap-2">
+                        <i class="fas fa-clipboard-list"></i>
+                        ADMIN - PEDIDOS
+                    </h1>
+                    <?php if ($urgentes > 0): ?>
+                        <span class="badge bg-red-500 text-white animate-pulse">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <?= $urgentes ?> URGENTES
+                        </span>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- STATS COMPACTOS -->
+                <div class="flex space-x-6 text-sm">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold"><?= $total ?></div>
+                        <div class="text-blue-200">Total</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-yellow-300"><?= $pendientes ?></div>
+                        <div class="text-blue-200">Pendientes</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-300"><?= $preparando ?></div>
+                        <div class="text-blue-200">Preparando</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-300"><?= $listos ?></div>
+                        <div class="text-blue-200">Listos</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-emerald-200">$<?= number_format($total_ventas/1000, 1) ?>K</div>
+                        <div class="text-blue-200">Ventas</div>
+                    </div>
+                </div>
+                
+                <!-- BOTONES -->
+                <div class="flex items-center space-x-2">
+                    <a href="delivery_simple.php" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                        <i class="fas fa-motorcycle"></i>
+                        🏍️ Delivery
+                    </a>
+                    <a href="vista_ejecutiva.php" class="btn bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-table"></i>
+                        Vista Ejecutiva
+                    </a>
+                    <a href="crear_pedido.php" class="btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-plus"></i>
+                        Nuevo
+                    </a>
+                    <a href="../../index.php" class="btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-home"></i>
+                    </a>
+                    <a href="../../logout.php" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
             </div>
         </div>
+    </header>
 
-        <!-- FILTROS MEJORADOS CON FILTROS RÁPIDOS -->
-        <div class="bg-white rounded-lg shadow mb-6 p-6">
-            <form method="GET" id="filtrosForm">
+    <!-- ============================================ -->
+    <!-- FILTROS Y TABS -->
+    <!-- ============================================ -->
+    <div class="bg-white shadow-md sticky top-[73px] z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            
+            <!-- TABS DE FILTRO RÁPIDO -->
+            <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
+                <a href="?fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
+                   class="filter-tab <?= empty($filtro_estado) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+                    <i class="fas fa-th-large"></i>
+                    Todos (<?= $total ?>)
+                </a>
+                <a href="?estado=Pendiente&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Pendiente' ? 'active' : 'bg-yellow-100 text-yellow-800' ?>">
+                    <i class="fas fa-clock"></i>
+                    Pendientes (<?= $pendientes ?>)
+                </a>
+                <a href="?estado=Preparando&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Preparando' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
+                    <i class="fas fa-fire"></i>
+                    Preparando (<?= $preparando ?>)
+                </a>
+                <a href="?estado=Listo&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Listo' ? 'active' : 'bg-green-100 text-green-800' ?>">
+                    <i class="fas fa-check-circle"></i>
+                    Listos (<?= $listos ?>)
+                </a>
+                <a href="?estado=Entregado&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
+                   class="filter-tab <?= $filtro_estado === 'Entregado' ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+                    <i class="fas fa-check-double"></i>
+                    Entregados (<?= $entregados ?>)
+                </a>
                 
-                <!-- SECCIÓN: Filtros rápidos de fecha -->
-                <div class="mb-4">
-                    <h4 class="font-semibold text-gray-700 mb-3">
-                        <i class="fas fa-calendar-week mr-2"></i>Filtros rápidos:
-                    </h4>
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" onclick="setFiltroRapido('hoy')" 
-                                class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded text-sm">
-                            <i class="fas fa-calendar-day mr-1"></i>Hoy
+                <!-- SEPARADOR -->
+                <span class="text-gray-300 mx-2">|</span>
+                
+                <!-- FILTRO POR UBICACIÓN -->
+                <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
+                   class="filter-tab <?= empty($filtro_ubicacion) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+                    <i class="fas fa-map-marked-alt"></i>
+                    Todas
+                </a>
+                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Local 1&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_ubicacion === 'Local 1' ? 'active' : 'bg-purple-100 text-purple-800' ?>">
+                    🏪 Local 1
+                </a>
+                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Fábrica&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
+                   class="filter-tab <?= $filtro_ubicacion === 'Fábrica' ? 'active' : 'bg-orange-100 text-orange-800' ?>">
+                    🏭 Fábrica
+                </a>
+            </div>
+            
+            <!-- FILTROS AVANZADOS (COLAPSABLES) -->
+            <details class="text-sm">
+                <summary class="cursor-pointer text-gray-600 hover:text-gray-800 font-semibold mb-3 inline-flex items-center gap-2">
+                    <i class="fas fa-sliders-h"></i>
+                    Filtros Avanzados
+                </summary>
+                <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-3 mt-2">
+                    <input type="text" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" 
+                           placeholder="🔍 Buscar por nombre, tel, producto..." 
+                           class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    
+                    <input type="date" name="fecha_desde" value="<?= $fecha_desde ?>" 
+                           class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    
+                    <input type="date" name="fecha_hasta" value="<?= $fecha_hasta ?>" 
+                           class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    
+                    <select name="modalidad" class="px-4 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="">🚚 Todas modalidades</option>
+                        <option value="Retiro" <?= $filtro_modalidad === 'Retiro' ? 'selected' : '' ?>>📦 Retiro</option>
+                        <option value="Delivery" <?= $filtro_modalidad === 'Delivery' ? 'selected' : '' ?>>🏍️ Delivery</option>
+                    </select>
+                    
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-search"></i>
+                            Buscar
                         </button>
-                        <button type="button" onclick="setFiltroRapido('ayer')" 
-                                class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded text-sm">
-                            <i class="fas fa-calendar-minus mr-1"></i>Ayer
-                        </button>
-                        <button type="button" onclick="setFiltroRapido('semana')" 
-                                class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm">
-                            <i class="fas fa-calendar-week mr-1"></i>Esta semana
-                        </button>
-                        <button type="button" onclick="setFiltroRapido('mes')" 
-                                class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1 rounded text-sm">
-                            <i class="fas fa-calendar mr-1"></i>Este mes
-                        </button>
-                        <button type="button" onclick="setFiltroRapido('todo')" 
-                                class="bg-orange-100 hover:bg-orange-200 text-orange-800 px-3 py-1 rounded text-sm">
-                            <i class="fas fa-calendar-alt mr-1"></i>Todo
-                        </button>
+                        <a href="ver_pedidos.php" class="btn flex-1 bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold text-center">
+                            <i class="fas fa-redo"></i>
+                        </a>
                     </div>
-                </div>
+                </form>
+            </details>
+        </div>
+    </div>
 
-                <!-- Filtros principales -->
-                <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
-                    <!-- Buscador -->
-                    <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Buscar:</label>
-                        <input type="text" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" 
-                               placeholder="Cliente, producto, teléfono..." 
-                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    
-                    <!-- Estado -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Estado:</label>
-                        <select name="estado" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="">Todos</option>
-                            <option value="Pendiente" <?= $filtro_estado === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                            <option value="Preparando" <?= $filtro_estado === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
-                            <option value="Listo" <?= $filtro_estado === 'Listo' ? 'selected' : '' ?>>Listo</option>
-                            <option value="Entregado" <?= $filtro_estado === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Fecha desde -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Desde:</label>
-                        <input type="date" name="fecha_desde" value="<?= htmlspecialchars($fecha_desde) ?>" 
-                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    
-                    <!-- Fecha hasta -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Hasta:</label>
-                        <input type="date" name="fecha_hasta" value="<?= htmlspecialchars($fecha_hasta) ?>" 
-                               class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    
-                    <!-- Modalidad -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Modalidad:</label>
-                        <select name="modalidad" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <option value="">Todas</option>
-                            <option value="Retira" <?= $filtro_modalidad === 'Retira' ? 'selected' : '' ?>>Retira</option>
-                            <option value="Delivery" <?= $filtro_modalidad === 'Delivery' ? 'selected' : '' ?>>Delivery</option>
-                        </select>
-                    </div>
-                </div>
+    <!-- ============================================ -->
+    <!-- MENSAJES -->
+    <!-- ============================================ -->
+    <?php if (isset($_SESSION['mensaje'])): ?>
+        <div class="max-w-7xl mx-auto px-4 mt-4">
+            <div class="bg-green-50 border-l-4 border-green-500 text-green-800 px-4 py-3 rounded-lg shadow animate-pulse">
+                <i class="fas fa-check-circle mr-2"></i><?= htmlspecialchars($_SESSION['mensaje']) ?>
+            </div>
+        </div>
+        <?php unset($_SESSION['mensaje']); ?>
+    <?php endif; ?>
 
-                <!-- FILA: Filtro de ubicación -->
-                <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
-                    <!-- Ubicación -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Ubicación:</label>
-                        <select name="ubicacion" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
-                            <option value="">Todas las ubicaciones</option>
-                            <option value="Local 1" <?= $filtro_ubicacion === 'Local 1' ? 'selected' : '' ?>>🏪 Local 1</option>
-                            <option value="Fábrica" <?= $filtro_ubicacion === 'Fábrica' ? 'selected' : '' ?>>🏭 Fábrica</option>
-                        </select>
+    <?php if (isset($_SESSION['error'])): ?>
+        <div class="max-w-7xl mx-auto px-4 mt-4">
+            <div class="bg-red-50 border-l-4 border-red-500 text-red-800 px-4 py-3 rounded-lg shadow">
+                <i class="fas fa-exclamation-triangle mr-2"></i><?= htmlspecialchars($_SESSION['error']) ?>
+            </div>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
+    <!-- ============================================ -->
+    <!-- BARRA DE ACCIONES MASIVAS -->
+    <!-- ============================================ -->
+    <div class="max-w-7xl mx-auto px-4 mt-4">
+        <div class="bg-gradient-to-r from-gray-800 to-gray-700 text-white rounded-lg shadow-lg p-3">
+            <form method="POST" id="accionMasivaForm">
+                <input type="hidden" name="accion" value="accion_masiva">
+                <input type="hidden" name="tipo_accion" id="tipo_accion">
+                <input type="hidden" name="nuevo_estado" id="nuevo_estado_hidden">
+                
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" id="selectAll" class="checkbox-custom">
+                            <span class="font-semibold">Seleccionar Todos</span>
+                        </label>
+                        <span id="contador" class="badge bg-blue-500 text-white">0 seleccionados</span>
                     </div>
                     
-                    <!-- Ordenamiento -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Ordenar por:</label>
-                        <select name="orden" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                            <?php foreach ($ordenes_validos as $valor => $nombre): ?>
-                                <option value="<?= $valor ?>" <?= $orden === $valor ? 'selected' : '' ?>><?= $nombre ?></option>
-                            <?php endforeach; ?>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <!-- CAMBIAR ESTADO -->
+                        <select id="estado_masivo" class="px-3 py-2 border border-gray-600 rounded-lg text-sm bg-gray-700 text-white">
+                            <option value="">Cambiar estado a...</option>
+                            <option value="Pendiente">⏱️ Pendiente</option>
+                            <option value="Preparando">🔥 Preparando</option>
+                            <option value="Listo">✅ Listo</option>
+                            <option value="Entregado">📦 Entregado</option>
                         </select>
-                    </div>
-                    
-                    <!-- Botones -->
-                    <div class="md:col-span-2 flex items-end space-x-2">
-                        <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg">
-                            <i class="fas fa-search mr-2"></i>Filtrar
+                        
+                        <button type="button" onclick="cambiarEstadoMasivo()" class="btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-sync-alt"></i>
+                            Cambiar Estado
                         </button>
-                        <button type="button" onclick="limpiarFiltros()" 
-                                class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg">
-                            <i class="fas fa-times mr-2"></i>Limpiar
+                        
+                        <!-- IMPRIMIR -->
+                        <button type="button" onclick="imprimirSeleccionados()" class="btn bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-print"></i>
+                            Imprimir
+                        </button>
+                        
+                        <!-- MARCAR IMPRESO -->
+                        <button type="button" onclick="marcarImpresoMasivo()" class="btn bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-stamp"></i>
+                            Marcar Impreso
+                        </button>
+                        
+                        <!-- ELIMINAR -->
+                        <button type="button" onclick="eliminarMasivo()" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-trash-alt"></i>
+                            Eliminar
                         </button>
                     </div>
                 </div>
             </form>
-            
-            <!-- Filtros rápidos por ubicación -->
-            <div class="mt-4 pt-4 border-t">
-                <div class="flex flex-wrap gap-2">
-                    <span class="text-sm font-medium">Filtro rápido ubicación:</span>
-                    <button onclick="filtrarPorUbicacion('todas')" 
-                            class="px-3 py-1 text-xs rounded <?= !$filtro_ubicacion ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700' ?>">
-                        Todas
-                    </button>
-                    <button onclick="filtrarPorUbicacion('Local 1')" 
-                            class="px-3 py-1 text-xs rounded <?= $filtro_ubicacion === 'Local 1' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700' ?>">
-                        🏪 Local 1
-                    </button>
-                    <button onclick="filtrarPorUbicacion('Fábrica')" 
-                            class="px-3 py-1 text-xs rounded <?= $filtro_ubicacion === 'Fábrica' ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-700' ?>">
-                        🏭 Fábrica
-                    </button>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- LISTA DE PEDIDOS -->
+    <!-- ============================================ -->
+    <main class="max-w-7xl mx-auto px-4 py-4">
+        <?php if (empty($pedidos)): ?>
+            <div class="bg-white rounded-xl shadow-lg p-12 text-center">
+                <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+                <h2 class="text-2xl font-bold text-gray-600 mb-2">No hay pedidos</h2>
+                <p class="text-gray-400 mb-6">Intenta ajustar los filtros o crear un nuevo pedido</p>
+                <div class="flex gap-3 justify-center">
+                    <a href="ver_pedidos.php" class="btn bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold">
+                        <i class="fas fa-list"></i>
+                        Ver Todos
+                    </a>
+                    <a href="crear_pedido.php" class="btn bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-semibold">
+                        <i class="fas fa-plus"></i>
+                        Crear Pedido
+                    </a>
                 </div>
             </div>
-        </div>
-
-        <!-- Tabla de pedidos -->
-        <div class="bg-white rounded-lg shadow overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold">
-                    Pedidos encontrados: <?= count($pedidos) ?>
-                </h2>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modalidad</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ubicación</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Impresión</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($pedidos as $pedido): ?>
-                            <?php
-                            $nombre_completo = $pedido['cliente_fijo_nombre'] ? 
-                                $pedido['cliente_fijo_nombre'] . ' ' . $pedido['cliente_fijo_apellido'] : 
-                                $pedido['nombre'] . ' ' . $pedido['apellido'];
-                            
-                            $es_cliente_fijo = !empty($pedido['cliente_fijo_nombre']);
-                            
-                            // Calcular tiempo transcurrido
-                            $tiempo_transcurrido = time() - strtotime($pedido['created_at']);
-                            $minutos = floor($tiempo_transcurrido / 60);
-                            
-                            // Determinar urgencia por color
-                            $urgencia_class = '';
-                            if ($minutos > 60) {
-                                $urgencia_class = 'bg-red-100 border-red-200';
-                            } elseif ($minutos > 30) {
-                                $urgencia_class = 'bg-yellow-100 border-yellow-200';
-                            }
-                            ?>
-                            <tr class="hover:bg-gray-50 <?= $urgencia_class ?>">
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    #<?= $pedido['id'] ?>
-                                    <?php if ($minutos > 30): ?>
-                                        <div class="text-xs text-red-600">
-                                            <?php if ($minutos > 60): ?>
-                                                🚨 <?= floor($minutos/60) ?>h <?= $minutos%60 ?>m
-                                            <?php else: ?>
-                                                ⚠️ <?= $minutos ?>m
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
+        <?php else: ?>
+            <div class="tabla-container">
+                <div class="grid grid-cols-1 gap-4">
+                    <?php foreach ($pedidos as $pedido): ?>
+                        <?php
+                        $nombre_completo = $pedido['cliente_fijo_nombre'] ? 
+                            $pedido['cliente_fijo_nombre'] . ' ' . $pedido['cliente_fijo_apellido'] : 
+                            $pedido['nombre'] . ' ' . $pedido['apellido'];
+                        
+                        // Clases dinámicas según prioridad
+                        $clase_prioridad = '';
+                        if ($pedido['prioridad'] === 'urgente' && $pedido['estado'] !== 'Entregado') {
+                            $clase_prioridad = 'urgente';
+                        } elseif ($pedido['prioridad'] === 'atencion' && $pedido['estado'] !== 'Entregado') {
+                            $clase_prioridad = 'atencion';
+                        }
+                        
+                        // Color del badge de estado
+                        $estado_color = match($pedido['estado']) {
+                            'Pendiente' => 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                            'Preparando' => 'bg-blue-100 text-blue-800 border-blue-300',
+                            'Listo' => 'bg-green-100 text-green-800 border-green-300',
+                            'Entregado' => 'bg-gray-100 text-gray-800 border-gray-300',
+                            default => 'bg-white text-gray-800'
+                        };
+                        ?>
+                        
+                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>">
+                            <div class="flex items-center gap-3">
                                 
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <div><?= htmlspecialchars($nombre_completo) ?></div>
-                                    <div class="text-xs text-gray-500">
-                                        <?= htmlspecialchars($pedido['telefono']) ?>
-                                        <?php if ($es_cliente_fijo): ?>
-                                            <span class="bg-green-100 text-green-800 px-1 rounded text-xs ml-1">FIJO</span>
+                                <!-- CHECKBOX -->
+                                <input type="checkbox" name="pedidos[]" value="<?= $pedido['id'] ?>" 
+                                       class="checkbox-pedido checkbox-custom"
+                                       onchange="actualizarContador()">
+                                
+                                <!-- INFO COMPACTA EN UNA SOLA LÍNEA -->
+                                <div class="flex-1 flex items-center justify-between gap-4">
+                                    
+                                    <!-- ID + TIEMPO + BADGES -->
+                                    <div class="flex items-center gap-2 min-w-[120px]">
+                                        <span class="text-xl font-bold text-blue-600">#<?= $pedido['id'] ?></span>
+                                        <span class="text-xs text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
+                                        <?php if ($pedido['prioridad'] === 'urgente'): ?>
+                                            <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
+                                        <?php endif; ?>
+                                        <?php if (!$pedido['impreso']): ?>
+                                            <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>
                                         <?php endif; ?>
                                     </div>
-                                </td>
-                                
-                                <td class="px-6 py-4 text-sm text-gray-900">
-                                    <div class="font-medium"><?= htmlspecialchars($pedido['producto']) ?></div>
-                                    <div class="text-xs text-gray-500">
-                                        Cant: <?= $pedido['cantidad'] ?> | $<?= number_format($pedido['precio'], 0, ',', '.') ?>
+                                    
+                                    <!-- CLIENTE -->
+                                    <div class="flex-1 min-w-[150px]">
+                                        <div class="font-semibold text-sm text-gray-800 truncate"><?= htmlspecialchars($nombre_completo) ?></div>
+                                        <div class="text-xs text-gray-600"><?= htmlspecialchars($pedido['telefono']) ?></div>
                                     </div>
-                                </td>
-                                
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <?php if ($pedido['modalidad'] === 'Delivery'): ?>
-                                        <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
-                                            <i class="fas fa-truck mr-1"></i>Delivery
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                                            <i class="fas fa-store mr-1"></i>Retira
-                                        </span>
-                                    <?php endif; ?>
-                                </td>
-                                
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <?php if ($pedido['ubicacion'] === 'Local 1'): ?>
-                                        <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-                                            🏪 Local 1
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
-                                            🏭 Fábrica
-                                        </span>
-                                    <?php endif; ?>
-                                </td>
-                                
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <select onchange="cambiarEstado(<?= $pedido['id'] ?>, this.value)" 
-                                            class="text-xs px-2 py-1 rounded border
-                                            <?php
-                                            switch ($pedido['estado']) {
-                                                case 'Pendiente': echo 'bg-yellow-100 text-yellow-800 border-yellow-300'; break;
-                                                case 'Preparando': echo 'bg-blue-100 text-blue-800 border-blue-300'; break;
-                                                case 'Listo': echo 'bg-green-100 text-green-800 border-green-300'; break;
-                                                case 'Entregado': echo 'bg-gray-100 text-gray-800 border-gray-300'; break;
-                                                default: echo 'bg-gray-100 text-gray-800 border-gray-300';
-                                            }
-                                            ?>">
-                                        <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>Pendiente</option>
-                                        <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>Preparando</option>
-                                        <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>Listo</option>
-                                        <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>Entregado</option>
-                                    </select>
-                                </td>
-                                
-                                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                    <?php if ($pedido['impreso']): ?>
-                                        <div class="flex flex-col space-y-1">
-                                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                                                <i class="fas fa-check-circle mr-1"></i>Impreso
-                                            </span>
-                                            <button onclick="reimprimir(<?= $pedido['id'] ?>)" 
-                                                    class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs">
-                                                <i class="fas fa-redo mr-1"></i>Reimprimir
-                                            </button>
+                                    
+                                    <!-- PRODUCTO + MINI BADGES + BOTÓN OJO -->
+                                    <div class="flex-1 min-w-[180px] flex items-center gap-2">
+                                        <div class="flex-1">
+                                            <div class="font-medium text-sm text-gray-800 truncate"><?= htmlspecialchars($pedido['producto']) ?></div>
+                                            <div class="flex items-center gap-1 text-xs mt-0.5">
+                                                <span title="<?= $pedido['modalidad'] ?>">
+                                                    <?= $pedido['modalidad'] === 'Retiro' ? '📦' : '🏍️' ?>
+                                                </span>
+                                                <span title="<?= $pedido['forma_pago'] ?>">
+                                                    <?= $pedido['forma_pago'] === 'Efectivo' ? '💵' : '💳' ?>
+                                                </span>
+                                                <span title="<?= $pedido['ubicacion'] ?>">
+                                                    <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : '🏭' ?>
+                                                </span>
+                                                <?php if ($pedido['observaciones']): ?>
+                                                    <i class="fas fa-sticky-note text-yellow-600" title="<?= htmlspecialchars($pedido['observaciones']) ?>"></i>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
-                                    <?php else: ?>
-                                        <div class="flex flex-col space-y-1">
-                                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">
-                                                <i class="fas fa-exclamation-circle mr-1"></i>Sin imprimir
-                                            </span>
-                                            
-                                            <?php if ($pedido['ubicacion'] === 'Local 1'): ?>
-                                                <button onclick="imprimirLocal1(<?= $pedido['id'] ?>)" 
-                                                        class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
-                                                    <i class="fas fa-print mr-1"></i>🏪 Local 1
-                                                </button>
-                                            <?php else: ?>
-                                                <button onclick="imprimirComanda(<?= $pedido['id'] ?>)" 
-                                                        class="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 rounded text-xs">
-                                                    <i class="fas fa-print mr-1"></i>🏭 Fábrica
-                                                </button>
-                                            <?php endif; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                
-                                <td class="px-6 py-4 text-sm font-medium">
-                                    <div class="flex space-x-2">
+                                        
+                                        <!-- BOTÓN OJO -->
                                         <button onclick="verDetalles(<?= $pedido['id'] ?>)" 
-                                                class="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded" 
+                                                class="btn bg-blue-500 hover:bg-blue-600 text-white p-2 rounded text-sm"
                                                 title="Ver detalles completos">
                                             <i class="fas fa-eye"></i>
                                         </button>
+                                    </div>
+                                    
+                                    <!-- ESTADO COMPACTO -->
+                                    <div class="min-w-[130px]">
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="accion" value="cambiar_estado">
+                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                            <select name="estado" 
+                                                    onchange="if(confirm('¿Cambiar estado?')) this.form.submit()" 
+                                                    class="w-full text-xs font-semibold border rounded-lg px-2 py-1 <?= $estado_color ?> cursor-pointer">
+                                                <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>⏱️ Pendiente</option>
+                                                <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>🔥 Preparando</option>
+                                                <option value="Listo" <?= $pedido['estado'] === 'Listo' ? 'selected' : '' ?>>✅ Listo</option>
+                                                <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>📦 Entregado</option>
+                                            </select>
+                                        </form>
+                                    </div>
+                                    
+                                    <!-- PRECIO -->
+                                    <div class="text-right min-w-[80px]">
+                                        <div class="text-lg font-bold text-green-600">
+                                            $<?= number_format($pedido['precio']/1000, 0) ?>K
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- ACCIONES COMPACTAS -->
+                                    <div class="flex items-center gap-1">
+                                        <!-- IMPRIMIR -->
+                                        <button onclick="imprimir(<?= $pedido['id'] ?>)" 
+                                                class="btn bg-orange-500 hover:bg-orange-600 text-white p-2 rounded text-xs"
+                                                title="Imprimir">
+                                            <i class="fas fa-print"></i>
+                                        </button>
                                         
-                                        <?php if ($pedido['modalidad'] === 'Delivery' || $pedido['telefono']): ?>
-                                            <button onclick="contactarCliente('<?= htmlspecialchars($pedido['telefono']) ?>', '<?= htmlspecialchars($nombre_completo) ?>', <?= $pedido['id'] ?>, '<?= htmlspecialchars($pedido['estado']) ?>')" 
-                                                    class="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-2 py-1 rounded" 
-                                                    title="Contactar por WhatsApp">
+                                        <!-- WHATSAPP -->
+                                        <?php if ($pedido['telefono']): ?>
+                                            <a href="https://wa.me/54<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($nombre_completo) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
+                                               target="_blank"
+                                               class="btn bg-green-500 hover:bg-green-600 text-white p-2 rounded text-xs"
+                                               title="WhatsApp">
                                                 <i class="fab fa-whatsapp"></i>
-                                            </button>
+                                            </a>
                                         <?php endif; ?>
                                         
-                                        <button onclick="eliminarPedido(<?= $pedido['id'] ?>, '#<?= $pedido['id'] ?> - <?= htmlspecialchars($nombre_completo) ?>')" 
-                                                class="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded" 
-                                                title="Eliminar pedido">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        <!-- ELIMINAR -->
+                                        <form method="POST" class="inline" onsubmit="return confirm('⚠️ ¿ELIMINAR #<?= $pedido['id'] ?>?')">
+                                            <input type="hidden" name="accion" value="eliminar">
+                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                            <button type="submit" class="btn bg-red-500 hover:bg-red-600 text-white p-2 rounded text-xs" title="Eliminar">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
                                     </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+                                    
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            
+            <!-- MODAL DE DETALLES -->
+            <div id="modalDetalles" class="modal-overlay" onclick="cerrarModal(event)">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                    <div class="flex justify-between items-center mb-4 pb-4 border-b-2 border-blue-500">
+                        <h3 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <i class="fas fa-receipt text-blue-600"></i>
+                            Detalles del Pedido
+                        </h3>
+                        <button onclick="cerrarModal()" class="text-gray-500 hover:text-gray-800 text-2xl">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="modalBody"></div>
+                </div>
+            </div>
+            
+        <?php endif; ?>
+    </main>
+
+    <!-- DATOS DE PEDIDOS EN JSON PARA JAVASCRIPT -->
+    <script>
+    const pedidosData = <?= json_encode(array_map(function($p) {
+        return [
+            'id' => $p['id'],
+            'nombre' => $p['cliente_fijo_nombre'] ?: $p['nombre'],
+            'apellido' => $p['cliente_fijo_apellido'] ?: $p['apellido'],
+            'telefono' => $p['telefono'],
+            'direccion' => $p['direccion'] ?? '',
+            'producto' => $p['producto'],
+            'precio' => $p['precio'],
+            'modalidad' => $p['modalidad'],
+            'forma_pago' => $p['forma_pago'],
+            'ubicacion' => $p['ubicacion'],
+            'estado' => $p['estado'],
+            'observaciones' => $p['observaciones'] ?? '',
+            'created_at' => $p['created_at'],
+            'minutos' => $p['minutos_transcurridos'],
+            'impreso' => $p['impreso']
+        ];
+    }, $pedidos)) ?>;
+    </script>
+
+    <!-- ============================================ -->
+    <!-- JAVASCRIPT -->
+    <!-- ============================================ -->
+    <script>
+    console.log('🎯 Admin Ver Pedidos - Sistema Completo Cargado');
+    console.log('📊 Total pedidos: <?= $total ?>');
+    console.log('⚡ Pedidos urgentes: <?= $urgentes ?>');
+    
+    // ============================================
+    // MODAL DE DETALLES
+    // ============================================
+    
+    function verDetalles(pedidoId) {
+        const pedido = pedidosData.find(p => p.id == pedidoId);
+        
+        if (!pedido) {
+            alert('❌ No se encontraron datos del pedido');
+            return;
+        }
+        
+        const nombreCompleto = `${pedido.nombre} ${pedido.apellido}`.trim();
+        const fechaCreacion = new Date(pedido.created_at.replace(' ', 'T'));
+        const fechaFormateada = fechaCreacion.toLocaleString('es-AR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        // Determinar estado visual
+        let estadoBadge = '';
+        switch(pedido.estado) {
+            case 'Pendiente':
+                estadoBadge = '<span class="badge bg-yellow-500 text-white">⏱️ Pendiente</span>';
+                break;
+            case 'Preparando':
+                estadoBadge = '<span class="badge bg-blue-500 text-white">🔥 Preparando</span>';
+                break;
+            case 'Listo':
+                estadoBadge = '<span class="badge bg-green-500 text-white">✅ Listo</span>';
+                break;
+            case 'Entregado':
+                estadoBadge = '<span class="badge bg-gray-500 text-white">📦 Entregado</span>';
+                break;
+        }
+        
+        const html = `
+            <div class="space-y-2">
+                <!-- ID y Estado -->
+                <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 mb-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <div class="text-sm text-gray-600">Pedido</div>
+                            <div class="text-3xl font-bold text-blue-600">#${pedido.id}</div>
+                        </div>
+                        <div class="text-right">
+                            ${estadoBadge}
+                            <div class="text-xs text-gray-600 mt-1">
+                                ${pedido.impreso ? '✅ Impreso' : '⚠️ Sin imprimir'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 
-                <?php if (empty($pedidos)): ?>
-                    <div class="text-center py-12">
-                        <i class="fas fa-search text-4xl text-gray-400 mb-4"></i>
-                        <p class="text-gray-500 text-lg">No se encontraron pedidos con los filtros aplicados</p>
-                        <a href="ver_pedidos.php" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">
-                            Ver todos los pedidos
+                <!-- Cliente -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-user mr-2"></i>Cliente
+                    </div>
+                    <div class="detalle-valor font-semibold">${nombreCompleto}</div>
+                </div>
+                
+                <!-- Teléfono -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-phone mr-2"></i>Teléfono
+                    </div>
+                    <div class="detalle-valor">
+                        <a href="https://wa.me/54${pedido.telefono.replace(/[^0-9]/g, '')}" 
+                           target="_blank"
+                           class="text-green-600 hover:text-green-700 font-medium">
+                            ${pedido.telefono}
+                            <i class="fab fa-whatsapp ml-1"></i>
                         </a>
                     </div>
-                <?php endif; ?>
+                </div>
+                
+                <!-- Dirección -->
+                ${pedido.direccion ? `
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-map-marker-alt mr-2"></i>Dirección
+                    </div>
+                    <div class="detalle-valor">${pedido.direccion}</div>
+                </div>
+                ` : ''}
+                
+                <!-- Producto -->
+                <div class="detalle-row bg-yellow-50">
+                    <div class="detalle-label">
+                        <i class="fas fa-hamburger mr-2"></i>Producto
+                    </div>
+                    <div class="detalle-valor font-bold text-lg">${pedido.producto}</div>
+                </div>
+                
+                <!-- Precio -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-dollar-sign mr-2"></i>Precio
+                    </div>
+                    <div class="detalle-valor text-2xl font-bold text-green-600">
+                        ${pedido.precio.toLocaleString('es-AR')}
+                    </div>
+                </div>
+                
+                <!-- Modalidad -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-shipping-fast mr-2"></i>Modalidad
+                    </div>
+                    <div class="detalle-valor">
+                        <span class="badge ${pedido.modalidad === 'Retiro' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                            ${pedido.modalidad === 'Retiro' ? '📦' : '🏍️'} ${pedido.modalidad}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Forma de Pago -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-credit-card mr-2"></i>Pago
+                    </div>
+                    <div class="detalle-valor">
+                        <span class="badge bg-purple-100 text-purple-800">
+                            ${pedido.forma_pago === 'Efectivo' ? '💵' : '💳'} ${pedido.forma_pago}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Ubicación -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="fas fa-store mr-2"></i>Ubicación
+                    </div>
+                    <div class="detalle-valor">
+                        <span class="badge ${pedido.ubicacion === 'Local 1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'}">
+                            ${pedido.ubicacion === 'Local 1' ? '🏪' : '🏭'} ${pedido.ubicacion}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Observaciones -->
+                ${pedido.observaciones ? `
+                <div class="detalle-row bg-yellow-50 border-l-4 border-yellow-500">
+                    <div class="detalle-label">
+                        <i class="fas fa-sticky-note mr-2"></i>Observaciones
+                    </div>
+                    <div class="detalle-valor font-medium">${pedido.observaciones}</div>
+                </div>
+                ` : ''}
+                
+                <!-- Fecha y Tiempo -->
+                <div class="detalle-row">
+                    <div class="detalle-label">
+                        <i class="far fa-clock mr-2"></i>Creado
+                    </div>
+                    <div class="detalle-valor">
+                        ${fechaFormateada}
+                        <span class="text-sm text-gray-500 ml-2">(${pedido.minutos} minutos)</span>
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
-
-    <!-- Modal de Detalles -->
-    <div id="detallesModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-        <div class="relative top-10 mx-auto p-5 border max-w-4xl shadow-lg rounded-md bg-white">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Detalles del Pedido</h3>
-                <button onclick="cerrarDetallesModal()" class="text-gray-400 hover:text-gray-600">
-                    <i class="fas fa-times text-xl"></i>
+            
+            <!-- Acciones del Modal -->
+            <div class="mt-6 pt-4 border-t flex gap-2">
+                <button onclick="imprimir(${pedido.id}); cerrarModal();" 
+                        class="btn flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-semibold">
+                    <i class="fas fa-print mr-2"></i>Imprimir
+                </button>
+                <button onclick="cerrarModal()" 
+                        class="btn flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold">
+                    <i class="fas fa-times mr-2"></i>Cerrar
                 </button>
             </div>
-            <div id="detallesContent">
-                <!-- Contenido dinámico -->
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let pedidoActualModal = null;
-
-        // Funciones para filtros rápidos (RESTAURADAS)
-        function setFiltroRapido(periodo) {
-            const hoy = new Date();
-            let fechaDesde = '';
-            let fechaHasta = '';
-            
-            switch(periodo) {
-                case 'hoy':
-                    fechaDesde = fechaHasta = formatDate(hoy);
-                    break;
-                    
-                case 'ayer':
-                    const ayer = new Date(hoy);
-                    ayer.setDate(ayer.getDate() - 1);
-                    fechaDesde = fechaHasta = formatDate(ayer);
-                    break;
-                    
-                case 'semana':
-                    const inicioSemana = new Date(hoy);
-                    inicioSemana.setDate(hoy.getDate() - hoy.getDay());
-                    fechaDesde = formatDate(inicioSemana);
-                    fechaHasta = formatDate(hoy);
-                    break;
-                    
-                case 'mes':
-                    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-                    fechaDesde = formatDate(inicioMes);
-                    fechaHasta = formatDate(hoy);
-                    break;
-                    
-                case 'todo':
-                    fechaDesde = fechaHasta = '';
-                    break;
-            }
-            
-            document.querySelector('input[name="fecha_desde"]').value = fechaDesde;
-            document.querySelector('input[name="fecha_hasta"]').value = fechaHasta;
-            
-            // Aplicar filtros automáticamente
-            aplicarFiltros();
-        }
-
-        function formatDate(date) {
-            const año = date.getFullYear();
-            const mes = String(date.getMonth() + 1).padStart(2, '0');
-            const dia = String(date.getDate()).padStart(2, '0');
-            return `${año}-${mes}-${dia}`;
-        }
-
-        function limpiarFiltros() {
-            // Limpiar todos los campos
-            document.querySelector('input[name="buscar"]').value = '';
-            document.querySelector('select[name="estado"]').value = '';
-            document.querySelector('select[name="modalidad"]').value = '';
-            document.querySelector('select[name="ubicacion"]').value = '';
-            document.querySelector('input[name="fecha_desde"]').value = '';
-            document.querySelector('input[name="fecha_hasta"]').value = '';
-            document.querySelector('select[name="orden"]').value = 'created_at DESC';
-            
-            // Aplicar filtros vacíos
-            aplicarFiltros();
-        }
-
-        function aplicarFiltros() {
-            const form = document.getElementById('filtrosForm');
-            if (form) {
-                console.log('Aplicando filtros...');
-                form.submit();
-            } else {
-                console.error('Formulario filtrosForm no encontrado');
-            }
-        }
-
-        function filtrarPorUbicacion(ubicacion) {
-            const params = new URLSearchParams(window.location.search);
-            if (ubicacion === 'todas') {
-                params.delete('ubicacion');
-            } else {
-                params.set('ubicacion', ubicacion);
-            }
-            window.location.search = params.toString();
-        }
-
-        // FUNCIÓN PARA LOCAL 1 - Usar la nueva comanda simple del admin
-function imprimirLocal1(pedidoId) {
-    console.log('🏪 Imprimiendo Local 1 - Pedido #' + pedidoId);
-    
-    // Usar la nueva comanda simple en el módulo de impresión del admin
-    const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
-    const ventana = window.open(url, '_blank', 'width=400,height=600,scrollbars=yes');
-    
-    if (!ventana) {
-        alert('❌ Error: No se pudo abrir la ventana de impresión.\n\n' +
-              'Por favor, permite ventanas emergentes y vuelve a intentar.');
-        return false;
+        `;
+        
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modalDetalles').classList.add('active');
+        document.body.style.overflow = 'hidden';
+        
+        console.log('👁️ Viendo detalles del pedido #' + pedidoId);
     }
     
-    ventana.focus();
-    
-    // Marcar como impreso automáticamente
-    setTimeout(() => {
-        marcarPedidoComoImpreso(pedidoId);
-    }, 2000);
-    
-    console.log('✅ Comanda Local 1 - desde módulo admin');
-    return true;
-}
-
-       // FUNCIÓN PARA FÁBRICA - También usar la misma comanda simple
-function imprimirComanda(pedidoId) {
-    console.log('🏭 Imprimiendo Fábrica - Pedido #' + pedidoId);
-    
-    // Usar la misma comanda simple (funcionará para ambas ubicaciones)
-    const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
-    const ventana = window.open(url, '_blank', 'width=400,height=600,scrollbars=yes');
-    
-    if (!ventana) {
-        alert('❌ Error: No se pudo abrir la ventana.\n\n' +
-              'Por favor, permite ventanas emergentes y vuelve a intentar.');
-        return false;
+    function cerrarModal(event) {
+        if (event && event.target !== event.currentTarget) return;
+        
+        document.getElementById('modalDetalles').classList.remove('active');
+        document.body.style.overflow = 'auto';
+        console.log('✅ Modal cerrado');
     }
     
-    ventana.focus();
+    // Cerrar modal con ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            cerrarModal();
+        }
+    });
     
-    // Marcar como impreso automáticamente
-    setTimeout(() => {
-        marcarPedidoComoImpreso(pedidoId);
-    }, 2000);
+    // ============================================
+    // SELECCIÓN DE PEDIDOS
+    // ============================================
     
-    console.log('✅ Comanda Fábrica - desde módulo admin');
-    return true;
-}
-
-        // Función auxiliar para marcar pedido como impreso
-        function marcarPedidoComoImpreso(pedidoId) {
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `accion=marcar_impreso&id=${pedidoId}`
-            })
-            .then(response => {
-                if (response.ok) {
-                    console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
-                    
-                    // Actualizar interfaz sin recargar página
-                    actualizarEstadoImpresion(pedidoId);
-                    
-                } else {
-                    console.error('Error marcando como impreso');
-                }
-            })
-            .catch(error => {
-                console.error('Error en petición:', error);
+    // Seleccionar todos
+    document.getElementById('selectAll')?.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.checkbox-pedido');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+        actualizarContador();
+    });
+    
+    // Actualizar contador de seleccionados
+    function actualizarContador() {
+        const seleccionados = document.querySelectorAll('.checkbox-pedido:checked').length;
+        const contador = document.getElementById('contador');
+        
+        if (contador) {
+            contador.textContent = seleccionados + ' seleccionados';
+            contador.className = seleccionados > 0 ? 
+                'badge bg-green-500 text-white animate-pulse' : 
+                'badge bg-blue-500 text-white';
+        }
+        
+        // Actualizar checkbox "Seleccionar todos"
+        const selectAll = document.getElementById('selectAll');
+        const total = document.querySelectorAll('.checkbox-pedido').length;
+        if (selectAll) {
+            selectAll.checked = seleccionados === total && total > 0;
+            selectAll.indeterminate = seleccionados > 0 && seleccionados < total;
+        }
+    }
+    
+    // Obtener IDs seleccionados
+    function getSeleccionados() {
+        const checks = document.querySelectorAll('.checkbox-pedido:checked');
+        return Array.from(checks).map(c => c.value);
+    }
+    
+    // ============================================
+    // ACCIONES MASIVAS
+    // ============================================
+    
+    function cambiarEstadoMasivo() {
+        const seleccionados = getSeleccionados();
+        const nuevoEstado = document.getElementById('estado_masivo').value;
+        
+        if (seleccionados.length === 0) {
+            alert('⚠️ Debes seleccionar al menos un pedido');
+            return;
+        }
+        
+        if (!nuevoEstado) {
+            alert('⚠️ Debes seleccionar un estado');
+            return;
+        }
+        
+        if (confirm(`¿Cambiar ${seleccionados.length} pedido(s) a "${nuevoEstado}"?`)) {
+            const form = document.getElementById('accionMasivaForm');
+            document.getElementById('tipo_accion').value = 'cambiar_estado';
+            document.getElementById('nuevo_estado_hidden').value = nuevoEstado;
+            
+            // Agregar inputs hidden con los IDs
+            seleccionados.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'pedidos[]';
+                input.value = id;
+                form.appendChild(input);
             });
-        }
-
-        // Función para actualizar estado visual sin recargar
-        function actualizarEstadoImpresion(pedidoId) {
-            const filas = document.querySelectorAll('tbody tr');
             
-            filas.forEach(fila => {
-                const idCell = fila.querySelector('td:first-child');
-                if (idCell && idCell.textContent.includes('#' + pedidoId)) {
-                    
-                    // Buscar columna de impresión (índice 6)
-                    const impresionCell = fila.children[6];
-                    
-                    if (impresionCell) {
-                        impresionCell.innerHTML = `
-                            <div class="flex flex-col space-y-1">
-                                <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
-                                    <i class="fas fa-check-circle mr-1"></i>Impreso
-                                </span>
-                                <button onclick="reimprimir(${pedidoId})" 
-                                        class="bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded text-xs">
-                                    <i class="fas fa-redo mr-1"></i>Reimprimir
-                                </button>
-                            </div>
-                        `;
-                    }
-                }
+            form.submit();
+        }
+    }
+    
+    function marcarImpresoMasivo() {
+        const seleccionados = getSeleccionados();
+        
+        if (seleccionados.length === 0) {
+            alert('⚠️ Debes seleccionar al menos un pedido');
+            return;
+        }
+        
+        if (confirm(`¿Marcar ${seleccionados.length} pedido(s) como impreso?`)) {
+            const form = document.getElementById('accionMasivaForm');
+            document.getElementById('tipo_accion').value = 'marcar_impreso';
+            
+            seleccionados.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'pedidos[]';
+                input.value = id;
+                form.appendChild(input);
             });
-        }
-
-        function cambiarEstado(id, nuevoEstado) {
-            if (nuevoEstado) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="cambiar_estado">
-                    <input type="hidden" name="id" value="${id}">
-                    <input type="hidden" name="estado" value="${nuevoEstado}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        function eliminarPedido(id, descripcion) {
-            if (confirm(`¿Estás seguro de eliminar el pedido ${descripcion}?`)) {
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.innerHTML = `
-                    <input type="hidden" name="accion" value="eliminar">
-                    <input type="hidden" name="id" value="${id}">
-                `;
-                document.body.appendChild(form);
-                form.submit();
-            }
-        }
-
-        function reimprimir(pedidoId) {
-            console.log('🔄 Reimprimiendo pedido #' + pedidoId);
             
-            if (confirm(`¿Reimprimir comanda del pedido #${pedidoId}?`)) {
-                // Buscar la ubicación del pedido en la tabla
-                const filas = document.querySelectorAll('tbody tr');
-                let ubicacion = 'Local 1'; // Por defecto
-                
-                filas.forEach(fila => {
-                    const idCell = fila.querySelector('td:first-child');
-                    if (idCell && idCell.textContent.includes('#' + pedidoId)) {
-                        const ubicacionCell = fila.children[4]; // Columna de ubicación
-                        if (ubicacionCell.textContent.includes('Fábrica')) {
-                            ubicacion = 'Fábrica';
-                        }
-                    }
-                });
-                
-                // Reimprimir según la ubicación
-                if (ubicacion === 'Local 1') {
-                    return imprimirLocal1(pedidoId);
-                } else {
-                    return imprimirComanda(pedidoId);
-                }
-            }
+            form.submit();
+        }
+    }
+    
+    function eliminarMasivo() {
+        const seleccionados = getSeleccionados();
+        
+        if (seleccionados.length === 0) {
+            alert('⚠️ Debes seleccionar al menos un pedido');
+            return;
+        }
+        
+        if (confirm(`⚠️ ¿ELIMINAR ${seleccionados.length} pedido(s)?\n\n⚠️ ESTA ACCIÓN NO SE PUEDE DESHACER ⚠️`)) {
+            const form = document.getElementById('accionMasivaForm');
+            document.getElementById('tipo_accion').value = 'eliminar';
             
+            seleccionados.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'pedidos[]';
+                input.value = id;
+                form.appendChild(input);
+            });
+            
+            form.submit();
+        }
+    }
+    
+    // ============================================
+    // IMPRESIÓN
+    // ============================================
+    
+    function imprimir(pedidoId) {
+        console.log('🖨️ Imprimiendo comanda - Pedido #' + pedidoId);
+        
+        const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
+        const ventana = window.open(url, '_blank', 'width=320,height=500,scrollbars=yes');
+        
+        if (!ventana) {
+            alert('❌ Error: No se pudo abrir la ventana.\n\n💡 Habilita las ventanas emergentes en tu navegador.');
             return false;
         }
-
-        function contactarCliente(telefono, nombre, pedidoId, estado) {
-            const telefonoLimpio = telefono.replace(/[^0-9]/g, '');
-            const nombreLimpio = nombre.split('(')[0].trim();
-            const estadoMinuscula = estado.toLowerCase();
-            
-            const url = `https://wa.me/${telefonoLimpio}?text=Hola%20${encodeURIComponent(nombreLimpio)},%20tu%20pedido%20#${pedidoId}%20está%20${encodeURIComponent(estadoMinuscula)}`;
-            window.open(url, '_blank');
+        
+        ventana.focus();
+        console.log('✅ Comanda abierta (80mm)');
+        return true;
+    }
+    
+    function imprimirSeleccionados() {
+        const seleccionados = getSeleccionados();
+        
+        if (seleccionados.length === 0) {
+            alert('⚠️ Debes seleccionar al menos un pedido');
+            return;
         }
-
-        // VER DETALLES - MODAL COMPLETO
-        function verDetalles(pedidoId) {
-            console.log('Cargando detalles del pedido:', pedidoId);
-            
-            const filas = document.querySelectorAll('tbody tr');
-            let pedidoData = null;
-            
-            filas.forEach(fila => {
-                const idCell = fila.querySelector('td:first-child');
-                if (idCell && idCell.textContent.includes('#' + pedidoId)) {
-                    pedidoData = extraerDatosDeFila(fila, pedidoId);
-                }
-            });
-            
-            if (pedidoData) {
-                mostrarModalDetalles(pedidoData);
-            } else {
-                alert('No se pudieron cargar los detalles del pedido');
+        
+        if (seleccionados.length > 10) {
+            if (!confirm(`⚠️ Vas a imprimir ${seleccionados.length} comandas.\n\n¿Continuar?`)) {
+                return;
             }
         }
-
-        function extraerDatosDeFila(fila, pedidoId) {
-            const celdas = fila.children;
-            
-            return {
-                id: pedidoId,
-                cliente: {
-                    nombre: celdas[1].querySelector('div').textContent.trim(),
-                    telefono: celdas[1].querySelector('.text-xs').textContent.replace('FIJO', '').trim()
-                },
-                producto: celdas[2].querySelector('.font-medium').textContent.trim(),
-                detalles: celdas[2].querySelector('.text-xs').textContent.trim(),
-                modalidad: celdas[3].textContent.trim(),
-                ubicacion: celdas[4].textContent.trim(),
-                estado: celdas[5].querySelector('select').value,
-                impreso: celdas[6].textContent.includes('Impreso')
-            };
-        }
-
-        function mostrarModalDetalles(pedido) {
-            pedidoActualModal = pedido;
-            
-            const detallesContent = document.getElementById('detallesContent');
-            detallesContent.innerHTML = `
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    <!-- INFO PRINCIPAL -->
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h4 class="font-bold text-lg text-blue-800 mb-3">
-                            <i class="fas fa-info-circle mr-2"></i>PEDIDO #${pedido.id}
-                        </h4>
-                        <div class="space-y-2">
-                            <div><strong>Cliente:</strong> ${pedido.cliente.nombre}</div>
-                            <div><strong>Teléfono:</strong> ${pedido.cliente.telefono}</div>
-                            <div><strong>Estado:</strong> 
-                                <span class="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">${pedido.estado}</span>
-                            </div>
-                            <div><strong>Ubicación:</strong> ${pedido.ubicacion}</div>
-                            <div><strong>Modalidad:</strong> ${pedido.modalidad}</div>
-                        </div>
-                    </div>
-                    
-                    <!-- PRODUCTO -->
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <h4 class="font-bold text-lg text-green-800 mb-3">
-                            <i class="fas fa-shopping-bag mr-2"></i>PRODUCTO
-                        </h4>
-                        <div class="space-y-2">
-                            <div class="font-semibold text-lg">${pedido.producto}</div>
-                            <div class="text-sm text-gray-600">${pedido.detalles}</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- ACCIONES -->
-                <div class="mt-6 flex justify-center space-x-4">
-                    ${pedido.ubicacion.includes('Local 1') ? 
-                        `<button onclick="imprimirComandaDesdeModal()" 
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded">
-                            <i class="fas fa-print mr-2"></i>🏪 Imprimir Local 1
-                        </button>` :
-                        `<button onclick="imprimirComandaDesdeModal()" 
-                                class="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded">
-                            <i class="fas fa-print mr-2"></i>🏭 Imprimir Fábrica
-                        </button>`
-                    }
-                    
-                    <button onclick="contactarClienteDesdeModal()" 
-                            class="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded">
-                        <i class="fab fa-whatsapp mr-2"></i>WhatsApp
-                    </button>
-                    
-                    <button onclick="cerrarDetallesModal()" 
-                            class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded">
-                        Cerrar
-                    </button>
-                </div>
-            `;
-            
-            document.getElementById('detallesModal').classList.remove('hidden');
-        }
-
-        function imprimirComandaDesdeModal() {
-            if (pedidoActualModal) {
-                if (pedidoActualModal.ubicacion.includes('Local 1')) {
-                    imprimirLocal1(pedidoActualModal.id);
-                } else {
-                    imprimirComanda(pedidoActualModal.id);
-                }
-                cerrarDetallesModal();
-            }
-        }
-
-        function contactarClienteDesdeModal() {
-            if (pedidoActualModal) {
-                const telefono = pedidoActualModal.cliente.telefono.replace(/[^0-9]/g, '');
-                const nombre = pedidoActualModal.cliente.nombre.split('(')[0].trim();
-                const estado = pedidoActualModal.estado.toLowerCase();
-                
-                const url = `https://wa.me/${telefono}?text=Hola%20${encodeURIComponent(nombre)},%20tu%20pedido%20#${pedidoActualModal.id}%20está%20${encodeURIComponent(estado)}`;
-                window.open(url, '_blank');
-            }
-        }
-
-        function cerrarDetallesModal() {
-            const modal = document.getElementById('detallesModal');
-            if (modal) {
-                modal.classList.add('hidden');
-            }
-            pedidoActualModal = null;
-        }
-
-        // Cerrar modales al hacer clic fuera
-        document.addEventListener('DOMContentLoaded', function() {
-            const detallesModal = document.getElementById('detallesModal');
-            
-            if (detallesModal) {
-                detallesModal.addEventListener('click', function(e) {
-                    if (e.target === this) {
-                        cerrarDetallesModal();
-                    }
-                });
-            }
-            
-            // Información de depuración
-            console.log('🏪 Sistema Santa Catalina - Ver Pedidos');
-            console.log('🖨️ Local 1: POS80-CX configurada');
-            console.log('🏭 Fábrica: 3nstar RPT006S configurada');
+        
+        console.log(`🖨️ Imprimiendo ${seleccionados.length} comandas...`);
+        
+        // Imprimir cada pedido con delay
+        seleccionados.forEach((id, index) => {
+            setTimeout(() => {
+                imprimir(id);
+            }, index * 500); // 500ms entre cada impresión
         });
-
-        // Atajos de teclado
-        document.addEventListener('keydown', function(e) {
-            // Escape para cerrar modales
-            if (e.key === 'Escape') {
-                cerrarDetallesModal();
-            }
+    }
+    
+    // ============================================
+    // AUTO-REFRESH (OPCIONAL)
+    // ============================================
+    
+    // Descomentar para auto-refresh cada 60 segundos
+    // setInterval(() => {
+    //     console.log('🔄 Auto-refresh...');
+    //     location.reload();
+    // }, 60000);
+    
+    // ============================================
+    // INICIALIZACIÓN
+    // ============================================
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('✅ Sistema inicializado correctamente');
+        actualizarContador();
+        
+        // Scroll suave al hacer clic en un pedido urgente
+        document.querySelectorAll('.urgente').forEach(card => {
+            card.style.scrollMarginTop = '150px';
         });
+    });
+    
+    // Atajos de teclado
+    document.addEventListener('keydown', function(e) {
+        // Ctrl + A: Seleccionar todos
+        if (e.ctrlKey && e.key === 'a') {
+            e.preventDefault();
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                selectAll.checked = !selectAll.checked;
+                selectAll.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Ctrl + P: Imprimir seleccionados
+        if (e.ctrlKey && e.key === 'p') {
+            e.preventDefault();
+            imprimirSeleccionados();
+        }
+    });
+    
+    console.log('⌨️ Atajos: Ctrl+A (Seleccionar todos) | Ctrl+P (Imprimir)');
     </script>
+
 </body>
 </html>
