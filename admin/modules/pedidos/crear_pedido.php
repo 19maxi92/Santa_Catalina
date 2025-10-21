@@ -180,113 +180,134 @@ if ($_POST) {
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Nuevo Pedido - <?= APP_NAME ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .producto-card { 
-            transition: all 0.2s ease; 
+        .producto-card {
+            transition: all 0.2s ease;
             cursor: pointer;
+            min-height: 80px;
         }
-        .producto-card:hover { 
-            transform: translateY(-2px); 
+        .producto-card:hover {
+            transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-        .producto-card.selected { 
+        .producto-card.selected {
             border-color: #3b82f6;
             background-color: #eff6ff;
-            box-shadow: 0 0 0 2px #3b82f6;
+            box-shadow: 0 0 0 3px #3b82f6;
+        }
+        .sabor-btn {
+            transition: all 0.15s ease;
+            touch-action: manipulation;
         }
         .sabor-btn:active { transform: scale(0.95); }
         .sabor-btn:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+        /* Mejorar visibilidad de inputs en móvil */
+        input[type="text"],
+        input[type="tel"],
+        input[type="date"],
+        input[type="time"],
+        input[type="number"],
+        select,
+        textarea {
+            font-size: 16px !important; /* Evita zoom en iOS */
+        }
     </style>
 </head>
 <body class="bg-gray-100">
     <!-- Header -->
-    <header class="bg-white shadow-md">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+    <header class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-3 sm:px-4 py-3 flex justify-between items-center">
             <div class="flex items-center">
-                <a href="../../" class="text-gray-600 hover:text-gray-800 mr-4">
-                    <i class="fas fa-arrow-left"></i>
+                <a href="../../" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg mr-2 sm:mr-4 transition-colors">
+                    <i class="fas fa-arrow-left mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Volver</span>
                 </a>
-                <h1 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-plus-circle text-green-500 mr-2"></i>Nuevo Pedido
+                <h1 class="text-base sm:text-xl font-bold text-gray-800">
+                    <i class="fas fa-plus-circle text-green-500 mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Nuevo Pedido</span>
+                    <span class="sm:hidden">Pedido</span>
                 </h1>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-6">
+    <main class="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <!-- Mensajes -->
         <?php if ($mensaje): ?>
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+        <div class="bg-green-100 border border-green-400 text-green-700 px-3 sm:px-4 py-3 rounded-lg mb-4 text-sm sm:text-base">
             <i class="fas fa-check-circle mr-2"></i><?= $mensaje ?>
         </div>
         <?php endif; ?>
 
         <?php if ($error): ?>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-3 sm:px-4 py-3 rounded-lg mb-4 text-sm sm:text-base">
             <i class="fas fa-exclamation-circle mr-2"></i><?= $error ?>
         </div>
         <?php endif; ?>
 
         <form method="POST" id="pedidoForm">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                <!-- COLUMNA 1: DATOS DEL CLIENTE (SIN CAMBIOS) -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+
+                <!-- COLUMNA 1: DATOS DEL CLIENTE -->
+                <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+                    <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 sticky top-0 bg-white py-2 -mt-2">
                         <i class="fas fa-user text-blue-500 mr-2"></i>Datos del Cliente
                     </h3>
                     
-                    <div class="space-y-4">
+                    <div class="space-y-3 sm:space-y-4">
                         <div>
-                            <label class="block text-gray-700 mb-2 font-medium">
+                            <label class="block text-gray-700 mb-1 sm:mb-2 font-medium text-sm sm:text-base">
                                 Nombre <span class="text-red-500">*</span>
                             </label>
-                            <input type="text" name="nombre" required 
+                            <input type="text" name="nombre" required
                                    value="<?= htmlspecialchars($_POST['nombre'] ?? $cliente_seleccionado['nombre'] ?? '') ?>"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                   class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                         </div>
 
                         <div>
-                            <label class="block text-gray-700 mb-2 font-medium">
+                            <label class="block text-gray-700 mb-1 sm:mb-2 font-medium text-sm sm:text-base">
                                 Apellido <span class="text-red-500">*</span>
                             </label>
-                            <input type="text" name="apellido" required 
+                            <input type="text" name="apellido" required
                                    value="<?= htmlspecialchars($_POST['apellido'] ?? $cliente_seleccionado['apellido'] ?? '') ?>"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                   class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                         </div>
 
                         <div>
-                            <label class="block text-gray-700 mb-2 font-medium">Teléfono</label>
+                            <label class="block text-gray-700 mb-1 sm:mb-2 font-medium text-sm sm:text-base">Teléfono</label>
                             <input type="tel" name="telefono"
                                    value="<?= htmlspecialchars($_POST['telefono'] ?? $cliente_seleccionado['telefono'] ?? '') ?>"
-                                   class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                   class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                         </div>
 
                         <!-- Modalidad y Ubicación -->
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                             <div>
-                                <label class="block text-gray-700 mb-2 font-medium">Modalidad <span class="text-red-500">*</span></label>
+                                <label class="block text-gray-700 mb-2 font-medium text-sm sm:text-base">Modalidad <span class="text-red-500">*</span></label>
                                 <div class="space-y-2">
-                                    <label class="flex items-center">
-                                        <input type="radio" name="modalidad" value="Retira" required class="mr-2"
+                                    <label class="flex items-center p-2 border-2 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors">
+                                        <input type="radio" name="modalidad" value="Retira" required class="mr-2 w-4 h-4"
                                                <?= ($_POST['modalidad'] ?? '') === 'Retira' ? 'checked' : '' ?> onchange="toggleDireccion()">
-                                        <i class="fas fa-store mr-2 text-blue-500"></i>Retira
+                                        <i class="fas fa-store mr-2 text-blue-500"></i>
+                                        <span class="text-sm sm:text-base">Retira</span>
                                     </label>
-                                    <label class="flex items-center">
-                                        <input type="radio" name="modalidad" value="Delivery" required class="mr-2"
+                                    <label class="flex items-center p-2 border-2 rounded-lg cursor-pointer hover:bg-green-50 transition-colors">
+                                        <input type="radio" name="modalidad" value="Delivery" required class="mr-2 w-4 h-4"
                                                <?= ($_POST['modalidad'] ?? '') === 'Delivery' ? 'checked' : '' ?> onchange="toggleDireccion()">
-                                        <i class="fas fa-truck mr-2 text-green-500"></i>Delivery
+                                        <i class="fas fa-truck mr-2 text-green-500"></i>
+                                        <span class="text-sm sm:text-base">Delivery</span>
                                     </label>
                                 </div>
                             </div>
-                            
+
                             <div>
-                                <label class="block text-gray-700 mb-2 font-medium">Ubicación <span class="text-red-500">*</span></label>
-                                <select name="ubicacion" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                                <label class="block text-gray-700 mb-2 font-medium text-sm sm:text-base">Ubicación <span class="text-red-500">*</span></label>
+                                <select name="ubicacion" required class="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base">
                                     <option value="">Seleccionar...</option>
                                     <option value="Local 1" <?= ($_POST['ubicacion'] ?? '') === 'Local 1' ? 'selected' : '' ?>>Local 1</option>
                                     <option value="Fábrica" <?= ($_POST['ubicacion'] ?? '') === 'Fábrica' ? 'selected' : '' ?>>Fábrica</option>
@@ -393,20 +414,20 @@ if ($_POST) {
                 </div>
 
                 <!-- COLUMNA 2: SELECCIONAR PRODUCTOS -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">
+                <div class="bg-white rounded-lg shadow p-4 sm:p-6">
+                    <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4 sticky top-0 bg-white py-2 -mt-2">
                         <i class="fas fa-shopping-cart text-purple-500 mr-2"></i>Seleccionar Producto
                     </h3>
 
                     <!-- Tabs -->
-                    <div class="border-b border-gray-200 mb-4">
-                        <nav class="-mb-px flex space-x-8">
+                    <div class="border-b border-gray-200 mb-3 sm:mb-4">
+                        <nav class="-mb-px flex space-x-4 sm:space-x-8">
                             <button type="button" id="tab-predefinido" onclick="mostrarTab('predefinido')"
-                                    class="py-2 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600">
-                                Productos del Menú
+                                    class="py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm border-blue-500 text-blue-600 whitespace-nowrap">
+                                Menú
                             </button>
                             <button type="button" id="tab-personalizado" onclick="mostrarTab('personalizado')"
-                                    class="py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-blue-600">
+                                    class="py-2 px-2 sm:px-1 border-b-2 font-medium text-xs sm:text-sm border-transparent text-gray-500 hover:text-blue-600 whitespace-nowrap">
                                 Personalizado
                             </button>
                         </nav>
@@ -414,27 +435,27 @@ if ($_POST) {
 
                     <input type="hidden" name="tipo_pedido" id="tipo_pedido" value="predefinido">
 
-                    <!-- TAB PREDEFINIDOS (SIN CAMBIOS) -->
+                    <!-- TAB PREDEFINIDOS -->
                     <div id="content-predefinido">
-                        <div class="space-y-3 max-h-96 overflow-y-auto">
+                        <div class="space-y-2 sm:space-y-3 max-h-[60vh] sm:max-h-96 overflow-y-auto">
                             <?php foreach ($productos as $producto): ?>
-                                <div class="producto-card border rounded-lg p-4" 
+                                <div class="producto-card border-2 rounded-lg p-3 sm:p-4 active:scale-[0.98] transition-transform"
                                      onclick="seleccionarProducto(<?= $producto['id'] ?>, '<?= htmlspecialchars(addslashes($producto['nombre'])) ?>', <?= $producto['precio_efectivo'] ?>, <?= $producto['precio_transferencia'] ?>, this)">
-                                    
+
                                     <input type="radio" name="producto_id" value="<?= $producto['id'] ?>" class="hidden">
-                                    
-                                    <div class="flex justify-between items-start">
+
+                                    <div class="flex justify-between items-start gap-3">
                                         <div class="flex-1">
-                                            <h4 class="font-medium text-gray-800"><?= htmlspecialchars($producto['nombre']) ?></h4>
+                                            <h4 class="font-semibold text-gray-800 text-sm sm:text-base"><?= htmlspecialchars($producto['nombre']) ?></h4>
                                             <?php if ($producto['descripcion']): ?>
-                                                <p class="text-sm text-gray-600 mt-1"><?= htmlspecialchars($producto['descripcion']) ?></p>
+                                                <p class="text-xs sm:text-sm text-gray-600 mt-1"><?= htmlspecialchars($producto['descripcion']) ?></p>
                                             <?php endif; ?>
                                         </div>
-                                        <div class="text-right ml-4">
-                                            <div class="text-sm text-gray-500">Efectivo:</div>
-                                            <div class="font-medium text-green-600">$<?= number_format($producto['precio_efectivo'], 0, ',', '.') ?></div>
-                                            <div class="text-sm text-gray-500 mt-1">Transferencia:</div>
-                                            <div class="font-medium text-blue-600">$<?= number_format($producto['precio_transferencia'], 0, ',', '.') ?></div>
+                                        <div class="text-right">
+                                            <div class="text-xs text-gray-500">Efectivo:</div>
+                                            <div class="font-bold text-green-600 text-sm sm:text-base">$<?= number_format($producto['precio_efectivo'], 0, ',', '.') ?></div>
+                                            <div class="text-xs text-gray-500 mt-1">Transfer:</div>
+                                            <div class="font-bold text-blue-600 text-sm sm:text-base">$<?= number_format($producto['precio_transferencia'], 0, ',', '.') ?></div>
                                         </div>
                                     </div>
                                 </div>
@@ -516,17 +537,17 @@ if ($_POST) {
                     </div>
                 </div>
 
-                <!-- COLUMNA 3: RESUMEN (SIN CAMBIOS) -->
-                <div class="bg-white rounded-lg shadow p-6">
-                    <h3 class="text-lg font-semibold mb-4">
+                <!-- COLUMNA 3: RESUMEN -->
+                <div class="bg-white rounded-lg shadow p-4 sm:p-6 lg:sticky lg:top-20">
+                    <h3 class="text-base sm:text-lg font-semibold mb-3 sm:mb-4">
                         <i class="fas fa-clipboard-list text-orange-500 mr-2"></i>Resumen del Pedido
                     </h3>
 
-                    <div id="resumen-pedido" class="mb-6 p-4 bg-gray-50 rounded-lg">
-                        <p class="text-gray-500 text-center">Selecciona un producto para ver el resumen</p>
+                    <div id="resumen-pedido" class="mb-4 sm:mb-6 p-4 bg-gray-50 rounded-lg min-h-[100px] flex items-center justify-center">
+                        <p class="text-gray-500 text-center text-sm sm:text-base">Selecciona un producto para ver el resumen</p>
                     </div>
 
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium">
+                    <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-3 sm:py-4 px-4 rounded-lg font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]">
                         <i class="fas fa-save mr-2"></i>Crear Pedido
                     </button>
                 </div>
