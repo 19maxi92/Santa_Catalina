@@ -97,12 +97,27 @@
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .hero-title {
-                font-size: 2.5rem;
+                font-size: 2rem !important;
             }
-            
+
             .sandwich-card {
                 margin-bottom: 1.5rem;
             }
+
+            .whatsapp-fixed {
+                bottom: 15px;
+                right: 15px;
+                padding: 12px;
+            }
+
+            .whatsapp-fixed i {
+                font-size: 24px;
+            }
+        }
+
+        /* Mejorar accesibilidad de inputs en móvil */
+        input, select, textarea {
+            font-size: 16px !important;
         }
     </style>
 </head>
@@ -111,19 +126,20 @@
     <!-- Header Hero Section -->
     <header class="hero-bg text-white relative overflow-hidden">
         <!-- Sección de accesos en la parte superior -->
-        <div class="bg-gray-800 bg-opacity-90 py-3 border-b border-gray-700" style="position: relative; z-index: 100;">
-            <div class="container mx-auto px-4">
-                <div class="flex justify-end space-x-3">
-                    <a href="empleados/login.php" 
-                       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center shadow-lg"
+        <div class="bg-gray-800 bg-opacity-90 py-2 sm:py-3 border-b border-gray-700" style="position: relative; z-index: 100;">
+            <div class="container mx-auto px-3 sm:px-4">
+                <div class="flex justify-end space-x-2 sm:space-x-3">
+                    <a href="empleados/login.php"
+                       class="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 flex items-center shadow-lg"
                        style="pointer-events: auto; position: relative; z-index: 101;">
-                        <i class="fas fa-users mr-2"></i>
-                        Empleados
+                        <i class="fas fa-users mr-1 sm:mr-2"></i>
+                        <span class="hidden sm:inline">Empleados</span>
+                        <span class="sm:hidden">Emp</span>
                     </a>
-                    <a href="admin/login.php" 
-                       class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center shadow-lg"
+                    <a href="admin/login.php"
+                       class="bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 flex items-center shadow-lg"
                        style="pointer-events: auto; position: relative; z-index: 101;">
-                        <i class="fas fa-cog mr-2"></i>
+                        <i class="fas fa-cog mr-1 sm:mr-2"></i>
                         Admin
                     </a>
                 </div>
@@ -131,42 +147,43 @@
         </div>
         
         <div class="absolute inset-0 bg-black opacity-10"></div>
-        <div class="container mx-auto px-4 py-16 relative z-10">
+        <div class="container mx-auto px-3 sm:px-4 py-8 sm:py-12 md:py-16 relative z-10">
             <div class="text-center">
                 <!-- Logo placeholder -->
-                <div class="floating mb-8">
-                    <div class="w-32 h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl">
-                        <i class="fas fa-hamburger text-6xl text-orange-500"></i>
+                <div class="floating mb-4 sm:mb-6 md:mb-8">
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl">
+                        <i class="fas fa-hamburger text-4xl sm:text-5xl md:text-6xl text-orange-500"></i>
                     </div>
                 </div>
-                
-                <h1 class="hero-title text-5xl md:text-6xl font-bold mb-4">
+
+                <h1 class="hero-title text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4">
                     Sandwichería<br>
                     <span class="text-yellow-300">Santa Catalina</span>
                 </h1>
-                
-                <p class="text-xl md:text-2xl mb-8 font-light">
+
+                <p class="text-base sm:text-lg md:text-xl lg:text-2xl mb-6 sm:mb-8 font-light px-4">
                     Los mejores sándwiches triples de Buenos Aires
                 </p>
-                
-                <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-6">
-                    <div class="flex items-center text-lg">
-                        <i class="fas fa-map-marker-alt mr-3 text-yellow-300"></i>
-                        <span>Camino General Manuel Belgrano 7241, J.M. Gutierrez, Buenos Aires, Argentina</span>
+
+                <div class="flex flex-col md:flex-row items-center justify-center space-y-3 sm:space-y-4 md:space-y-0 md:space-x-6 px-3">
+                    <div class="flex items-center text-xs sm:text-sm md:text-base lg:text-lg">
+                        <i class="fas fa-map-marker-alt mr-2 sm:mr-3 text-yellow-300"></i>
+                        <span class="text-left sm:text-center">Camino Gral. Belgrano 7241, Gutierrez, BA</span>
                     </div>
-                    <div class="flex items-center text-lg">
-                        <i class="fas fa-phone mr-3 text-yellow-300"></i>
-                        <span>11 5981-3546</span>
+                    <div class="flex items-center text-sm sm:text-base md:text-lg">
+                        <i class="fas fa-phone mr-2 sm:mr-3 text-yellow-300"></i>
+                        <a href="tel:+541159813546" class="hover:underline">11 5981-3546</a>
                     </div>
                 </div>
-                
+
                 <!-- Call to Action -->
-                <div class="mt-8">
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido" 
-                       target="_blank" 
-                       class="pulse-button inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-xl font-semibold px-8 py-4 rounded-full transition-all duration-300 shadow-lg">
-                        <i class="fab fa-whatsapp mr-3 text-2xl"></i>
-                        Hacer Pedido por WhatsApp
+                <div class="mt-6 sm:mt-8 px-4">
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido"
+                       target="_blank"
+                       class="pulse-button inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg md:text-xl font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-full transition-all duration-300 shadow-lg">
+                        <i class="fab fa-whatsapp mr-2 sm:mr-3 text-xl sm:text-2xl"></i>
+                        <span class="hidden sm:inline">Hacer Pedido por WhatsApp</span>
+                        <span class="sm:hidden">Pedir por WhatsApp</span>
                     </a>
                 </div>
             </div>
@@ -174,11 +191,11 @@
     </header>
 
     <!-- Productos Principales -->
-    <main class="container mx-auto px-4 py-16">
+    <main class="container mx-auto px-3 sm:px-4 py-8 sm:py-12 md:py-16">
         <!-- Título de sección -->
-        <div class="text-center mb-16">
-            <h2 class="text-4xl font-bold gradient-text mb-4">Nuestros Sándwiches</h2>
-            <p class="text-xl text-gray-600">Triples frescos hechos al momento con los mejores ingredientes</p>
+        <div class="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text mb-3 sm:mb-4">Nuestros Sándwiches</h2>
+            <p class="text-base sm:text-lg md:text-xl text-gray-600 px-4">Triples frescos hechos al momento con los mejores ingredientes</p>
         </div>
 
         <!-- Grid de productos principales -->
@@ -764,9 +781,9 @@
     <!-- Sección de accesos para empleados y admin - ELIMINADA PORQUE SE MOVIÓ ARRIBA -->
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white py-12">
-        <div class="container mx-auto px-4">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+    <footer class="bg-gray-900 text-white py-8 sm:py-12">
+        <div class="container mx-auto px-3 sm:px-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
                 <div>
                     <h3 class="text-xl font-bold mb-4">Sandwichería Santa Catalina</h3>
                     <p class="text-gray-300 mb-4">Los mejores sándwiches triples de La Plata desde 2020. Ingredientes frescos, sabor casero.</p>
