@@ -424,717 +424,1042 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
         Express
     </button>
 
-    <!-- MODAL PEDIDO EXPRESS -->
-    <div id="modalPedidoExpress" class="modal fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[95vh] overflow-y-auto">
-            
-            <!-- Header -->
-            <div class="bg-green-600 text-white p-4 rounded-t-xl flex justify-between items-center">
-                <h2 class="text-xl font-bold">
-                    <i class="fas fa-tachometer-alt mr-2"></i>
-                    Pedido Express - Local 1
+  <!-- ============================================ -->
+<!-- MODAL PEDIDO EXPRESS CON SISTEMA DE PASOS -->
+<!-- Reemplazar TODO el modal en dashboard.php -->
+<!-- ============================================ -->
+
+<div id="modalPedidoExpress" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        
+        <!-- Header con indicador de pasos -->
+        <div class="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg sticky top-0 z-10">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">
+                    <i class="fas fa-bolt mr-2"></i>Pedido Express
                 </h2>
                 <button onclick="cerrarPedidoExpress()" class="text-white hover:text-gray-200">
-                    <i class="fas fa-times text-xl"></i>
+                    <i class="fas fa-times text-2xl"></i>
                 </button>
             </div>
+            
+            <!-- Indicador de pasos -->
+            <div class="flex items-center justify-center space-x-2">
+                <div id="indicador-paso-1" class="paso-indicador activo">
+                    <div class="w-10 h-10 rounded-full bg-white text-green-600 flex items-center justify-center font-bold">1</div>
+                    <span class="text-xs mt-1">Datos</span>
+                </div>
+                <div class="flex-1 h-1 bg-white bg-opacity-30 mx-2"></div>
+                <div id="indicador-paso-2" class="paso-indicador">
+                    <div class="w-10 h-10 rounded-full bg-white bg-opacity-30 text-white flex items-center justify-center font-bold">2</div>
+                    <span class="text-xs mt-1">Tipo</span>
+                </div>
+                <div class="flex-1 h-1 bg-white bg-opacity-30 mx-2"></div>
+                <div id="indicador-paso-3" class="paso-indicador">
+                    <div class="w-10 h-10 rounded-full bg-white bg-opacity-30 text-white flex items-center justify-center font-bold">3</div>
+                    <span class="text-xs mt-1">Pedido</span>
+                </div>
+                <div class="flex-1 h-1 bg-white bg-opacity-30 mx-2"></div>
+                <div id="indicador-paso-4" class="paso-indicador">
+                    <div class="w-10 h-10 rounded-full bg-white bg-opacity-30 text-white flex items-center justify-center font-bold">4</div>
+                    <span class="text-xs mt-1">Resumen</span>
+                </div>
+            </div>
+        </div>
 
-            <!-- Formulario -->
-            <form id="formPedidoExpress" class="p-6">
-                
-                <!-- Datos del Cliente + TURNOS -->
-                <div class="bg-blue-50 rounded-lg p-4 mb-6">
-                    <h3 class="font-bold text-blue-900 mb-3">
-                        <i class="fas fa-user mr-2"></i>Datos del Cliente
+        <form id="formPedidoExpress">
+            <div class="p-6">
+
+                <!-- ============================================ -->
+                <!-- PASO 1: DATOS DEL CLIENTE -->
+                <!-- ============================================ -->
+                <div id="paso1" class="paso-container">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fas fa-user-circle mr-3 text-green-600"></i>
+                        Datos del Cliente
                     </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+
+                    <!-- Datos personales -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-                            <input type="text" id="nombre" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg" placeholder="Juan">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Nombre *
+                            </label>
+                            <input type="text" id="nombre" required
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 text-lg"
+                                   placeholder="Juan">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
-                            <input type="text" id="apellido" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg" placeholder="Pérez">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Apellido *
+                            </label>
+                            <input type="text" id="apellido" required
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 text-lg"
+                                   placeholder="Pérez">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-                            <input type="tel" id="telefono" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg" placeholder="11 1234-5678">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Teléfono
+                            </label>
+                            <input type="tel" id="telefono"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 text-lg"
+                                   placeholder="11 1234-5678">
                         </div>
                     </div>
-                    
-                    <!-- TURNOS -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">¿Para qué turno? *</label>
-                        <div class="grid grid-cols-3 gap-3">
-                            <div class="turno-card cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('M', this)">
-                                <i class="fas fa-sun text-yellow-500 text-2xl mb-2"></i>
-                                <div class="font-bold">Mañana</div>
-                                <div class="text-xs text-gray-500">6am - 2pm</div>
-                                <input type="radio" name="turno" value="M" class="hidden">
+
+                    <!-- Turno -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">Turno *</label>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="turno-card" onclick="seleccionarTurno('Mañana', this)">
+                                <input type="radio" name="turno" value="Mañana" class="hidden">
+                                <div class="text-4xl mb-2">🌅</div>
+                                <div class="font-bold">MAÑANA</div>
+                                <div class="text-sm text-gray-600">06:00 - 14:00</div>
                             </div>
-                            <div class="turno-card cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('S', this)">
-                                <i class="fas fa-cloud-sun text-orange-500 text-2xl mb-2"></i>
-                                <div class="font-bold">Siesta</div>
-                                <div class="text-xs text-gray-500">2pm - 6pm</div>
-                                <input type="radio" name="turno" value="S" class="hidden">
+                            <div class="turno-card" onclick="seleccionarTurno('Siesta', this)">
+                                <input type="radio" name="turno" value="Siesta" class="hidden">
+                                <div class="text-4xl mb-2">☀️</div>
+                                <div class="font-bold">SIESTA</div>
+                                <div class="text-sm text-gray-600">14:00 - 18:00</div>
                             </div>
-                            <div class="turno-card cursor-pointer bg-white p-4 rounded-lg border-2 border-gray-300 hover:border-blue-400 text-center" onclick="seleccionarTurno('T', this)">
-                                <i class="fas fa-moon text-purple-500 text-2xl mb-2"></i>
-                                <div class="font-bold">Tarde</div>
-                                <div class="text-xs text-gray-500">6pm - 11pm</div>
-                                <input type="radio" name="turno" value="T" class="hidden">
+                            <div class="turno-card" onclick="seleccionarTurno('Tarde', this)">
+                                <input type="radio" name="turno" value="Tarde" class="hidden">
+                                <div class="text-4xl mb-2">🌙</div>
+                                <div class="font-bold">TARDE</div>
+                                <div class="text-sm text-gray-600">18:00 - 23:00</div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Forma de pago -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-3">Forma de Pago *</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <label class="pago-card">
+                                <input type="radio" name="forma_pago" value="Efectivo" class="hidden">
+                                <div class="text-3xl mb-2">💵</div>
+                                <div class="font-bold">Efectivo</div>
+                            </label>
+                            <label class="pago-card">
+                                <input type="radio" name="forma_pago" value="Transferencia" class="hidden">
+                                <div class="text-3xl mb-2">💳</div>
+                                <div class="font-bold">Transferencia</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Botón siguiente -->
+                    <div class="flex justify-end">
+                        <button type="button" onclick="irAPaso(2)" 
+                                class="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-lg">
+                            SIGUIENTE <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
                     </div>
                 </div>
 
-                <!-- PEDIDOS COMUNES -->
-                <div id="seccionComunes" class="bg-yellow-50 rounded-lg p-4 mb-6">
-                    <h3 class="font-bold text-yellow-900 mb-4">
-                        <i class="fas fa-star mr-2"></i>¿Qué va a llevar?
+                <!-- ============================================ -->
+                <!-- PASO 2: SELECCIONAR TIPO DE PEDIDO -->
+                <!-- ============================================ -->
+                <div id="paso2" class="paso-container hidden">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fas fa-clipboard-list mr-3 text-green-600"></i>
+                        ¿Qué tipo de pedido?
                     </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
+
+                    <div class="grid grid-cols-2 gap-6 mb-6">
+                        <!-- Pedido Común -->
+                        <div class="tipo-pedido-card" onclick="seleccionarTipoPedido('comun')">
+                            <div class="text-6xl mb-4">🍔</div>
+                            <h4 class="text-2xl font-bold mb-2">COMÚN</h4>
+                            <p class="text-gray-600">Combos armados</p>
+                        </div>
+
+                        <!-- Pedido Personalizado -->
+                        <div class="tipo-pedido-card" onclick="seleccionarTipoPedido('personalizado')">
+                            <div class="text-6xl mb-4">🎨</div>
+                            <h4 class="text-2xl font-bold mb-2">PERSONALIZADO</h4>
+                            <p class="text-gray-600">Elegir planchas</p>
+                        </div>
+                    </div>
+
+                    <!-- Botones navegación -->
+                    <div class="flex justify-between">
+                        <button type="button" onclick="irAPaso(1)" 
+                                class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                            <i class="fas fa-arrow-left mr-2"></i>VOLVER A DATOS
+                        </button>
+                        <button type="button" onclick="cerrarPedidoExpress()" 
+                                class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold">
+                            <i class="fas fa-times mr-2"></i>CANCELAR
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================ -->
+                <!-- PASO 3A: PEDIDO COMÚN -->
+                <!-- ============================================ -->
+                <div id="paso3comun" class="paso-container hidden">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fas fa-hamburger mr-3 text-green-600"></i>
+                        Seleccioná los combos
+                    </h3>
+
+                    <div class="space-y-3 mb-6">
                         <!-- JyQ x24 -->
-                        <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('jyq24')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-bold text-gray-800 text-lg">Jamón y Queso x24</h4>
-                                    <p class="text-sm text-gray-600">3 planchas</p>
-                                    <p class="font-bold text-green-600 text-xl">$18.000</p>
+                        <div class="combo-item" data-tipo="jyq24" data-precio="18000">
+                            <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-green-500 cursor-pointer transition-all">
+                                <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
+                                <div class="flex-1">
+                                    <div class="font-bold text-lg">Jamón y Queso x24</div>
+                                    <div class="text-green-600 font-bold">$18.000</div>
                                 </div>
-                                <div class="text-yellow-500">
-                                    <i class="fas fa-bread-slice text-4xl"></i>
+                                <div class="flex items-center space-x-3">
+                                    <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
+                                    <span class="cantidad-display font-bold text-lg w-8 text-center">1</span>
+                                    <button type="button" onclick="cambiarCantidadCombo(this, 1)" class="cantidad-btn">+</button>
                                 </div>
-                            </div>
-                            <input type="radio" name="pedido_tipo" value="jyq24" class="hidden">
+                            </label>
                         </div>
 
                         <!-- JyQ x48 -->
-                        <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('jyq48')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-bold text-gray-800 text-lg">Jamón y Queso x48</h4>
-                                    <p class="text-sm text-gray-600">6 planchas</p>
-                                    <p class="font-bold text-green-600 text-xl">$22.000</p>
+                        <div class="combo-item" data-tipo="jyq48" data-precio="22000">
+                            <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-green-500 cursor-pointer transition-all">
+                                <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
+                                <div class="flex-1">
+                                    <div class="font-bold text-lg">Jamón y Queso x48</div>
+                                    <div class="text-green-600 font-bold">$22.000</div>
                                 </div>
-                                <div class="text-yellow-600">
-                                    <i class="fas fa-layer-group text-4xl"></i>
+                                <div class="flex items-center space-x-3">
+                                    <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
+                                    <span class="cantidad-display font-bold text-lg w-8 text-center">1</span>
+                                    <button type="button" onclick="cambiarCantidadCombo(this, 1)" class="cantidad-btn">+</button>
                                 </div>
-                            </div>
-                            <input type="radio" name="pedido_tipo" value="jyq48" class="hidden">
-                        </div>
-
-                        <!-- Surtido Clásico x48 -->
-                        <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('surtido_clasico48')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-bold text-gray-800 text-lg">Surtido Clásico x48</h4>
-                                    <p class="text-sm text-gray-600">Sabores comunes</p>
-                                    <p class="font-bold text-green-600 text-xl">$20.000</p>
-                                </div>
-                                <div class="text-blue-500">
-                                    <i class="fas fa-list text-4xl"></i>
-                                </div>
-                            </div>
-                            <input type="radio" name="pedido_tipo" value="surtido_clasico48" class="hidden">
-                        </div>
-
-                        <!-- Surtido Especial x48 -->
-                        <div class="pedido-card bg-white rounded-lg border-2 border-yellow-200 p-4 hover:border-yellow-400 cursor-pointer transition-all" onclick="seleccionarComun('surtido_especial48')">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <h4 class="font-bold text-gray-800 text-lg">Surtido Especial x48</h4>
-                                    <p class="text-sm text-gray-600">Con sabores premium</p>
-                                    <p class="font-bold text-green-600 text-xl">$25.000</p>
-                                </div>
-                                <div class="text-purple-500">
-                                    <i class="fas fa-crown text-4xl"></i>
-                                </div>
-                            </div>
-                            <input type="radio" name="pedido_tipo" value="surtido_especial48" class="hidden">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PERSONALIZADO CON PLANCHAS -->
-                <div id="seccionPersonalizado" class="bg-purple-50 rounded-lg p-4 mb-6">
-                    <h3 class="font-bold text-purple-900 mb-4">
-                        <i class="fas fa-palette mr-2"></i>¿Algo Diferente?
-                    </h3>
-                    
-                    <div class="pedido-card bg-white rounded-lg border-2 border-purple-200 p-4 hover:border-purple-400 cursor-pointer transition-all" onclick="seleccionarPersonalizado()" data-tipo="personalizado">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h4 class="font-bold text-gray-800 text-lg">Personalizado por Planchas</h4>
-                                <p class="text-sm text-gray-600">Clickeá cada sabor para agregar planchas</p>
-                            </div>
-                            <div class="text-purple-500">
-                                <i class="fas fa-sliders-h text-4xl"></i>
-                            </div>
-                        </div>
-                        <input type="radio" name="pedido_tipo" value="personalizado" class="hidden">
-                    </div>
-
-                    <!-- Panel personalizado (oculto por defecto) -->
-                    <div id="panelPersonalizado" class="mt-4 hidden">
-                        
-                        <!-- Precio Final Total -->
-                        <div class="p-4 bg-white rounded-lg shadow border-2 border-green-500 mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                <i class="fas fa-dollar-sign text-green-500 mr-2"></i>Precio Final Total *
                             </label>
-                            <input type="number" 
-                                   id="precioPersonalizado"
-                                   min="0" 
-                                   step="100" 
-                                   placeholder="$0"
-                                   class="w-full px-4 py-3 text-2xl font-bold text-center rounded-lg border-2 border-green-500 focus:ring-2 focus:ring-green-300">
-                            <p class="text-xs text-gray-600 mt-1 text-center">Ingresá el precio total del pedido</p>
                         </div>
 
-                        <!-- Botón Deshacer -->
-                        <div class="flex justify-end mb-4">
-                            <button type="button" onclick="deshacer()" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 font-medium">
-                                <i class="fas fa-undo mr-1"></i>Deshacer
-                            </button>
-                        </div>
-
-                        <!-- Resumen de Planchas -->
-                        <div class="p-4 bg-blue-100 rounded-lg text-center mb-4">
-                            <div class="text-sm text-gray-700">Total de planchas seleccionadas:</div>
-                            <div id="totalPlanchas" class="text-4xl font-bold text-blue-600">0</div>
-                            <div class="text-xs text-gray-600 mt-1">1 plancha = 8 sándwiches</div>
-                        </div>
-
-                        <!-- Sabores Clickeables -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <!-- COMUNES -->
-                            <div class="p-4 bg-green-50 border-2 border-green-300 rounded-lg">
-                                <h4 class="font-bold text-green-800 mb-3 text-sm">
-                                    <i class="fas fa-circle text-green-500 mr-2"></i>SABORES COMUNES
-                                </h4>
-                                <div class="grid grid-cols-2 gap-2" id="saboresComunes">
-                                    <!-- Se generan con JS -->
+                        <!-- Surtido Clásico -->
+                        <div class="combo-item" data-tipo="surtido_clasico48" data-precio="20000">
+                            <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-green-500 cursor-pointer transition-all">
+                                <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
+                                <div class="flex-1">
+                                    <div class="font-bold text-lg">Surtido Clásico x48</div>
+                                    <div class="text-green-600 font-bold">$20.000</div>
                                 </div>
-                            </div>
-
-                            <!-- PREMIUM -->
-                            <div class="p-4 bg-orange-50 border-2 border-orange-300 rounded-lg">
-                                <h4 class="font-bold text-orange-800 mb-3 text-sm">
-                                    <i class="fas fa-star text-orange-500 mr-2"></i>SABORES PREMIUM
-                                </h4>
-                                <div class="grid grid-cols-2 gap-2" id="saboresPremium">
-                                    <!-- Se generan con JS -->
+                                <div class="flex items-center space-x-3">
+                                    <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
+                                    <span class="cantidad-display font-bold text-lg w-8 text-center">1</span>
+                                    <button type="button" onclick="cambiarCantidadCombo(this, 1)" class="cantidad-btn">+</button>
                                 </div>
-                            </div>
+                            </label>
                         </div>
+
+                        <!-- Surtido Especial -->
+                        <div class="combo-item" data-tipo="surtido_especial48" data-precio="25000">
+                            <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-green-500 cursor-pointer transition-all">
+                                <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
+                                <div class="flex-1">
+                                    <div class="font-bold text-lg">Surtido Especial x48</div>
+                                    <div class="text-green-600 font-bold">$25.000</div>
+                                </div>
+                                <div class="flex items-center space-x-3">
+                                    <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
+                                    <span class="cantidad-display font-bold text-lg w-8 text-center">1</span>
+                                    <button type="button" onclick="cambiarCantidadCombo(this, 1)" class="cantidad-btn">+</button>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Observaciones -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones (opcional)</label>
+                        <textarea id="observaciones_comun" rows="3" 
+                                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500"
+                                  placeholder="Ej: Sin lechuga, tomate a parte..."></textarea>
+                    </div>
+
+                    <!-- Botones navegación -->
+                    <div class="flex justify-between">
+                        <button type="button" onclick="irAPaso(2)" 
+                                class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                            <i class="fas fa-arrow-left mr-2"></i>VOLVER A TIPO
+                        </button>
+                        <button type="button" onclick="agregarPedidosComunes()" 
+                                class="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">
+                            <i class="fas fa-check mr-2"></i>AGREGAR PEDIDO(S)
+                        </button>
                     </div>
                 </div>
 
-                <!-- Forma de Pago -->
-                <div class="bg-green-50 rounded-lg p-4 mb-6">
-                    <h3 class="font-bold text-green-900 mb-3">
-                        <i class="fas fa-money-bill-wave mr-2"></i>¿Cómo va a pagar? *
+                <!-- ============================================ -->
+                <!-- PASO 3B: PEDIDO PERSONALIZADO -->
+                <!-- ============================================ -->
+                <div id="paso3personalizado" class="paso-container hidden">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                        <i class="fas fa-palette mr-3 text-green-600"></i>
+                        Armá tu pedido personalizado
                     </h3>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
-                            <input type="radio" name="forma_pago" value="Efectivo" class="mr-2">
-                            <i class="fas fa-money-bill text-green-500 mr-2"></i>
-                            Efectivo
-                        </label>
-                        <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
-                            <input type="radio" name="forma_pago" value="Transferencia" class="mr-2">
-                            <i class="fas fa-exchange-alt text-blue-500 mr-2"></i>
-                            Transferencia
-                        </label>
-                        <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
-                            <input type="radio" name="forma_pago" value="Tarjeta" class="mr-2">
-                            <i class="fas fa-credit-card text-purple-500 mr-2"></i>
-                            Tarjeta
-                        </label>
-                        <label class="flex items-center cursor-pointer bg-white p-3 rounded-lg border border-gray-300 hover:border-green-500">
-                            <input type="radio" name="forma_pago" value="MercadoPago" class="mr-2">
-                            <i class="fas fa-mobile-alt text-cyan-500 mr-2"></i>
-                            MercadoPago
-                        </label>
+
+                    <!-- Contador total -->
+                    <div class="bg-green-50 border-2 border-green-300 rounded-lg p-4 mb-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-lg font-semibold">Total de planchas:</span>
+                            <span id="totalPlanchas" class="text-3xl font-bold text-green-600">0</span>
+                        </div>
+                        <div class="text-sm text-gray-600 mt-1">
+                            <span id="totalSandwiches">0</span> sándwiches totales (8 por plancha)
+                        </div>
+                    </div>
+
+                    <!-- Sabores Comunes -->
+                    <div class="mb-4">
+                        <h4 class="font-bold text-green-700 mb-2">🟢 SABORES COMUNES</h4>
+                        <div id="saboresComunes" class="grid grid-cols-4 gap-2"></div>
+                    </div>
+
+                    <!-- Sabores Premium -->
+                    <div class="mb-4">
+                        <h4 class="font-bold text-orange-600 mb-2">🟠 SABORES PREMIUM</h4>
+                        <div id="saboresPremium" class="grid grid-cols-5 gap-2"></div>
+                    </div>
+
+                    <!-- Botón deshacer -->
+                    <div class="mb-4">
+                        <button type="button" onclick="deshacer()" 
+                                class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded font-semibold">
+                            <i class="fas fa-undo mr-2"></i>Deshacer última plancha
+                        </button>
+                    </div>
+
+                    <!-- Precio -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Precio Total *</label>
+                        <input type="number" id="precioPersonalizado" step="500" required
+                               class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 text-lg"
+                               placeholder="Ej: 14500">
+                    </div>
+
+                    <!-- Observaciones -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones (opcional)</label>
+                        <textarea id="observaciones_personalizado" rows="3" 
+                                  class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500"
+                                  placeholder="Ej: Con pan y queso extra..."></textarea>
+                    </div>
+
+                    <!-- Botones navegación -->
+                    <div class="flex justify-between">
+                        <button type="button" onclick="irAPaso(2)" 
+                                class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                            <i class="fas fa-arrow-left mr-2"></i>VOLVER A TIPO
+                        </button>
+                        <button type="button" onclick="agregarPedidoPersonalizado()" 
+                                class="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">
+                            <i class="fas fa-check mr-2"></i>AGREGAR PEDIDO
+                        </button>
                     </div>
                 </div>
 
-                <!-- Observaciones -->
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
-                    <textarea id="observaciones" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Observaciones adicionales del pedido..."></textarea>
+                <!-- ============================================ -->
+                <!-- PASO 4: RESUMEN -->
+                <!-- ============================================ -->
+                <div id="paso4" class="paso-container hidden">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6 flex items-center">
+                        <i class="fas fa-list-check mr-3 text-green-600"></i>
+                        Resumen del Pedido
+                    </h3>
+
+                    <!-- Info del cliente -->
+                    <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-4 mb-6">
+                        <div class="font-bold text-lg mb-2" id="resumenCliente">Cliente: -</div>
+                        <div class="text-sm text-gray-700">
+                            <span id="resumenTurno">Turno: -</span> | 
+                            <span id="resumenPago">Pago: -</span>
+                        </div>
+                    </div>
+
+                    <!-- Lista de pedidos -->
+                    <div id="listaPedidosResumen" class="space-y-3 mb-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+
+                    <!-- Total -->
+                    <div class="bg-green-50 border-2 border-green-500 rounded-lg p-4 mb-6">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xl font-bold">TOTAL:</span>
+                            <span id="totalFinal" class="text-3xl font-bold text-green-600">$0</span>
+                        </div>
+                    </div>
+
+                    <!-- Botones finales -->
+                    <div class="flex flex-col gap-3">
+                        <button type="button" onclick="irAPaso(1)" 
+                                class="px-6 py-3 bg-gray-400 hover:bg-gray-500 text-white rounded-lg font-semibold">
+                            <i class="fas fa-edit mr-2"></i>EDITAR DATOS DEL CLIENTE
+                        </button>
+                        <button type="button" onclick="irAPaso(2)" 
+                                class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold text-lg">
+                            <i class="fas fa-plus mr-2"></i>AGREGAR OTRO PEDIDO
+                        </button>
+                        <button type="button" onclick="finalizarYCrearPedidos()" 
+                                class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xl">
+                            <i class="fas fa-check-circle mr-2"></i>FINALIZAR Y CREAR PEDIDOS
+                        </button>
+                        <button type="button" onclick="cerrarPedidoExpress()" 
+                                class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold">
+                            <i class="fas fa-times-circle mr-2"></i>CANCELAR TODO
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Botones -->
-                <div class="flex gap-4 justify-end">
-                    <button type="button" onclick="cerrarPedidoExpress()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
-                        <i class="fas fa-times mr-2"></i>Cancelar
-                    </button>
-                    <button type="submit" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold">
-                        <i class="fas fa-check mr-2"></i>Crear Pedido Express
-                    </button>
-                </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
+</div>
 
-    <style>
-    .modal { 
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-    }
-    .turno-card {
-        transition: all 0.2s ease;
-        position: relative;
-    }
-    .turno-card.seleccionado {
-        border-color: #3b82f6 !important;
-        background: #dbeafe !important;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
-        transform: scale(1.02);
-    }
-    .turno-card.seleccionado::after {
-        content: '✓';
-        position: absolute;
-        top: 4px;
-        right: 8px;
-        color: #3b82f6;
-        font-weight: bold;
-        font-size: 16px;
-    }
-    .pedido-card.seleccionado {
-        border-color: #3b82f6 !important;
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%) !important;
-        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4) !important;
-        transform: scale(1.02);
-    }
-    .pedido-card.seleccionado::after {
-        content: '✓';
-        position: absolute;
-        top: 4px;
-        right: 8px;
-        color: #10b981;
-        font-weight: bold;
-        font-size: 20px;
-    }
-    .seccion-bloqueada {
-        opacity: 0.3 !important;
-        pointer-events: none !important;
-        filter: grayscale(80%) !important;
-    }
-    .sabor-btn {
-        transition: all 0.2s ease;
-    }
-    .sabor-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    </style>
+<!-- ============================================ -->
+<!-- ESTILOS ADICIONALES -->
+<!-- ============================================ -->
+<style>
+.paso-indicador {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.paso-indicador.activo div:first-child {
+    background: white;
+    color: #16a34a;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.3);
+}
+
+.paso-indicador.completado div:first-child {
+    background: #22c55e;
+    color: white;
+}
+
+.turno-card {
+    border: 3px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.turno-card:hover {
+    border-color: #22c55e;
+    transform: translateY(-2px);
+}
+
+.turno-card.seleccionado {
+    border-color: #16a34a;
+    background: #f0fdf4;
+}
+
+.pago-card {
+    border: 3px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: block;
+}
+
+.pago-card:hover {
+    border-color: #22c55e;
+    transform: translateY(-2px);
+}
+
+.pago-card:has(input:checked) {
+    border-color: #16a34a;
+    background: #f0fdf4;
+}
+
+.tipo-pedido-card {
+    border: 4px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tipo-pedido-card:hover {
+    border-color: #22c55e;
+    transform: scale(1.05);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.cantidad-btn {
+    width: 36px;
+    height: 36px;
+    border: 2px solid #22c55e;
+    border-radius: 8px;
+    background: white;
+    color: #16a34a;
+    font-weight: bold;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cantidad-btn:hover {
+    background: #22c55e;
+    color: white;
+}
+
+.combo-item input:checked ~ * {
+    border-color: #16a34a !important;
+    background: #f0fdf4 !important;
+}
+
+.sabor-btn {
+    transition: all 0.2s;
+}
+
+.sabor-btn:active {
+    transform: scale(0.95);
+}
+</style>
 
     <script>
-    // Variables globales para Express
-    let pedidoSeleccionado = null;
-    let precioBase = 0;
-    let turnoSeleccionado = null;
-    let planchasPorSabor = {};
-    let historial = [];
+// ============================================
+// 🎯 SISTEMA DE PASOS - PEDIDO EXPRESS
+// Reemplazar TODO el <script> del dashboard.php
+// ============================================
 
-    const precios = {
-        'jyq24': 18000,
-        'jyq48': 22000,
-        'surtido_clasico48': 20000,
-        'surtido_especial48': 25000
-    };
+// Variables globales
+let pasoActual = 1;
+let pedidosAcumulados = [];
+let datosCliente = null;
+let planchasPorSabor = {};
+let historial = [];
 
-    const saboresComunes = [
-        'Jamón y Queso', 'Lechuga', 'Tomate', 'Huevo',
-        'Choclo', 'Aceitunas', 'Zanahoria y Queso', 'Zanahoria y Huevo'
-    ];
+const precios = {
+    'jyq24': { nombre: 'Jamón y Queso x24', precio: 18000, cantidad: 24 },
+    'jyq48': { nombre: 'Jamón y Queso x48', precio: 22000, cantidad: 48 },
+    'surtido_clasico48': { nombre: 'Surtido Clásico x48', precio: 20000, cantidad: 48 },
+    'surtido_especial48': { nombre: 'Surtido Especial x48', precio: 25000, cantidad: 48 }
+};
 
-    const saboresPremium = [
-        'Ananá', 'Atún', 'Berenjena', 'Jamón Crudo',
-        'Morrón', 'Palmito', 'Panceta', 'Pollo',
-        'Roquefort', 'Salame'
-    ];
+const saboresComunes = [
+    'Jamón y Queso', 'Lechuga', 'Tomate', 'Huevo',
+    'Choclo', 'Aceitunas', 'Zanahoria y Queso', 'Zanahoria y Huevo'
+];
 
-    function generarBotonesSabores() {
-        const contenedorComunes = document.getElementById('saboresComunes');
-        contenedorComunes.innerHTML = saboresComunes.map(sabor => `
-            <button type="button" 
-                    onclick="agregarPlancha('${sabor}')" 
-                    class="sabor-btn p-3 bg-white border-2 border-green-300 rounded-lg text-xs font-medium hover:bg-green-100 hover:border-green-500 transition-all">
-                <div class="font-bold">${sabor}</div>
-                <div id="count-${sabor.replace(/\s+/g, '-')}" class="text-green-600 font-bold mt-1 text-lg">0</div>
-            </button>
-        `).join('');
+const saboresPremium = [
+    'Ananá', 'Atún', 'Berenjena', 'Jamón Crudo',
+    'Morrón', 'Palmito', 'Panceta', 'Pollo', 'Roquefort', 'Salame'
+];
 
-        const contenedorPremium = document.getElementById('saboresPremium');
-        contenedorPremium.innerHTML = saboresPremium.map(sabor => `
-            <button type="button" 
-                    onclick="agregarPlancha('${sabor}')" 
-                    class="sabor-btn p-3 bg-white border-2 border-orange-300 rounded-lg text-xs font-medium hover:bg-orange-100 hover:border-orange-500 transition-all">
-                <div class="font-bold">${sabor}</div>
-                <div id="count-${sabor.replace(/\s+/g, '-')}" class="text-orange-600 font-bold mt-1 text-lg">0</div>
-            </button>
-        `).join('');
+// ============================================
+// FUNCIONES DE NAVEGACIÓN
+// ============================================
+
+function abrirPedidoExpress() {
+    document.getElementById('modalPedidoExpress').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    irAPaso(1);
+}
+
+function cerrarPedidoExpress() {
+    // Cerrar directo sin preguntar
+    document.getElementById('modalPedidoExpress').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+    resetearTodo();
+}
+
+function resetearTodo() {
+    pasoActual = 1;
+    pedidosAcumulados = [];
+    datosCliente = null;
+    planchasPorSabor = {};
+    historial = [];
+    
+    // Resetear formulario
+    document.getElementById('formPedidoExpress').reset();
+    document.querySelectorAll('.turno-card').forEach(c => c.classList.remove('seleccionado'));
+    document.querySelectorAll('.combo-checkbox').forEach(c => c.checked = false);
+    document.querySelectorAll('.cantidad-display').forEach(c => c.textContent = '1');
+}
+
+function irAPaso(numeroPaso) {
+    // Validar antes de avanzar
+    if (numeroPaso > pasoActual) {
+        if (pasoActual === 1 && !validarPaso1()) return;
     }
-
-    function agregarPlancha(sabor) {
-        historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
-        if (!planchasPorSabor[sabor]) planchasPorSabor[sabor] = 0;
-        planchasPorSabor[sabor]++;
-        actualizarVista();
+    
+    // Ocultar todos los pasos
+    document.querySelectorAll('.paso-container').forEach(p => p.classList.add('hidden'));
+    
+    // Mostrar el paso solicitado
+    if (numeroPaso === 1) {
+        document.getElementById('paso1').classList.remove('hidden');
+    } else if (numeroPaso === 2) {
+        document.getElementById('paso2').classList.remove('hidden');
+    } else if (numeroPaso === 4) {
+        actualizarResumen();
+        document.getElementById('paso4').classList.remove('hidden');
     }
+    
+    // Actualizar indicadores
+    actualizarIndicadores(numeroPaso);
+    pasoActual = numeroPaso;
+}
 
-    function deshacer() {
-        if (historial.length > 0) {
-            planchasPorSabor = historial.pop();
-            actualizarVista();
-        } else {
-            alert('No hay acciones para deshacer');
+function actualizarIndicadores(paso) {
+    for (let i = 1; i <= 4; i++) {
+        const indicador = document.getElementById(`indicador-paso-${i}`);
+        if (!indicador) continue;
+        
+        indicador.classList.remove('activo', 'completado');
+        
+        if (i === paso) {
+            indicador.classList.add('activo');
+        } else if (i < paso) {
+            indicador.classList.add('completado');
         }
     }
+}
 
-    function actualizarVista() {
-        [...saboresComunes, ...saboresPremium].forEach(sabor => {
-            const id = 'count-' + sabor.replace(/\s+/g, '-');
-            const elemento = document.getElementById(id);
-            if (elemento) elemento.textContent = 0;
-        });
+// ============================================
+// VALIDACIONES
+// ============================================
+
+function validarPaso1() {
+    const nombre = document.getElementById('nombre').value.trim();
+    const apellido = document.getElementById('apellido').value.trim();
+    const turno = document.querySelector('input[name="turno"]:checked');
+    const formaPago = document.querySelector('input[name="forma_pago"]:checked');
+    
+    if (!nombre || !apellido) {
+        alert('🏃‍♂️ Ingresá nombre y apellido');
+        return false;
+    }
+    
+    if (!turno) {
+        alert('⏰ Seleccioná el turno');
+        return false;
+    }
+    
+    if (!formaPago) {
+        alert('💳 Seleccioná la forma de pago');
+        return false;
+    }
+    
+    // Guardar datos del cliente
+    datosCliente = {
+        nombre: nombre,
+        apellido: apellido,
+        telefono: document.getElementById('telefono').value.trim(),
+        turno: turno.value,
+        formaPago: formaPago.value
+    };
+    
+    return true;
+}
+
+// ============================================
+// PASO 1: SELECCIÓN DE DATOS
+// ============================================
+
+function seleccionarTurno(turno, elemento) {
+    document.querySelectorAll('.turno-card').forEach(c => c.classList.remove('seleccionado'));
+    elemento.classList.add('seleccionado');
+    elemento.querySelector('input[type="radio"]').checked = true;
+}
+
+// ============================================
+// PASO 2: TIPO DE PEDIDO
+// ============================================
+
+function seleccionarTipoPedido(tipo) {
+    if (tipo === 'comun') {
+        document.getElementById('paso2').classList.add('hidden');
+        document.getElementById('paso3comun').classList.remove('hidden');
+        pasoActual = 3;
+        actualizarIndicadores(3);
+    } else if (tipo === 'personalizado') {
+        document.getElementById('paso2').classList.add('hidden');
+        document.getElementById('paso3personalizado').classList.remove('hidden');
+        pasoActual = 3;
+        actualizarIndicadores(3);
         
-        Object.keys(planchasPorSabor).forEach(sabor => {
-            const count = planchasPorSabor[sabor];
-            if (count > 0) {
-                const id = 'count-' + sabor.replace(/\s+/g, '-');
-                const elemento = document.getElementById(id);
-                if (elemento) elemento.textContent = count;
-            }
-        });
-
-        const totalPlanchas = Object.values(planchasPorSabor).reduce((a, b) => a + b, 0);
-        document.getElementById('totalPlanchas').textContent = totalPlanchas;
-    }
-
-    function seleccionarTurno(turno, elemento) {
-        document.querySelectorAll('.turno-card').forEach(card => card.classList.remove('seleccionado'));
-        elemento.classList.add('seleccionado');
-        elemento.querySelector('input[type="radio"]').checked = true;
-        turnoSeleccionado = turno;
-    }
-
-    function seleccionarComun(tipo) {
-        document.getElementById('seccionPersonalizado').classList.add('seccion-bloqueada');
-        document.getElementById('seccionComunes').classList.remove('seccion-bloqueada');
-        document.querySelectorAll('.pedido-card').forEach(card => card.classList.remove('seleccionado'));
-        document.getElementById('panelPersonalizado').classList.add('hidden');
-        event.currentTarget.classList.add('seleccionado');
-        event.currentTarget.querySelector('input[type="radio"]').checked = true;
-        pedidoSeleccionado = tipo;
-        precioBase = precios[tipo];
-    }
-
-    function seleccionarPersonalizado() {
-        document.getElementById('seccionComunes').classList.add('seccion-bloqueada');
-        document.getElementById('seccionPersonalizado').classList.remove('seccion-bloqueada');
-        document.querySelectorAll('.pedido-card').forEach(card => card.classList.remove('seleccionado'));
-        event.currentTarget.classList.add('seleccionado');
-        event.currentTarget.querySelector('input[type="radio"]').checked = true;
-        document.getElementById('panelPersonalizado').classList.remove('hidden');
-        
+        // Generar botones de sabores si no existen
         if (document.getElementById('saboresComunes').children.length === 0) {
             generarBotonesSabores();
-            actualizarVista();
         }
-        pedidoSeleccionado = 'personalizado';
     }
+}
 
-    function abrirPedidoExpress() {
-        document.getElementById('modalPedidoExpress').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+// ============================================
+// PASO 3A: PEDIDOS COMUNES
+// ============================================
+
+function cambiarCantidadCombo(boton, cambio) {
+    const item = boton.closest('.combo-item');
+    const display = item.querySelector('.cantidad-display');
+    let cantidad = parseInt(display.textContent);
+    
+    cantidad += cambio;
+    if (cantidad < 1) cantidad = 1;
+    if (cantidad > 99) cantidad = 99;
+    
+    display.textContent = cantidad;
+    
+    // Marcar checkbox si cantidad > 1
+    const checkbox = item.querySelector('.combo-checkbox');
+    if (cantidad > 1) {
+        checkbox.checked = true;
     }
+}
 
-    function cerrarPedidoExpress() {
-        document.getElementById('modalPedidoExpress').classList.add('hidden');
-        document.body.style.overflow = 'auto';
-        resetearFormulario();
+function agregarPedidosComunes() {
+    const combosSeleccionados = [];
+    const items = document.querySelectorAll('.combo-item');
+    
+    items.forEach(item => {
+        const checkbox = item.querySelector('.combo-checkbox');
+        if (checkbox.checked) {
+            const tipo = item.dataset.tipo;
+            const cantidad = parseInt(item.querySelector('.cantidad-display').textContent);
+            const info = precios[tipo];
+            
+            // Crear un pedido por cada cantidad
+            for (let i = 0; i < cantidad; i++) {
+                combosSeleccionados.push({
+                    tipo_pedido: tipo,
+                    producto: info.nombre,
+                    cantidad: info.cantidad,
+                    precio: info.precio,
+                    observaciones: document.getElementById('observaciones_comun').value.trim()
+                });
+            }
+        }
+    });
+    
+    if (combosSeleccionados.length === 0) {
+        alert('⚠️ Seleccioná al menos un combo');
+        return;
     }
+    
+    // Agregar a la lista de pedidos
+    pedidosAcumulados.push(...combosSeleccionados);
+    
+    // Resetear selección de combos
+    items.forEach(item => {
+        item.querySelector('.combo-checkbox').checked = false;
+        item.querySelector('.cantidad-display').textContent = '1';
+    });
+    document.getElementById('observaciones_comun').value = '';
+    
+    // Ir al resumen
+    irAPaso(4);
+    
+    alert(`✅ ${combosSeleccionados.length} pedido(s) agregado(s)`);
+}
 
-    function resetearFormulario() {
-        document.getElementById('formPedidoExpress').reset();
-        document.querySelectorAll('.pedido-card, .turno-card').forEach(card => card.classList.remove('seleccionado'));
-        document.querySelectorAll('.seccion-bloqueada').forEach(s => s.classList.remove('seccion-bloqueada'));
-        document.getElementById('panelPersonalizado').classList.add('hidden');
-        pedidoSeleccionado = null;
-        turnoSeleccionado = null;
-        planchasPorSabor = {};
-        historial = [];
-        precioBase = 0;
-        actualizarVista();
+// ============================================
+// PASO 3B: PEDIDO PERSONALIZADO
+// ============================================
+
+function generarBotonesSabores() {
+    const contenedorComunes = document.getElementById('saboresComunes');
+    contenedorComunes.innerHTML = saboresComunes.map(sabor => `
+        <button type="button" onclick="agregarPlancha('${sabor}')" 
+                class="sabor-btn p-3 bg-white border-2 border-green-300 rounded-lg text-xs font-medium hover:bg-green-100 transition-all">
+            <div class="font-bold">${sabor}</div>
+            <div id="count-${sabor.replace(/\s+/g, '-')}" class="text-green-600 font-bold mt-1 text-lg">0</div>
+        </button>
+    `).join('');
+
+    const contenedorPremium = document.getElementById('saboresPremium');
+    contenedorPremium.innerHTML = saboresPremium.map(sabor => `
+        <button type="button" onclick="agregarPlancha('${sabor}')" 
+                class="sabor-btn p-3 bg-white border-2 border-orange-300 rounded-lg text-xs font-medium hover:bg-orange-100 transition-all">
+            <div class="font-bold">${sabor}</div>
+            <div id="count-${sabor.replace(/\s+/g, '-')}" class="text-orange-600 font-bold mt-1 text-lg">0</div>
+        </button>
+    `).join('');
+}
+
+function agregarPlancha(sabor) {
+    historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
+    planchasPorSabor[sabor] = (planchasPorSabor[sabor] || 0) + 1;
+    actualizarContadores();
+}
+
+function deshacer() {
+    if (historial.length > 0) {
+        planchasPorSabor = historial.pop();
+        actualizarContadores();
     }
+}
 
-    document.getElementById('formPedidoExpress').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const nombre = document.getElementById('nombre').value.trim();
-        const apellido = document.getElementById('apellido').value.trim();
-        const turno = document.querySelector('input[name="turno"]:checked')?.value;
-        const formaPago = document.querySelector('input[name="forma_pago"]:checked')?.value;
-        
-        if (!nombre || !apellido) {
-            alert('Ingresá nombre y apellido');
-            return;
+function actualizarContadores() {
+    [...saboresComunes, ...saboresPremium].forEach(sabor => {
+        const id = 'count-' + sabor.replace(/\s+/g, '-');
+        const elemento = document.getElementById(id);
+        if (elemento) {
+            elemento.textContent = planchasPorSabor[sabor] || 0;
         }
+    });
+    
+    const totalPlanchas = Object.values(planchasPorSabor).reduce((a, b) => a + b, 0);
+    const totalSandwiches = totalPlanchas * 8;
+    
+    const elemPlanchas = document.getElementById('totalPlanchas');
+    const elemSandwiches = document.getElementById('totalSandwiches');
+    
+    if (elemPlanchas) elemPlanchas.textContent = totalPlanchas;
+    if (elemSandwiches) elemSandwiches.textContent = totalSandwiches;
+}
+
+function agregarPedidoPersonalizado() {
+    const totalPlanchas = Object.values(planchasPorSabor).reduce((sum, val) => sum + val, 0);
+    
+    if (totalPlanchas === 0) {
+        alert('⚠️ Agregá al menos una plancha');
+        return;
+    }
+    
+    const precio = parseFloat(document.getElementById('precioPersonalizado').value);
+    
+    if (!precio || precio <= 0) {
+        alert('💰 Ingresá el precio del pedido personalizado');
+        return;
+    }
+    
+    const totalSandwiches = totalPlanchas * 8;
+    
+    // Crear detalle de sabores
+    let detalleSabores = '\n=== SABORES PERSONALIZADOS ===';
+    for (let sabor in planchasPorSabor) {
+        const planchas = planchasPorSabor[sabor];
+        const sandwiches = planchas * 8;
+        detalleSabores += `\n• ${sabor}: ${planchas} plancha${planchas > 1 ? 's' : ''} (${sandwiches} sándwiches)`;
+    }
+    
+    const observaciones = document.getElementById('observaciones_personalizado').value.trim();
+    
+    // Agregar pedido
+    pedidosAcumulados.push({
+        tipo_pedido: 'personalizado',
+        producto: `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''})`,
+        cantidad: totalSandwiches,
+        precio: precio,
+        sabores_personalizados_json: JSON.stringify(planchasPorSabor),
+        observaciones: observaciones + detalleSabores
+    });
+    
+    // Resetear personalizado
+    planchasPorSabor = {};
+    historial = [];
+    actualizarContadores();
+    document.getElementById('precioPersonalizado').value = '';
+    document.getElementById('observaciones_personalizado').value = '';
+    
+    // Ir al resumen
+    irAPaso(4);
+    
+    alert('✅ Pedido personalizado agregado');
+}
+
+// ============================================
+// PASO 4: RESUMEN
+// ============================================
+
+function actualizarResumen() {
+    if (!datosCliente) return;
+    
+    // Actualizar info del cliente
+    document.getElementById('resumenCliente').textContent = 
+        `Cliente: ${datosCliente.nombre} ${datosCliente.apellido}`;
+    document.getElementById('resumenTurno').textContent = 
+        `Turno: ${datosCliente.turno}`;
+    document.getElementById('resumenPago').textContent = 
+        `Pago: ${datosCliente.formaPago}`;
+    
+    // Actualizar lista de pedidos
+    const lista = document.getElementById('listaPedidosResumen');
+    lista.innerHTML = '';
+    
+    let total = 0;
+    
+    pedidosAcumulados.forEach((pedido, index) => {
+        total += pedido.precio;
         
-        if (!turno) {
-            alert('Seleccioná el turno');
-            return;
-        }
-        
-        if (!formaPago) {
-            alert('Seleccioná la forma de pago');
-            return;
-        }
-        
-        if (!pedidoSeleccionado) {
-            alert('Seleccioná un tipo de pedido');
-            return;
-        }
-        
-        const pedido = {
-            nombre: nombre,
-            apellido: apellido,
-            telefono: document.getElementById('telefono').value.trim(),
-            modalidad: 'Retiro',
-            forma_pago: formaPago,
-            observaciones: `Turno: ${turno}\n${document.getElementById('observaciones').value.trim()}`,
-            tipo_pedido: pedidoSeleccionado,
-            precio: precioBase,
+        const div = document.createElement('div');
+        div.className = 'bg-white border-2 border-green-300 rounded-lg p-4';
+        div.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div class="flex-1">
+                    <div class="font-bold text-lg">${index + 1}. ${pedido.producto}</div>
+                    ${pedido.observaciones ? `<div class="text-sm text-gray-600 mt-1">${pedido.observaciones.split('\n')[0]}</div>` : ''}
+                </div>
+                <div class="text-right">
+                    <div class="text-xl font-bold text-green-600">${pedido.precio.toLocaleString()}</div>
+                    <button type="button" onclick="eliminarPedido(${index})" 
+                            class="text-red-500 hover:text-red-700 text-sm mt-1">
+                        <i class="fas fa-trash"></i> Eliminar
+                    </button>
+                </div>
+            </div>
+        `;
+        lista.appendChild(div);
+    });
+    
+    // Actualizar total
+    document.getElementById('totalFinal').textContent = `${total.toLocaleString()}`;
+    
+    // Mostrar mensaje si no hay pedidos
+    if (pedidosAcumulados.length === 0) {
+        lista.innerHTML = '<div class="text-center text-gray-500 py-8">No hay pedidos agregados aún</div>';
+    }
+}
+
+function eliminarPedido(index) {
+    if (confirm('¿Eliminar este pedido?')) {
+        pedidosAcumulados.splice(index, 1);
+        actualizarResumen();
+    }
+}
+
+// ============================================
+// FINALIZAR Y CREAR PEDIDOS
+// ============================================
+
+function finalizarYCrearPedidos() {
+    if (pedidosAcumulados.length === 0) {
+        alert('⚠️ No hay pedidos para crear');
+        return;
+    }
+    
+    if (!confirm(`¿Crear ${pedidosAcumulados.length} pedido(s) para ${datosCliente.nombre} ${datosCliente.apellido}?`)) {
+        return;
+    }
+    
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creando...';
+    btn.disabled = true;
+    
+    // Crear promesas para todos los pedidos
+    const promesas = pedidosAcumulados.map((item, index) => {
+        const pedidoCompleto = {
+            nombre: datosCliente.nombre,
+            apellido: datosCliente.apellido,
+            telefono: datosCliente.telefono,
+            modalidad: 'Retiro', // Express siempre es Retiro
+            forma_pago: datosCliente.formaPago,
+            tipo_pedido: item.tipo_pedido,
+            precio: item.precio,
+            producto: item.producto,
+            cantidad: item.cantidad,
             ubicacion: 'Local 1',
-            estado: 'Pendiente'
+            estado: 'Pendiente',
+            observaciones: `Turno: ${datosCliente.turno}\n${item.observaciones || ''}`
         };
         
-        if (pedidoSeleccionado === 'personalizado') {
-            const precioPersonalizado = parseFloat(document.getElementById('precioPersonalizado').value) || 0;
-            
-            if (precioPersonalizado <= 0) {
-                alert('Ingresá el precio del pedido');
-                return;
-            }
-            
-            const totalPlanchas = Object.values(planchasPorSabor).reduce((sum, val) => sum + val, 0);
-            
-            if (totalPlanchas === 0) {
-                alert('Seleccioná al menos 1 plancha');
-                return;
-            }
-            
-            const totalSandwiches = totalPlanchas * 8;
-            
-            pedido.cantidad = totalSandwiches;
-            pedido.producto = `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''})`;
-            pedido.precio = precioPersonalizado;
-            pedido.sabores_personalizados_json = JSON.stringify(planchasPorSabor);
-            
-            let detalleSabores = '\n=== SABORES PERSONALIZADOS ===';
-            for (let sabor in planchasPorSabor) {
-                const planchas = planchasPorSabor[sabor];
-                const sandwiches = planchas * 8;
-                detalleSabores += `\n• ${sabor}: ${planchas} plancha${planchas > 1 ? 's' : ''} (${sandwiches} sándwiches)`;
-            }
-            pedido.observaciones += detalleSabores;
-            precioBase = precioPersonalizado;
-            
-        } else {
-            const productos = {
-                'jyq24': 'Jamón y Queso x24',
-                'jyq48': 'Jamón y Queso x48', 
-                'surtido_clasico48': 'Surtido Clásico x48',
-                'surtido_especial48': 'Surtido Especial x48'
-            };
-            pedido.producto = productos[pedidoSeleccionado];
-            pedido.cantidad = pedidoSeleccionado.includes('24') ? 24 : 48;
+        if (pedidosAcumulados.length > 1) {
+            pedidoCompleto.observaciones += `\n🔗 PEDIDO COMBINADO (${index + 1}/${pedidosAcumulados.length})`;
         }
         
-        procesarPedidoExpress(pedido);
-    });
-
-    function procesarPedidoExpress(pedido) {
-        const submitBtn = document.querySelector('button[type="submit"]');
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Creando...';
-        submitBtn.disabled = true;
+        if (item.sabores_personalizados_json) {
+            pedidoCompleto.sabores_personalizados_json = item.sabores_personalizados_json;
+        }
         
-        fetch('procesar_pedido_express.php', {
+        return fetch('procesar_pedido_express.php', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(pedido)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(`✅ Pedido #${data.pedido_id} creado!\n\n${data.data.cliente}\n${data.data.producto}\n${data.data.precio.toLocaleString()}`);
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pedidoCompleto)
+        }).then(r => r.json());
+    });
+    
+    Promise.all(promesas)
+        .then(resultados => {
+            if (resultados.every(r => r.success)) {
+                const ids = resultados.map(r => `#${r.pedido_id}`).join(', ');
+                const total = resultados.reduce((sum, r) => sum + r.data.precio, 0);
+                
+                let msg = `✅ ${resultados.length} pedido(s) creado(s)!\n\n`;
+                msg += `IDs: ${ids}\n`;
+                msg += `Cliente: ${resultados[0].data.cliente}\n\n`;
+                resultados.forEach((r, i) => {
+                    msg += `${i + 1}. ${r.data.producto} - ${r.data.precio.toLocaleString()}\n`;
+                });
+                msg += `\nTOTAL: ${total.toLocaleString()}`;
+                
+                alert(msg);
                 cerrarPedidoExpress();
-                setTimeout(() => location.reload(), 1000);
+                location.reload();
             } else {
-                alert('❌ Error: ' + data.error);
+                alert('❌ Algunos pedidos fallaron. Revisá la consola.');
+                console.error('Errores:', resultados.filter(r => !r.success));
             }
         })
         .catch(error => {
             alert('❌ Error de conexión');
+            console.error(error);
         })
         .finally(() => {
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         });
-    }
+}
 
-    // ESC para cerrar modal
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') cerrarPedidoExpress();
+// ============================================
+// FUNCIONES DEL DASHBOARD (SIN CAMBIOS)
+// ============================================
+
+function cambiarVista(vista) {
+    document.querySelectorAll('.view-toggle button').forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    
+    if (vista === 'cards') {
+        document.getElementById('vistaCards').classList.remove('hidden');
+        document.getElementById('vistaLista').classList.add('hidden');
+    } else {
+        document.getElementById('vistaCards').classList.add('hidden');
+        document.getElementById('vistaLista').classList.remove('hidden');
+    }
+    
+    localStorage.setItem('vistaPreferida', vista);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const vistaGuardada = localStorage.getItem('vistaPreferida');
+    if (vistaGuardada === 'lista') {
+        document.querySelector('[data-vista="lista"]')?.click();
+    }
+});
+
+function filtrarEstado(estado) {
+    document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelector(`.filter-tab[data-estado="${estado}"]`)?.classList.add('active');
+    
+    const cards = document.querySelectorAll('#vistaCards > [data-estado]');
+    const items = document.querySelectorAll('#vistaLista > [data-estado]');
+    
+    cards.forEach(pedido => {
+        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
     });
-    // Filtrar por estado
-    function filtrarEstado(estado) {
-        // Remover active de todos los tabs
-        document.querySelectorAll('.filter-tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        
-        // Marcar el tab clickeado como activo
-        const tabClickeado = document.querySelector(`.filter-tab[data-estado="${estado}"]`);
-        if (tabClickeado) {
-            tabClickeado.classList.add('active');
-        }
-        
-        // Filtrar SOLO los pedidos (cards y lista items)
-        // IMPORTANTE: usar selectores más específicos para no tocar los tabs
-        const pedidosCards = document.querySelectorAll('#vistaCards > [data-estado]');
-        const pedidosLista = document.querySelectorAll('#vistaLista > [data-estado]');
-        
-        let visibles = 0;
-        
-        // Filtrar cards
-        pedidosCards.forEach(pedido => {
-            if (estado === 'todos' || pedido.dataset.estado === estado) {
-                pedido.style.display = '';
-                visibles++;
-            } else {
-                pedido.style.display = 'none';
-            }
-        });
-        
-        // Filtrar items de lista
-        pedidosLista.forEach(pedido => {
-            if (estado === 'todos' || pedido.dataset.estado === estado) {
-                pedido.style.display = '';
-            } else {
-                pedido.style.display = 'none';
-            }
-        });
-        
-        // Mostrar mensaje si no hay pedidos
-        const vistaCards = document.getElementById('vistaCards');
-        const vistaLista = document.getElementById('vistaLista');
-        let mensajeVacio = document.getElementById('mensajeVacio');
-        
-        if (visibles === 0) {
-            if (!mensajeVacio) {
-                mensajeVacio = document.createElement('div');
-                mensajeVacio.id = 'mensajeVacio';
-                mensajeVacio.className = 'col-span-full text-center py-20';
-                mensajeVacio.innerHTML = `
-                    <i class="fas fa-search text-6xl text-gray-300 mb-4"></i>
-                    <h3 class="text-xl text-gray-500">No hay pedidos "${estado}"</h3>
-                    <button onclick="filtrarEstado('todos')" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-                        <i class="fas fa-list mr-2"></i>Ver Todos
-                    </button>
-                `;
-                
-                if (!vistaCards.classList.contains('hidden')) {
-                    vistaCards.appendChild(mensajeVacio);
-                } else {
-                    vistaLista.appendChild(mensajeVacio);
-                }
-            }
-        } else {
-            if (mensajeVacio) {
-                mensajeVacio.remove();
-            }
-        }
-        
-        console.log(`✅ Filtro: ${estado} | Visibles: ${visibles}`);
-    }
-
-    // Cambiar vista
-    function cambiarVista(vista) {
-        document.querySelectorAll('.view-toggle button').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        event.target.classList.add('active');
-        
-        if (vista === 'cards') {
-            document.getElementById('vistaCards').classList.remove('hidden');
-            document.getElementById('vistaLista').classList.add('hidden');
-        } else {
-            document.getElementById('vistaCards').classList.add('hidden');
-            document.getElementById('vistaLista').classList.remove('hidden');
-        }
-        
-        localStorage.setItem('vistaPreferida', vista);
-    }
-
-    // Restaurar vista preferida
-    window.addEventListener('DOMContentLoaded', () => {
-        const vistaGuardada = localStorage.getItem('vistaPreferida');
-        if (vistaGuardada === 'lista') {
-            document.querySelector('[data-vista="lista"]').click();
-        }
+    
+    items.forEach(pedido => {
+        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
     });
+}
 
-    // Funciones del dashboard
-    function cambiarEstado(pedidoId, nuevoEstado) {
-        if (confirm(`¿Cambiar a "${nuevoEstado}"?`)) {
-            const formData = new FormData();
-            formData.append('accion', 'cambiar_estado');
-            formData.append('pedido_id', pedidoId);
-            formData.append('nuevo_estado', nuevoEstado);
-            
-            fetch('dashboard.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) location.reload();
-                else alert('Error al cambiar estado');
-            });
-        }
-    }
-
-    // FUNCIÓN UNIFICADA - USA COMANDA_SIMPLE.PHP
-    function imprimir(pedidoId) {
-        console.log('🖨️ Imprimiendo comanda simple - Pedido #' + pedidoId);
-        
-        const url = `comanda_simple.php?pedido=${pedidoId}`;
-        const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
-        
-        if (!ventana) {
-            alert('❌ Error: No se pudo abrir la ventana.\nPermite ventanas emergentes.');
-            return false;
-        }
-        
-        ventana.focus();
-        setTimeout(() => marcarImpreso(pedidoId), 2000);
-        
-        console.log('✅ Comanda abierta exitosamente');
-        return true;
-    }
-
-    function marcarImpreso(pedidoId) {
+function cambiarEstado(pedidoId, nuevoEstado) {
+    if (confirm(`¿Cambiar a "${nuevoEstado}"?`)) {
         const formData = new FormData();
-        formData.append('accion', 'marcar_impreso');
+        formData.append('accion', 'cambiar_estado');
         formData.append('pedido_id', pedidoId);
+        formData.append('nuevo_estado', nuevoEstado);
         
         fetch('dashboard.php', {
             method: 'POST',
@@ -1142,29 +1467,61 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
-                setTimeout(() => location.reload(), 1000);
-            }
-        })
-        .catch(error => console.error('Error:', error));
+            if (data.success) location.reload();
+            else alert('Error al cambiar estado');
+        });
     }
+}
 
-    // Reloj
-    function updateClock() {
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        const s = String(now.getSeconds()).padStart(2, '0');
-        document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+function imprimir(pedidoId) {
+    const url = `comanda_simple.php?pedido=${pedidoId}`;
+    const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
+    
+    if (!ventana) {
+        alert('❌ Permitir ventanas emergentes');
+        return false;
     }
-    setInterval(updateClock, 1000);
-    updateClock();
+    
+    ventana.focus();
+    setTimeout(() => marcarImpreso(pedidoId), 2000);
+    return true;
+}
 
-    // AUTO-REFRESH cada 30 segundos
-    setTimeout(() => location.reload(), 30000);
+function marcarImpreso(pedidoId) {
+    const formData = new FormData();
+    formData.append('accion', 'marcar_impreso');
+    formData.append('pedido_id', pedidoId);
+    
+    fetch('dashboard.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => location.reload(), 1000);
+        }
+    });
+}
 
-    console.log('🚀 Dashboard optimizado cargado');
+function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    const elem = document.getElementById('clock');
+    if (elem) elem.textContent = `${h}:${m}:${s}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !document.getElementById('modalPedidoExpress').classList.contains('hidden')) {
+        cerrarPedidoExpress();
+    }
+});
+
+console.log('🚀 Dashboard con Sistema de Pasos cargado');
     </script>
 
 </body>

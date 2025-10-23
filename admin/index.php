@@ -18,8 +18,8 @@ $stats = [
 // Verificar si existe tabla promos (para compatibilidad)
 try {
     $stats['promos_activas'] = $pdo->query("
-        SELECT COUNT(*) FROM promos 
-        WHERE activa = 1 
+        SELECT COUNT(*) FROM promos
+        WHERE activa = 1
         AND (fecha_inicio IS NULL OR CURDATE() >= fecha_inicio)
         AND (fecha_fin IS NULL OR CURDATE() <= fecha_fin)
     ")->fetchColumn();
@@ -30,9 +30,9 @@ try {
 
 // Últimos pedidos
 $ultimos_pedidos = $pdo->query("
-    SELECT id, nombre, apellido, producto, precio, estado, created_at 
-    FROM pedidos 
-    ORDER BY created_at DESC 
+    SELECT id, nombre, apellido, producto, precio, estado, created_at
+    FROM pedidos
+    ORDER BY created_at DESC
     LIMIT 5
 ")->fetchAll();
 ?>
@@ -46,7 +46,7 @@ $ultimos_pedidos = $pdo->query("
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-gray-100">
-    <!-- Header -->
+    <!-- Header Sticky Responsive -->
     <header class="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-3 sm:px-4 py-3 flex justify-between items-center">
             <h1 class="text-lg sm:text-xl font-bold text-gray-800">
@@ -66,7 +66,7 @@ $ultimos_pedidos = $pdo->query("
     <!-- Main Content -->
     <main class="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
 
-        <!-- Stats Cards -->
+        <!-- Stats Cards Responsive -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
             <div class="bg-blue-500 text-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-shadow">
                 <div class="flex items-center">
@@ -109,7 +109,7 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
 
-        <!-- Quick Actions - Botón destacado para Nuevo Pedido -->
+        <!-- Botón Destacado: Nuevo Pedido -->
         <div class="mb-4 sm:mb-6">
             <a href="modules/pedidos/crear_pedido.php"
                class="block bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800
@@ -124,7 +124,7 @@ $ultimos_pedidos = $pdo->query("
             </a>
         </div>
 
-        <!-- Otras Acciones Rápidas -->
+        <!-- Quick Actions Responsive -->
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
             <a href="modules/clientes/lista_clientes.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center">
                 <i class="fas fa-address-book text-2xl sm:text-3xl text-green-500 mb-2 sm:mb-3"></i>
@@ -151,7 +151,7 @@ $ultimos_pedidos = $pdo->query("
             </a>
         </div>
 
-        <!-- SECCIÓN DE GESTIÓN DE PRODUCTOS -->
+        <!-- Sección de Gestión de Productos Responsive -->
         <div class="bg-white rounded-lg shadow mb-6 sm:mb-8 p-4 sm:p-6">
             <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
                 <i class="fas fa-boxes text-purple-500 mr-2"></i>Gestión de Productos
@@ -183,7 +183,7 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
 
-        <!-- Recent Orders -->
+        <!-- Tabla Últimos Pedidos Responsive -->
         <div class="bg-white rounded-lg shadow">
             <div class="p-4 sm:p-6 border-b">
                 <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
@@ -248,7 +248,7 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
 
-        <!-- Footer con información del sistema -->
+        <!-- Footer Responsive -->
         <div class="mt-6 sm:mt-8 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 sm:p-6">
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
                 <div>
@@ -261,54 +261,5 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
     </main>
-
-    <script>
-        // Animación sutil para las cards nuevas
-        document.addEventListener('DOMContentLoaded', function() {
-            const productCard = document.querySelector('a[href="modules/productos/index.php"]');
-            if (productCard) {
-                // Efecto de "nueva funcionalidad"
-                productCard.classList.add('ring-2', 'ring-purple-200', 'ring-opacity-50');
-                
-                // Animación de pulso sutil
-                setInterval(() => {
-                    productCard.classList.add('ring-purple-300');
-                    setTimeout(() => {
-                        productCard.classList.remove('ring-purple-300');
-                    }, 1000);
-                }, 5000);
-            }
-
-            // Mostrar notificación si hay promos activas
-            const promosActivas = <?= $stats['promos_activas'] ?>;
-            if (promosActivas > 0) {
-                setTimeout(() => {
-                    const notification = document.createElement('div');
-                    notification.className = 'fixed top-4 right-4 bg-orange-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-                    notification.innerHTML = `
-                        <i class="fas fa-tags mr-2"></i>
-                        ${promosActivas} promo${promosActivas > 1 ? 's' : ''} activa${promosActivas > 1 ? 's' : ''}
-                    `;
-                    document.body.appendChild(notification);
-                    
-                    // Auto-remove después de 4 segundos
-                    setTimeout(() => {
-                        notification.remove();
-                    }, 4000);
-                }, 2000);
-            }
-
-            // Verificar si el módulo de productos está funcionando
-            setTimeout(() => {
-                console.log('🔍 Verificando módulo de productos...');
-                console.log('📊 Productos activos:', <?= $stats['productos_activos'] ?>);
-                console.log('🏷️ Promos activas:', <?= $stats['promos_activas'] ?>);
-                
-                if (<?= $stats['productos_activos'] ?> === 0) {
-                    console.warn('⚠️ No hay productos activos - considera crear algunos productos');
-                }
-            }, 1000);
-        });
-    </script>
 </body>
 </html>
