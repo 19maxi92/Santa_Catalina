@@ -188,64 +188,67 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
 </head>
 <body class="bg-gray-50">
     
-    <!-- HEADER COMPACTO -->
-    <header class="bg-blue-600 text-white p-3 shadow-lg sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-bold">🏪 LOCAL 1</h1>
-                <div id="clock" class="text-blue-100 text-sm"></div>
-            </div>
-            
-            <!-- STATS COMPACTOS -->
-            <div class="flex space-x-4 text-xs">
-                <div class="text-center">
-                    <div class="text-lg font-bold"><?= $total ?></div>
-                    <div class="text-blue-200">Total</div>
+    <!-- HEADER COMPACTO RESPONSIVE -->
+    <header class="bg-blue-600 text-white p-2 sm:p-3 shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-center mb-2 sm:mb-0">
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <h1 class="text-base sm:text-xl font-bold">🏪 <span class="hidden sm:inline">LOCAL 1</span><span class="sm:hidden">L1</span></h1>
+                    <div id="clock" class="text-blue-100 text-xs sm:text-sm"></div>
                 </div>
-                <div class="text-center text-yellow-300">
-                    <div class="text-lg font-bold"><?= $pendientes ?></div>
-                    <div>Pend.</div>
-                </div>
-                <div class="text-center text-blue-200">
-                    <div class="text-lg font-bold"><?= $preparando ?></div>
-                    <div>Prep.</div>
-                </div>
-                <div class="text-center text-green-200">
-                    <div class="text-lg font-bold"><?= $listos ?></div>
-                    <div>Listos</div>
-                </div>
-                <div class="text-center text-red-200">
-                    <div class="text-lg font-bold"><?= $sin_imprimir ?></div>
-                    <div>Sin Imp.</div>
+
+                <div class="flex items-center space-x-1 sm:space-x-2">
+                    <a href="pedidos.php" class="bg-blue-500 hover:bg-blue-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
+                        <i class="fas fa-list sm:mr-1"></i><span class="hidden sm:inline">Ver Todos</span>
+                    </a>
+                    <a href="logout.php" class="bg-red-500 hover:bg-red-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
+                        <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
+                    </a>
                 </div>
             </div>
-            
-            <div class="flex items-center space-x-2">
-                <a href="pedidos.php" class="bg-blue-500 hover:bg-blue-400 px-3 py-1.5 rounded text-xs">
-                    <i class="fas fa-list mr-1"></i>Ver Todos
-                </a>
-                <a href="logout.php" class="bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded text-xs">
-                    <i class="fas fa-sign-out-alt mr-1"></i>Salir
-                </a>
+
+            <!-- STATS COMPACTOS RESPONSIVE -->
+            <div class="grid grid-cols-5 gap-1 sm:gap-4 text-center text-xs mt-2">
+                <div>
+                    <div class="text-sm sm:text-lg font-bold"><?= $total ?></div>
+                    <div class="text-blue-200 text-xs">Total</div>
+                </div>
+                <div class="text-yellow-300">
+                    <div class="text-sm sm:text-lg font-bold"><?= $pendientes ?></div>
+                    <div class="text-xs">Pend.</div>
+                </div>
+                <div class="text-blue-200">
+                    <div class="text-sm sm:text-lg font-bold"><?= $preparando ?></div>
+                    <div class="text-xs">Prep.</div>
+                </div>
+                <div class="text-green-200">
+                    <div class="text-sm sm:text-lg font-bold"><?= $listos ?></div>
+                    <div class="text-xs">Listos</div>
+                </div>
+                <div class="text-red-200">
+                    <div class="text-sm sm:text-lg font-bold"><?= $sin_imprimir ?></div>
+                    <div class="text-xs hidden sm:inline">Sin Imp.</div>
+                    <div class="text-xs sm:hidden">S/I</div>
+                </div>
             </div>
         </div>
     </header>
 
-    <!-- BARRA DE FILTROS Y VISTA -->
-    <div class="bg-white border-b p-3 sticky top-14 z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <!-- FILTROS POR ESTADO -->
-            <div class="flex space-x-2">
-                <div class="filter-tab active" onclick="filtrarEstado('todos')" data-estado="todos">
+    <!-- BARRA DE FILTROS Y VISTA RESPONSIVE -->
+    <div class="bg-white border-b p-2 sm:p-3 sticky top-16 sm:top-20 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto">
+            <!-- FILTROS POR ESTADO RESPONSIVE -->
+            <div class="flex flex-wrap gap-1 sm:gap-2 mb-2">
+                <div class="filter-tab active text-xs sm:text-sm" onclick="filtrarEstado('todos')" data-estado="todos">
                     Todos (<?= $total ?>)
                 </div>
-                <div class="filter-tab bg-yellow-100 text-yellow-800" onclick="filtrarEstado('Pendiente')" data-estado="Pendiente">
-                    Pendientes (<?= $pendientes ?>)
+                <div class="filter-tab bg-yellow-100 text-yellow-800 text-xs sm:text-sm" onclick="filtrarEstado('Pendiente')" data-estado="Pendiente">
+                    <span class="hidden sm:inline">Pendientes</span><span class="sm:hidden">Pend.</span> (<?= $pendientes ?>)
                 </div>
-                <div class="filter-tab bg-blue-100 text-blue-800" onclick="filtrarEstado('Preparando')" data-estado="Preparando">
-                    Preparando (<?= $preparando ?>)
+                <div class="filter-tab bg-blue-100 text-blue-800 text-xs sm:text-sm" onclick="filtrarEstado('Preparando')" data-estado="Preparando">
+                    <span class="hidden sm:inline">Preparando</span><span class="sm:hidden">Prep.</span> (<?= $preparando ?>)
                 </div>
-                <div class="filter-tab bg-green-100 text-green-800" onclick="filtrarEstado('Listo')" data-estado="Listo">
+                <div class="filter-tab bg-green-100 text-green-800 text-xs sm:text-sm" onclick="filtrarEstado('Listo')" data-estado="Listo">
                     Listos (<?= $listos ?>)
                 </div>
             </div>
