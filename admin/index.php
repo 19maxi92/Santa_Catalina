@@ -54,9 +54,15 @@ $ultimos_pedidos = $pdo->query("
                 <span class="hidden sm:inline"><?= APP_NAME ?></span>
                 <span class="sm:hidden">SC</span>
             </h1>
-            <div class="flex items-center space-x-2 sm:space-x-4">
-                <span class="text-sm sm:text-base text-gray-600 hidden md:inline">Hola, <?= $_SESSION['admin_name'] ?></span>
-                <a href="logout.php" class="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-sm sm:text-base">
+            <div class="flex items-center space-x-1 sm:space-x-2">
+                <a href="modules/dashboard/dashboard.php" class="bg-blue-500 hover:bg-blue-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Dashboard de Ventas">
+                    <i class="fas fa-chart-line sm:mr-1"></i><span class="hidden lg:inline">Dashboard</span>
+                </a>
+                <a href="modules/empleados/index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Gestión de Empleados">
+                    <i class="fas fa-users sm:mr-1"></i><span class="hidden lg:inline">Empleados</span>
+                </a>
+                <span class="text-sm text-gray-600 hidden xl:inline">Hola, <?= $_SESSION['admin_name'] ?></span>
+                <a href="logout.php" class="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm">
                     <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
                 </a>
             </div>
