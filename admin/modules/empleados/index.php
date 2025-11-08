@@ -2,6 +2,94 @@
 require_once '../../config.php';
 requireLogin();
 
+// === PROTECCIÓN DE ACCESO CON CONTRASEÑA ===
+$EMPLEADOS_PASSWORD = 'Santa.Catalina2186';
+$password_error = '';
+
+// Verificar si ya está autenticado para el módulo de empleados
+if (!isset($_SESSION['empleados_auth']) || $_SESSION['empleados_auth'] !== true) {
+
+    // Si se envió la contraseña, verificarla
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['empleados_password'])) {
+        if ($_POST['empleados_password'] === $EMPLEADOS_PASSWORD) {
+            $_SESSION['empleados_auth'] = true;
+            // Recargar la página para continuar con acceso autorizado
+            header('Location: index.php');
+            exit;
+        } else {
+            $password_error = 'Contraseña incorrecta. Acceso denegado.';
+        }
+    }
+
+    // Si no está autenticado, mostrar formulario de contraseña
+    if (!isset($_SESSION['empleados_auth'])) {
+        ?>
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Acceso Restringido - Empleados</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        </head>
+        <body class="bg-gradient-to-br from-purple-100 to-blue-100 min-h-screen flex items-center justify-center">
+            <div class="max-w-md w-full mx-4">
+                <div class="bg-white rounded-lg shadow-xl p-8">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-lock text-5xl text-purple-500 mb-4"></i>
+                        <h1 class="text-2xl font-bold text-gray-800">Acceso Restringido</h1>
+                        <p class="text-gray-600 mt-2">Módulo de Gestión de Empleados</p>
+                    </div>
+
+                    <?php if ($password_error): ?>
+                        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                            <i class="fas fa-exclamation-circle mr-2"></i><?= htmlspecialchars($password_error) ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <form method="POST" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-key mr-1"></i>Contraseña de Acceso
+                            </label>
+                            <input type="password"
+                                   name="empleados_password"
+                                   required
+                                   autofocus
+                                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                   placeholder="Ingrese la contraseña">
+                        </div>
+
+                        <button type="submit"
+                                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-lg transition-colors">
+                            <i class="fas fa-unlock mr-2"></i>Acceder
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <a href="../../index.php" class="text-sm text-gray-600 hover:text-purple-600">
+                            <i class="fas fa-arrow-left mr-1"></i>Volver al Dashboard
+                        </a>
+                    </div>
+
+                    <div class="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p class="text-xs text-yellow-800">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            <strong>Nota:</strong> Este módulo contiene información sensible de empleados y nóminas.
+                            El acceso está restringido para proteger la privacidad.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+        exit;
+    }
+}
+// === FIN PROTECCIÓN DE ACCESO ===
+
 $pdo = getConnection();
 
 // Crear tabla empleados si no existe

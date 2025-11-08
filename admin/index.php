@@ -115,8 +115,8 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
 
-        <!-- Botones Destacados: Nuevo Pedido y Dashboard -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
+        <!-- Botón Destacado: Nuevo Pedido -->
+        <div class="mb-4 sm:mb-6">
             <a href="modules/pedidos/crear_pedido.php"
                class="block bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800
                       text-white p-5 sm:p-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]">
@@ -125,18 +125,6 @@ $ultimos_pedidos = $pdo->query("
                     <div class="text-left">
                         <h3 class="text-xl sm:text-2xl font-bold">Nuevo Pedido</h3>
                         <p class="text-blue-100 text-sm sm:text-base">Click aquí para tomar pedidos rápidamente</p>
-                    </div>
-                </div>
-            </a>
-
-            <a href="modules/pedidos/dashboard.php"
-               class="block bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800
-                      text-white p-5 sm:p-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:scale-[1.02]">
-                <div class="flex items-center justify-center">
-                    <i class="fas fa-chart-line text-3xl sm:text-4xl mr-3 sm:mr-4"></i>
-                    <div class="text-left">
-                        <h3 class="text-xl sm:text-2xl font-bold">Dashboard en Vivo</h3>
-                        <p class="text-orange-100 text-sm sm:text-base">Ver y gestionar pedidos en tiempo real</p>
                     </div>
                 </div>
             </a>
