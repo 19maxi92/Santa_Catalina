@@ -1063,7 +1063,17 @@ function finalizarYCrearPedidos() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(pedidoCompleto)
-        }).then(r => r.json());
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .catch(error => {
+            console.error('Error en pedido:', error);
+            return { success: false, error: error.message };
+        });
     });
 
     Promise.all(promesas)
@@ -1084,13 +1094,20 @@ function finalizarYCrearPedidos() {
                 alert(msg);
                 window.location.href = '../../index.php';
             } else {
-                alert('❌ Algunos pedidos fallaron. Revisá la consola.');
-                console.error('Errores:', resultados.filter(r => !r.success));
+                // Mostrar errores específicos
+                let errorMsg = '❌ Error al crear pedidos:\n\n';
+                resultados.forEach((r, i) => {
+                    if (!r.success) {
+                        errorMsg += `Pedido ${i + 1}: ${r.error || 'Error desconocido'}\n`;
+                    }
+                });
+                alert(errorMsg);
+                console.error('Errores detallados:', resultados);
             }
         })
         .catch(error => {
-            alert('❌ Error de conexión');
-            console.error(error);
+            alert('❌ Error de conexión al servidor.\n\nDetalles: ' + error.message);
+            console.error('Error completo:', error);
         })
         .finally(() => {
             btn.innerHTML = originalText;

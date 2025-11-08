@@ -6,7 +6,6 @@ Procesa pedidos rápidos creados desde el dashboard de administración
 */
 
 header('Content-Type: application/json');
-session_start();
 require_once '../../config.php';
 
 // Verificar autenticación de admin
@@ -26,11 +25,17 @@ try {
 
     // Obtener datos JSON
     $input = file_get_contents('php://input');
+    error_log("DEBUG: Input recibido: " . substr($input, 0, 500)); // Log primeros 500 caracteres
+
     $data = json_decode($input, true);
 
     if (!$data) {
-        throw new Exception('Datos JSON inválidos');
+        $jsonError = json_last_error_msg();
+        error_log("ERROR: JSON inválido - " . $jsonError);
+        throw new Exception('Datos JSON inválidos: ' . $jsonError);
     }
+
+    error_log("DEBUG: Datos decodificados correctamente");
 
     // Validar campos obligatorios básicos
     $required_fields = ['nombre', 'modalidad', 'forma_pago', 'tipo_pedido', 'precio', 'ubicacion'];
