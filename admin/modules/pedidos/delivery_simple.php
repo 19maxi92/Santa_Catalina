@@ -16,6 +16,31 @@ $sql_create = "CREATE TABLE IF NOT EXISTS choferes (
 )";
 $pdo->exec($sql_create);
 
+// === CREAR TABLA DE CACHE DE GEOCODING ===
+$sql_cache = "CREATE TABLE IF NOT EXISTS geocoding_cache (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    direccion VARCHAR(500) NOT NULL,
+    lat DECIMAL(10, 7) NOT NULL,
+    lng DECIMAL(10, 7) NOT NULL,
+    servicio VARCHAR(50) DEFAULT 'nominatim',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_direccion (direccion)
+)";
+$pdo->exec($sql_cache);
+
+// === CREAR TABLA DE ASIGNACIONES MANUALES ===
+$sql_asignaciones = "CREATE TABLE IF NOT EXISTS pedido_asignaciones (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    pedido_id INT NOT NULL,
+    chofer_id INT NOT NULL,
+    orden INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_pedido (pedido_id),
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
+    FOREIGN KEY (chofer_id) REFERENCES choferes(id) ON DELETE CASCADE
+)";
+$pdo->exec($sql_asignaciones);
+
 // Insertar choferes por defecto si la tabla está vacía
 $stmt = $pdo->query("SELECT COUNT(*) FROM choferes");
 if ($stmt->fetchColumn() == 0) {
@@ -32,7 +57,7 @@ if ($stmt->fetchColumn() == 0) {
     }
 }
 
-// === MANEJAR ACCIONES DE CHOFERES ===
+// === MANEJAR ACCIONES DE CHOFERES Y ASIGNACIONES ===
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
 
@@ -54,6 +79,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $stmt = $pdo->prepare("UPDATE choferes SET activo = NOT activo WHERE id = ?");
                 $stmt->execute([$_POST['id']]);
                 echo json_encode(['success' => true]);
+                exit;
+
+            case 'asignar_pedido':
+                // Asignar pedido a chofer con orden
+                $stmt = $pdo->prepare("INSERT INTO pedido_asignaciones (pedido_id, chofer_id, orden)
+                                      VALUES (?, ?, ?)
+                                      ON DUPLICATE KEY UPDATE chofer_id = ?, orden = ?");
+                $stmt->execute([
+                    $_POST['pedido_id'],
+                    $_POST['chofer_id'],
+                    $_POST['orden'],
+                    $_POST['chofer_id'],
+                    $_POST['orden']
+                ]);
+                echo json_encode(['success' => true]);
+                exit;
+
+            case 'quitar_asignacion':
+                // Quitar asignación de pedido
+                $stmt = $pdo->prepare("DELETE FROM pedido_asignaciones WHERE pedido_id = ?");
+                $stmt->execute([$_POST['pedido_id']]);
+                echo json_encode(['success' => true]);
+                exit;
+
+            case 'save_geocoding':
+                // Guardar coordenadas en cache
+                $stmt = $pdo->prepare("INSERT INTO geocoding_cache (direccion, lat, lng, servicio)
+                                      VALUES (?, ?, ?, ?)
+                                      ON DUPLICATE KEY UPDATE lat = ?, lng = ?, servicio = ?");
+                $stmt->execute([
+                    $_POST['direccion'],
+                    $_POST['lat'],
+                    $_POST['lng'],
+                    $_POST['servicio'],
+                    $_POST['lat'],
+                    $_POST['lng'],
+                    $_POST['servicio']
+                ]);
+                echo json_encode(['success' => true]);
+                exit;
+
+            case 'get_geocoding':
+                // Obtener coordenadas desde cache
+                $stmt = $pdo->prepare("SELECT lat, lng, servicio FROM geocoding_cache WHERE direccion = ?");
+                $stmt->execute([$_POST['direccion']]);
+                $result = $stmt->fetch();
+                if ($result) {
+                    echo json_encode(['success' => true, 'data' => $result]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'No encontrado']);
+                }
                 exit;
         }
     } catch (Exception $e) {
@@ -78,13 +154,16 @@ if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado) {
     $filtro_estado = 'pendientes';
 }
 
-// Construir query para pedidos delivery
+// Construir query para pedidos delivery (con asignaciones)
 $sql = "SELECT p.*,
                cf.nombre as cliente_fijo_nombre,
                cf.apellido as cliente_fijo_apellido,
-               TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos
+               TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos,
+               pa.chofer_id as asignado_chofer_id,
+               pa.orden as asignado_orden
         FROM pedidos p
         LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
+        LEFT JOIN pedido_asignaciones pa ON p.id = pa.pedido_id
         WHERE p.modalidad = 'Delivery'";
 
 $params = [];
@@ -562,9 +641,13 @@ $choferes = $stmt->fetchAll();
             </div>
 
             <div class="flex items-center gap-2">
+                <button onclick="armarRutasManuales()" class="btn btn-primary">
+                    <i class="fas fa-map-marked-alt"></i>
+                    Armar Rutas
+                </button>
                 <button onclick="optimizarRuta()" class="btn btn-warning">
-                    <i class="fas fa-route"></i>
-                    Optimizar
+                    <i class="fas fa-magic"></i>
+                    Auto-Optimizar
                 </button>
                 <button onclick="centrarMapa()" class="btn btn-secondary btn-sm">
                     <i class="fas fa-crosshairs"></i>
@@ -811,6 +894,44 @@ $choferes = $stmt->fetchAll();
                                     </div>
                                 <?php endif; ?>
 
+                                <!-- ASIGNACIÓN MANUAL - DROPDOWNS COMPACTOS -->
+                                <div style="display: flex; gap: 4px; margin-bottom: 6px;" onclick="event.stopPropagation();">
+                                    <select id="chofer-select-<?= $pedido['id'] ?>"
+                                            class="chofer-select"
+                                            onchange="onChoferChange(<?= $pedido['id'] ?>)"
+                                            style="flex: 1; padding: 3px 6px; font-size: 9px; border: 1px solid #d1d5db; border-radius: 6px; background: white; cursor: pointer; font-weight: 600;">
+                                        <option value="">👤 Chofer...</option>
+                                        <?php foreach ($choferes as $c): ?>
+                                            <?php if ($c['activo']): ?>
+                                                <option value="<?= $c['id'] ?>"
+                                                        <?= $pedido['asignado_chofer_id'] == $c['id'] ? 'selected' : '' ?>
+                                                        data-color="<?= $c['color'] ?>">
+                                                    <?= substr($c['nombre'], 0, 1) ?>. <?= $c['apellido'] ?>
+                                                </option>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </select>
+
+                                    <select id="orden-select-<?= $pedido['id'] ?>"
+                                            class="orden-select"
+                                            onchange="onOrdenChange(<?= $pedido['id'] ?>)"
+                                            <?= empty($pedido['asignado_chofer_id']) ? 'disabled' : '' ?>
+                                            style="width: 60px; padding: 3px 6px; font-size: 9px; border: 1px solid #d1d5db; border-radius: 6px; background: <?= !empty($pedido['asignado_chofer_id']) ? 'white' : '#f3f4f6' ?>; cursor: <?= !empty($pedido['asignado_chofer_id']) ? 'pointer' : 'not-allowed' ?>; font-weight: 700; text-align: center;">
+                                        <option value="">Nº</option>
+                                        <?php for ($i = 1; $i <= 20; $i++): ?>
+                                            <option value="<?= $i ?>" <?= $pedido['asignado_orden'] == $i ? 'selected' : '' ?>><?= $i ?></option>
+                                        <?php endfor; ?>
+                                    </select>
+
+                                    <?php if (!empty($pedido['asignado_chofer_id'])): ?>
+                                        <button onclick="quitarAsignacion(<?= $pedido['id'] ?>)"
+                                                title="Quitar asignación"
+                                                style="padding: 3px 6px; font-size: 9px; border: 1px solid #ef4444; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-weight: 700;">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+
                                 <div style="font-size: 10px; color: #6b7280; margin-bottom: 6px;">
                                     <?= htmlspecialchars(substr($pedido['producto'], 0, 30)) ?><?= strlen($pedido['producto']) > 30 ? '...' : '' ?>
                                 </div>
@@ -1044,6 +1165,116 @@ $choferes = $stmt->fetchAll();
 
         // === FIN GESTIÓN DE CHOFERES ===
 
+        // === ASIGNACIÓN MANUAL DE PEDIDOS ===
+
+        // Cuando se selecciona un chofer en un pedido
+        async function onChoferChange(pedidoId) {
+            const choferSelect = document.getElementById(`chofer-select-${pedidoId}`);
+            const ordenSelect = document.getElementById(`orden-select-${pedidoId}`);
+            const choferId = choferSelect.value;
+
+            if (choferId) {
+                // Habilitar dropdown de orden
+                ordenSelect.disabled = false;
+                ordenSelect.style.background = 'white';
+                ordenSelect.style.cursor = 'pointer';
+
+                // Aplicar color del chofer al borde del select
+                const selectedOption = choferSelect.options[choferSelect.selectedIndex];
+                const color = selectedOption.dataset.color;
+                choferSelect.style.borderColor = color;
+                choferSelect.style.borderWidth = '2px';
+
+                console.log(`📌 Pedido #${pedidoId} asignado a chofer ${choferId}`);
+            } else {
+                // Deshabilitar dropdown de orden
+                ordenSelect.disabled = true;
+                ordenSelect.style.background = '#f3f4f6';
+                ordenSelect.style.cursor = 'not-allowed';
+                ordenSelect.value = '';
+                choferSelect.style.borderColor = '#d1d5db';
+                choferSelect.style.borderWidth = '1px';
+
+                // Quitar asignación
+                await quitarAsignacion(pedidoId, false);
+            }
+        }
+
+        // Cuando se selecciona un orden
+        async function onOrdenChange(pedidoId) {
+            const choferSelect = document.getElementById(`chofer-select-${pedidoId}`);
+            const ordenSelect = document.getElementById(`orden-select-${pedidoId}`);
+            const choferId = choferSelect.value;
+            const orden = ordenSelect.value;
+
+            if (!choferId) {
+                alert('⚠️ Primero selecciona un chofer');
+                ordenSelect.value = '';
+                return;
+            }
+
+            if (!orden) {
+                return;
+            }
+
+            // Aplicar color del chofer al select de orden también
+            const selectedOption = choferSelect.options[choferSelect.selectedIndex];
+            const color = selectedOption.dataset.color;
+            ordenSelect.style.borderColor = color;
+            ordenSelect.style.borderWidth = '2px';
+
+            // Guardar asignación
+            try {
+                const formData = new FormData();
+                formData.append('action', 'asignar_pedido');
+                formData.append('pedido_id', pedidoId);
+                formData.append('chofer_id', choferId);
+                formData.append('orden', orden);
+
+                const response = await fetch('', { method: 'POST', body: formData });
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log(`✅ Pedido #${pedidoId} → Chofer ${choferId} → Orden ${orden}`);
+                    // Recargar para mostrar botón de quitar
+                    location.reload();
+                } else {
+                    alert('❌ Error al asignar pedido');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al asignar pedido');
+            }
+        }
+
+        // Quitar asignación de un pedido
+        async function quitarAsignacion(pedidoId, reload = true) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'quitar_asignacion');
+                formData.append('pedido_id', pedidoId);
+
+                const response = await fetch('', { method: 'POST', body: formData });
+                const result = await response.json();
+
+                if (result.success) {
+                    console.log(`🗑️ Asignación eliminada para pedido #${pedidoId}`);
+                    if (reload) {
+                        location.reload();
+                    }
+                } else {
+                    alert('❌ Error al quitar asignación');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                if (reload) {
+                    alert('❌ Error al quitar asignación');
+                }
+            }
+        }
+
+        // === FIN ASIGNACIÓN MANUAL ===
+
         // Inicializar mapa
         function initMap() {
             console.log('🗺️ Inicializando mapa...');
@@ -1130,37 +1361,109 @@ $choferes = $stmt->fetchAll();
             }
         }
 
+        // Geocodificar con CACHE + Photon API + Nominatim fallback
         async function geocodificar(direccion) {
-            const query = `${direccion}, La Plata, Buenos Aires, Argentina`;
-            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
-
+            // 1️⃣ PASO 1: Buscar en cache
             try {
-                const response = await fetch(url, {
+                const formData = new FormData();
+                formData.append('action', 'get_geocoding');
+                formData.append('direccion', direccion);
+
+                const cacheResponse = await fetch('', { method: 'POST', body: formData });
+                const cacheResult = await cacheResponse.json();
+
+                if (cacheResult.success) {
+                    console.log(`  ⚡ CACHE HIT: ${direccion}`);
+                    return {
+                        lat: parseFloat(cacheResult.data.lat),
+                        lon: parseFloat(cacheResult.data.lng)
+                    };
+                }
+            } catch (error) {
+                console.log('  → Cache miss, procediendo a geocodificar...');
+            }
+
+            // 2️⃣ PASO 2: Intentar con Photon API (más rápido, sin rate limits estrictos)
+            try {
+                const query = `${direccion}, La Plata, Buenos Aires, Argentina`;
+                const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`;
+
+                const photonResponse = await fetch(photonUrl);
+
+                if (photonResponse.ok) {
+                    const photonData = await photonResponse.json();
+
+                    if (photonData.features && photonData.features.length > 0) {
+                        const coords = {
+                            lat: photonData.features[0].geometry.coordinates[1],
+                            lon: photonData.features[0].geometry.coordinates[0]
+                        };
+
+                        console.log(`  ✅ PHOTON: (${coords.lat}, ${coords.lon})`);
+
+                        // Guardar en cache
+                        await guardarEnCache(direccion, coords.lat, coords.lon, 'photon');
+
+                        return coords;
+                    }
+                }
+            } catch (error) {
+                console.log('  ⚠️ Photon falló, intentando Nominatim...');
+            }
+
+            // 3️⃣ PASO 3: Fallback a Nominatim
+            try {
+                const query = `${direccion}, La Plata, Buenos Aires, Argentina`;
+                const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`;
+
+                const nominatimResponse = await fetch(nominatimUrl, {
                     headers: { 'User-Agent': 'SantaCatalinaDelivery/1.0' }
                 });
 
-                if (!response.ok) {
-                    console.error(`HTTP Error: ${response.status} ${response.statusText}`);
+                if (!nominatimResponse.ok) {
+                    console.error(`  ❌ HTTP Error: ${nominatimResponse.status}`);
                     return null;
                 }
 
-                const data = await response.json();
+                const nominatimData = await nominatimResponse.json();
 
-                if (data && data.length > 0) {
+                if (nominatimData && nominatimData.length > 0) {
                     const coords = {
-                        lat: parseFloat(data[0].lat),
-                        lon: parseFloat(data[0].lon)
+                        lat: parseFloat(nominatimData[0].lat),
+                        lon: parseFloat(nominatimData[0].lon)
                     };
-                    console.log(`  → Coordenadas encontradas: (${coords.lat}, ${coords.lon})`);
+
+                    console.log(`  ✅ NOMINATIM: (${coords.lat}, ${coords.lon})`);
+
+                    // Guardar en cache
+                    await guardarEnCache(direccion, coords.lat, coords.lon, 'nominatim');
+
                     return coords;
                 } else {
-                    console.warn(`  → No se encontraron resultados para: ${direccion}`);
+                    console.warn(`  ❌ No se encontraron resultados para: ${direccion}`);
                     return null;
                 }
 
             } catch (error) {
-                console.error('  → Error en geocodificación:', error.message || error);
+                console.error('  ❌ Error en geocodificación:', error.message || error);
                 return null;
+            }
+        }
+
+        // Guardar coordenadas en cache
+        async function guardarEnCache(direccion, lat, lng, servicio) {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'save_geocoding');
+                formData.append('direccion', direccion);
+                formData.append('lat', lat);
+                formData.append('lng', lng);
+                formData.append('servicio', servicio);
+
+                await fetch('', { method: 'POST', body: formData });
+                console.log(`  💾 Guardado en cache`);
+            } catch (error) {
+                console.log('  ⚠️ No se pudo guardar en cache');
             }
         }
 
@@ -1314,7 +1617,170 @@ $choferes = $stmt->fetchAll();
             }
         }
 
-        // OPTIMIZAR RUTA - CON COLOR POR CHOFER
+        // ARMAR RUTAS MANUALES - Múltiples choferes con colores diferentes
+        async function armarRutasManuales() {
+            console.log('🗺️ Armando rutas manuales...');
+
+            // Obtener TODOS los pedidos del DOM (no solo los que tienen checkbox marcado)
+            const pedidosAsignados = [];
+
+            pedidos.forEach(pedido => {
+                const card = document.getElementById(`pedido-card-${pedido.id}`);
+                if (!card) return;
+
+                const choferSelect = document.getElementById(`chofer-select-${pedido.id}`);
+                const ordenSelect = document.getElementById(`orden-select-${pedido.id}`);
+
+                if (!choferSelect || !ordenSelect) return;
+
+                const choferId = parseInt(choferSelect.value);
+                const orden = parseInt(ordenSelect.value);
+
+                if (choferId && orden && card.dataset.lat && card.dataset.lng) {
+                    pedidosAsignados.push({
+                        ...pedido,
+                        choferId: choferId,
+                        orden: orden,
+                        lat: parseFloat(card.dataset.lat),
+                        lng: parseFloat(card.dataset.lng)
+                    });
+                }
+            });
+
+            console.log(`📦 Pedidos asignados: ${pedidosAsignados.length}`);
+
+            if (pedidosAsignados.length === 0) {
+                alert('⚠️ No hay pedidos asignados manualmente.\n\nPara cada pedido:\n1. Selecciona un chofer\n2. Selecciona un número de orden');
+                return;
+            }
+
+            // Agrupar por chofer
+            const gruposPorChofer = {};
+            pedidosAsignados.forEach(p => {
+                if (!gruposPorChofer[p.choferId]) {
+                    gruposPorChofer[p.choferId] = [];
+                }
+                gruposPorChofer[p.choferId].push(p);
+            });
+
+            // Ordenar cada grupo por orden
+            Object.keys(gruposPorChofer).forEach(choferId => {
+                gruposPorChofer[choferId].sort((a, b) => a.orden - b.orden);
+            });
+
+            console.log('👥 Choferes con pedidos asignados:', Object.keys(gruposPorChofer).length);
+
+            // Limpiar rutas anteriores
+            if (window.rutasPolylines) {
+                window.rutasPolylines.forEach(polyline => map.removeLayer(polyline));
+            }
+            window.rutasPolylines = [];
+
+            // Geocodificar origen (FÁBRICA)
+            console.log('📍 Geocodificando fábrica...');
+            let origenCoords = await geocodificar(DIRECCION_FABRICA);
+
+            if (!origenCoords) {
+                console.warn('⚠️ Usando coordenadas fijas de fábrica');
+                origenCoords = { lat: -34.8077, lon: -58.2715 };
+            }
+
+            // Marcador de origen (si no existe)
+            if (originMarker) {
+                map.removeLayer(originMarker);
+            }
+
+            const originIcon = L.divIcon({
+                className: 'origin-marker',
+                html: `<div style="
+                    background: linear-gradient(135deg, #16a34a, #15803d);
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: 4px solid white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 15px rgba(22, 163, 74, 0.5);
+                ">
+                    <i class="fas fa-home" style="color: white; font-size: 18px;"></i>
+                </div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            originMarker = L.marker([origenCoords.lat, origenCoords.lon], { icon: originIcon }).addTo(map);
+            originMarker.bindPopup('<strong>🏭 Fábrica (Origen)</strong><br>' + DIRECCION_FABRICA);
+
+            // Dibujar ruta para cada chofer
+            let totalDistancia = 0;
+            let totalPedidosAsignados = 0;
+
+            for (const choferId in gruposPorChofer) {
+                const chofer = choferes.find(c => c.id == choferId);
+                if (!chofer) continue;
+
+                const pedidosChofer = gruposPorChofer[choferId];
+                console.log(`\n🚗 Ruta de ${chofer.nombre} ${chofer.apellido} (${pedidosChofer.length} pedidos):`);
+
+                // Construir ruta: Fábrica → Pedidos en orden
+                const rutaCoords = [[origenCoords.lat, origenCoords.lon]];
+
+                pedidosChofer.forEach(p => {
+                    rutaCoords.push([p.lat, p.lng]);
+                    console.log(`   ${p.orden}. Pedido #${p.id} → ${p.direccion}`);
+                });
+
+                // Dibujar polyline con color del chofer
+                const polyline = L.polyline(rutaCoords, {
+                    color: chofer.color,
+                    weight: 4,
+                    opacity: 0.8,
+                    dashArray: '10, 5',
+                    lineJoin: 'round'
+                }).addTo(map);
+
+                window.rutasPolylines.push(polyline);
+
+                // Calcular distancia para esta ruta
+                const distanciaChofer = calcularDistanciaTotal(rutaCoords);
+                totalDistancia += distanciaChofer;
+                totalPedidosAsignados += pedidosChofer.length;
+
+                console.log(`   📏 Distancia: ${distanciaChofer.toFixed(1)} km`);
+
+                // Popup en la polyline con info del chofer
+                polyline.bindPopup(`
+                    <strong style="color: ${chofer.color};">${chofer.nombre} ${chofer.apellido}</strong><br>
+                    📦 ${pedidosChofer.length} pedidos<br>
+                    📏 ${distanciaChofer.toFixed(1)} km
+                `);
+            }
+
+            // Ajustar vista del mapa
+            const allCoords = [];
+            allCoords.push([origenCoords.lat, origenCoords.lon]);
+            pedidosAsignados.forEach(p => allCoords.push([p.lat, p.lng]));
+
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords);
+                map.fitBounds(bounds.pad(0.1));
+            }
+
+            // Resumen
+            const tiempoEstimado = Math.round(totalDistancia / 30 * 60);
+            const choferesCantidad = Object.keys(gruposPorChofer).length;
+
+            console.log(`\n✅ RESUMEN:`);
+            console.log(`   👥 Choferes: ${choferesCantidad}`);
+            console.log(`   📦 Pedidos: ${totalPedidosAsignados}`);
+            console.log(`   📏 Distancia total: ${totalDistancia.toFixed(1)} km`);
+            console.log(`   ⏱️ Tiempo estimado: ${tiempoEstimado} min`);
+
+            alert(`✅ Rutas armadas exitosamente\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n📏 ${totalDistancia.toFixed(1)} km totales\n⏱️ ~${tiempoEstimado} min`);
+        }
+
+        // OPTIMIZAR RUTA - CON COLOR POR CHOFER (Auto-optimización)
         async function optimizarRuta() {
             console.log('🔄 Optimizando ruta con TODOS los seleccionados...');
 
