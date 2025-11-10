@@ -1,5 +1,5 @@
 <?php
-// admin/modules/pedidos/delivery_simple.php - SISTEMA DE DELIVERY CON MAPA INTERACTIVO
+// admin/modules/pedidos/delivery_simple.php - SISTEMA AVANZADO DE DELIVERY CON MAPA INTERACTIVO
 require_once '../../config.php';
 requireLogin();
 
@@ -15,7 +15,7 @@ $busqueda = $_GET['buscar'] ?? '';
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado) {
     $fecha_desde = date('Y-m-d');
     $fecha_hasta = date('Y-m-d');
-    $filtro_estado = 'pendientes'; // todos menos entregados
+    $filtro_estado = 'pendientes';
 }
 
 // Construir query para pedidos delivery
@@ -81,19 +81,23 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🏍️ Delivery con Mapa - Admin</title>
+    <title>🏍️ Delivery Pro - Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 0;
             overflow: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
 
         .layout-container {
@@ -105,12 +109,13 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
         .header-bar {
             background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
             color: white;
-            padding: 12px 20px;
+            padding: 16px 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             z-index: 1000;
+            backdrop-filter: blur(10px);
         }
 
         .main-content {
@@ -120,33 +125,40 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
         }
 
         .sidebar {
-            width: 400px;
-            background: white;
-            border-right: 2px solid #e5e7eb;
+            width: 420px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(255, 255, 255, 0.3);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            box-shadow: 4px 0 30px rgba(0,0,0,0.1);
         }
 
         .sidebar-header {
-            padding: 15px;
-            background: #f9fafb;
-            border-bottom: 2px solid #e5e7eb;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.1) 0%, rgba(21, 128, 61, 0.05) 100%);
+            border-bottom: 1px solid rgba(22, 163, 74, 0.2);
         }
 
         .sidebar-content {
             flex: 1;
             overflow-y: auto;
-            padding: 10px;
+            padding: 16px;
         }
 
         .sidebar-content::-webkit-scrollbar {
-            width: 8px;
+            width: 10px;
+        }
+
+        .sidebar-content::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
         }
 
         .sidebar-content::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 4px;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            border-radius: 10px;
         }
 
         .map-container {
@@ -162,167 +174,367 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
         .pedido-card {
             background: white;
             border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 10px;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pedido-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, transparent 0%, rgba(22, 163, 74, 0.05) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .pedido-card:hover::before {
+            opacity: 1;
         }
 
         .pedido-card:hover {
             border-color: #16a34a;
-            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
-            transform: translateX(4px);
+            box-shadow: 0 8px 30px rgba(22, 163, 74, 0.25);
+            transform: translateX(8px) translateY(-2px);
         }
 
         .pedido-card.selected {
             border-color: #16a34a;
-            background: #f0fdf4;
-            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            box-shadow: 0 8px 30px rgba(22, 163, 74, 0.3);
+        }
+
+        .pedido-card.in-route {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
         }
 
         .pedido-card.estado-Pendiente {
-            border-left: 4px solid #eab308;
+            border-left: 5px solid #eab308;
         }
 
         .pedido-card.estado-Preparando {
-            border-left: 4px solid #3b82f6;
+            border-left: 5px solid #3b82f6;
         }
 
         .pedido-card.estado-Listo {
-            border-left: 4px solid #22c55e;
+            border-left: 5px solid #22c55e;
         }
 
         .pedido-card.estado-Entregado {
-            border-left: 4px solid #6b7280;
+            border-left: 5px solid #6b7280;
             opacity: 0.6;
         }
 
         .urgente-badge {
-            background: #dc2626;
+            background: linear-gradient(135deg, #dc2626, #991b1b);
             color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
+            padding: 4px 12px;
+            border-radius: 20px;
             font-size: 10px;
-            font-weight: bold;
-            animation: pulse 2s infinite;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            animation: pulseGlow 2s infinite;
+            box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+        @keyframes pulseGlow {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+            }
+            50% {
+                opacity: 0.8;
+                box-shadow: 0 4px 25px rgba(220, 38, 38, 0.6);
+            }
         }
 
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
+            gap: 12px;
+            margin-bottom: 20px;
         }
 
         .stat-box {
             background: white;
-            padding: 10px;
-            border-radius: 6px;
+            padding: 16px;
+            border-radius: 12px;
             text-align: center;
-            border: 1px solid #e5e7eb;
+            border: 2px solid #f3f4f6;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .stat-box:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
         }
 
         .stat-number {
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1;
         }
 
         .stat-label {
             font-size: 11px;
             color: #6b7280;
             text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
         }
 
         .btn {
-            padding: 8px 16px;
-            border-radius: 6px;
+            padding: 10px 18px;
+            border-radius: 10px;
             border: none;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
         }
 
         .btn-primary {
-            background: #16a34a;
+            background: linear-gradient(135deg, #16a34a, #15803d);
             color: white;
         }
 
         .btn-secondary {
-            background: #6b7280;
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
             color: white;
         }
 
         .btn-sm {
-            padding: 4px 10px;
-            font-size: 11px;
+            padding: 6px 12px;
+            font-size: 12px;
         }
 
-        .leaflet-popup-content {
-            min-width: 250px;
+        .origin-selector {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+            border: 2px solid #e5e7eb;
         }
 
-        .popup-content {
-            font-family: 'Segoe UI', sans-serif;
+        .origin-selector input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.3s;
         }
 
-        .popup-header {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 8px;
+        .origin-selector input:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+        }
+
+        .origin-suggestions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .origin-suggestion {
+            padding: 6px 14px;
+            background: #f3f4f6;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .origin-suggestion:hover {
+            background: #16a34a;
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .route-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 300px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            z-index: 999;
+            display: none;
+        }
+
+        .route-panel.active {
+            display: block;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .route-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .route-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #f9fafb;
+            border-radius: 10px;
+        }
+
+        .route-stat-label {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 600;
+        }
+
+        .route-stat-value {
+            font-size: 18px;
+            font-weight: 800;
             color: #16a34a;
         }
 
-        .popup-info {
-            font-size: 13px;
-            line-height: 1.6;
-            color: #374151;
+        .checkbox-container {
+            width: 24px;
+            height: 24px;
+            position: relative;
+            cursor: pointer;
         }
 
-        .popup-actions {
-            margin-top: 10px;
-            display: flex;
-            gap: 5px;
+        .checkbox-container input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            accent-color: #16a34a;
+        }
+
+        .orden-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 800;
+            font-size: 12px;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+            animation: bounce 0.5s ease-out;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
         }
 
         .filters-container {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             flex-wrap: wrap;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
         }
 
         .filter-btn {
-            padding: 6px 12px;
-            border-radius: 6px;
+            padding: 10px 16px;
+            border-radius: 10px;
             border: 2px solid #e5e7eb;
             background: white;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 600;
-            transition: all 0.2s;
+            transition: all 0.3s;
         }
 
         .filter-btn.active {
-            background: #16a34a;
+            background: linear-gradient(135deg, #16a34a, #15803d);
             color: white;
             border-color: #16a34a;
+            box-shadow: 0 4px 15px rgba(22, 163, 74, 0.3);
         }
 
         .filter-btn:hover:not(.active) {
             border-color: #16a34a;
             color: #16a34a;
+            transform: translateY(-2px);
+        }
+
+        .selection-toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .leaflet-popup-content {
+            min-width: 280px;
+        }
+
+        .popup-content {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .popup-header {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #16a34a;
+        }
+
+        .popup-info {
+            font-size: 13px;
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        .popup-actions {
+            margin-top: 12px;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
         }
 
         /* Responsive */
@@ -332,35 +544,43 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                 max-width: 100%;
                 position: absolute;
                 z-index: 999;
-                height: 40%;
+                height: 45%;
                 bottom: 0;
                 border-right: none;
-                border-top: 2px solid #e5e7eb;
+                border-top: 1px solid rgba(255, 255, 255, 0.3);
             }
 
             .map-container {
-                height: 60%;
+                height: 55%;
+            }
+
+            .route-panel {
+                top: 10px;
+                right: 10px;
+                min-width: 250px;
+                padding: 15px;
             }
         }
 
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: white;
-            animation: spin 1s ease-in-out infinite;
+        /* Animaciones adicionales */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
         }
 
-        .optimize-route-btn {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            color: white;
-            margin-top: 10px;
+        /* Mejoras en marcadores */
+        .custom-marker {
+            animation: markerPop 0.3s ease-out;
+        }
+
+        @keyframes markerPop {
+            0% { transform: scale(0) rotate(-45deg); }
+            50% { transform: scale(1.2) rotate(-45deg); }
+            100% { transform: scale(1) rotate(-45deg); }
         }
     </style>
 </head>
@@ -369,33 +589,33 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
         <!-- Header -->
         <div class="header-bar">
             <div class="flex items-center gap-4">
-                <h1 class="text-xl font-bold flex items-center gap-2">
+                <h1 class="text-2xl font-bold flex items-center gap-3">
                     <i class="fas fa-motorcycle"></i>
-                    DELIVERY CON MAPA
+                    DELIVERY PRO
                 </h1>
-                <span class="bg-white text-green-700 px-3 py-1 rounded-full text-sm font-bold">
+                <span class="bg-white text-green-700 px-4 py-1.5 rounded-full text-sm font-bold shadow-lg">
                     <?= $total ?> pedidos
                 </span>
-                <span class="text-green-100 text-sm">
+                <span class="text-green-100 text-sm font-medium">
                     <i class="fas fa-map-marked-alt"></i>
                     OpenStreetMap
                 </span>
             </div>
 
             <div class="flex items-center gap-2">
-                <button onclick="optimizarRuta()" class="btn btn-sm" style="background: #f59e0b; color: white;">
+                <button onclick="optimizarRuta()" class="btn btn-warning">
                     <i class="fas fa-route"></i>
                     Optimizar Ruta
                 </button>
-                <button onclick="centrarMapa()" class="btn btn-sm btn-secondary">
+                <button onclick="centrarMapa()" class="btn btn-secondary">
                     <i class="fas fa-crosshairs"></i>
                     Centrar
                 </button>
-                <button onclick="imprimirTodos()" class="btn btn-sm" style="background: #f97316; color: white;">
+                <button onclick="imprimirTodos()" class="btn btn-sm" style="background: linear-gradient(135deg, #f97316, #ea580c); color: white;">
                     <i class="fas fa-print"></i>
                     Imprimir
                 </button>
-                <a href="ver_pedidos.php" class="btn btn-sm btn-secondary">
+                <a href="ver_pedidos.php" class="btn btn-secondary">
                     <i class="fas fa-arrow-left"></i>
                     Volver
                 </a>
@@ -409,22 +629,60 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                 <div class="sidebar-header">
                     <!-- Stats -->
                     <div class="stats-grid">
-                        <div class="stat-box" style="border-left: 3px solid #eab308;">
+                        <div class="stat-box" style="border-left: 4px solid #eab308;">
                             <div class="stat-number" style="color: #eab308;"><?= $pendientes ?></div>
                             <div class="stat-label">Pendientes</div>
                         </div>
-                        <div class="stat-box" style="border-left: 3px solid #3b82f6;">
+                        <div class="stat-box" style="border-left: 4px solid #3b82f6;">
                             <div class="stat-number" style="color: #3b82f6;"><?= $preparando ?></div>
                             <div class="stat-label">Preparando</div>
                         </div>
-                        <div class="stat-box" style="border-left: 3px solid #22c55e;">
+                        <div class="stat-box" style="border-left: 4px solid #22c55e;">
                             <div class="stat-number" style="color: #22c55e;"><?= $listos ?></div>
                             <div class="stat-label">Listos</div>
                         </div>
-                        <div class="stat-box" style="border-left: 3px solid #16a34a;">
+                        <div class="stat-box" style="border-left: 4px solid #16a34a;">
                             <div class="stat-number" style="color: #16a34a;">$<?= number_format($total_ventas/1000, 1) ?>K</div>
                             <div class="stat-label">Total</div>
                         </div>
+                    </div>
+
+                    <!-- Selector de Origen -->
+                    <div class="origin-selector">
+                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #374151; font-size: 13px;">
+                            <i class="fas fa-map-pin"></i> Punto de Partida
+                        </label>
+                        <input type="text"
+                               id="origenInput"
+                               placeholder="Escribe la dirección de salida..."
+                               style="margin-bottom: 0;">
+                        <div class="origin-suggestions">
+                            <span class="origin-suggestion" onclick="setOrigen('Calle 7 1234, La Plata')">
+                                <i class="fas fa-store"></i> Local 1
+                            </span>
+                            <span class="origin-suggestion" onclick="setOrigen('Calle 50 567, La Plata')">
+                                <i class="fas fa-industry"></i> Fábrica
+                            </span>
+                            <span class="origin-suggestion" onclick="setOrigen('')">
+                                <i class="fas fa-times"></i> Limpiar
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Selection Toolbar -->
+                    <div class="selection-toolbar">
+                        <button onclick="seleccionarTodos()" class="btn btn-sm btn-primary">
+                            <i class="fas fa-check-double"></i> Todos
+                        </button>
+                        <button onclick="limpiarSeleccion()" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-times"></i> Limpiar
+                        </button>
+                        <button onclick="seleccionarListos()" class="btn btn-sm" style="background: #22c55e; color: white;">
+                            <i class="fas fa-check-circle"></i> Solo Listos
+                        </button>
+                        <span id="contadorSeleccion" style="margin-left: auto; font-weight: 600; color: #16a34a; font-size: 13px; display: flex; align-items: center;">
+                            0 seleccionados
+                        </span>
                     </div>
 
                     <!-- Filters -->
@@ -447,8 +705,8 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                 <div class="sidebar-content" id="pedidosList">
                     <?php if (empty($pedidos)): ?>
                         <div class="text-center py-12 text-gray-500">
-                            <i class="fas fa-motorcycle text-5xl mb-3 opacity-30"></i>
-                            <p class="font-semibold">No hay pedidos de delivery</p>
+                            <i class="fas fa-motorcycle text-6xl mb-4 opacity-20"></i>
+                            <p class="font-semibold text-lg">No hay pedidos de delivery</p>
                             <p class="text-sm">Para la fecha seleccionada</p>
                         </div>
                     <?php else: ?>
@@ -469,27 +727,36 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                             $urgente = ($pedido['minutos_transcurridos'] > 60 && $pedido['estado'] !== 'Entregado');
                             ?>
 
-                            <div class="pedido-card estado-<?= $pedido['estado'] ?>"
+                            <div class="pedido-card estado-<?= $pedido['estado'] ?> fade-in"
                                  id="pedido-card-<?= $pedido['id'] ?>"
                                  onclick="focusPedido(<?= $pedido['id'] ?>)"
                                  data-lat=""
                                  data-lng=""
+                                 data-precio="<?= $pedido['precio'] ?>"
                                  data-direccion="<?= htmlspecialchars($pedido['direccion']) ?>">
 
-                                <div class="flex justify-between items-start mb-2">
-                                    <div>
-                                        <span class="text-sm font-bold text-blue-600">#<?= $pedido['id'] ?></span>
-                                        <span class="text-xs text-gray-500 ml-2">
-                                            <?= $pedido['minutos_transcurridos'] ?> min
-                                        </span>
-                                        <?php if ($urgente): ?>
-                                            <span class="urgente-badge ml-2">¡URGENTE!</span>
-                                        <?php endif; ?>
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <div class="checkbox-container" onclick="event.stopPropagation();">
+                                            <input type="checkbox"
+                                                   class="pedido-checkbox"
+                                                   data-pedido-id="<?= $pedido['id'] ?>"
+                                                   onchange="actualizarSeleccion()">
+                                        </div>
+                                        <div>
+                                            <span class="text-sm font-bold text-blue-600">#<?= $pedido['id'] ?></span>
+                                            <span class="text-xs text-gray-500 ml-2">
+                                                <?= $pedido['minutos_transcurridos'] ?> min
+                                            </span>
+                                            <?php if ($urgente): ?>
+                                                <span class="urgente-badge ml-2">Urgente</span>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
-                                    <div class="text-xl"><?= $estado_icon ?></div>
+                                    <div class="text-2xl"><?= $estado_icon ?></div>
                                 </div>
 
-                                <div class="font-bold text-sm text-gray-800 mb-1">
+                                <div class="font-bold text-base text-gray-800 mb-2">
                                     <?= htmlspecialchars($nombre_completo) ?>
                                 </div>
 
@@ -504,23 +771,23 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                                         <?= htmlspecialchars($pedido['direccion']) ?>
                                     </div>
                                 <?php else: ?>
-                                    <div class="text-xs text-red-500 mb-2">
+                                    <div class="text-xs text-red-500 mb-2 font-semibold">
                                         <i class="fas fa-exclamation-triangle"></i>
                                         Sin dirección
                                     </div>
                                 <?php endif; ?>
 
-                                <div class="text-xs text-gray-700 mb-2">
-                                    <?= htmlspecialchars(substr($pedido['producto'], 0, 40)) ?><?= strlen($pedido['producto']) > 40 ? '...' : '' ?>
+                                <div class="text-xs text-gray-700 mb-3">
+                                    <?= htmlspecialchars(substr($pedido['producto'], 0, 45)) ?><?= strlen($pedido['producto']) > 45 ? '...' : '' ?>
                                 </div>
 
                                 <div class="flex justify-between items-center">
-                                    <span class="text-base font-bold text-green-600">
+                                    <span class="text-lg font-bold text-green-600">
                                         $<?= number_format($pedido['precio'], 0, ',', '.') ?>
                                     </span>
-                                    <div class="flex gap-1">
+                                    <div class="flex gap-2">
                                         <button onclick="event.stopPropagation(); imprimir(<?= $pedido['id'] ?>)"
-                                                class="btn btn-sm" style="background: #f97316; color: white;"
+                                                class="btn btn-sm" style="background: linear-gradient(135deg, #f97316, #ea580c); color: white;"
                                                 title="Imprimir">
                                             <i class="fas fa-print"></i>
                                         </button>
@@ -543,6 +810,50 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
             <div class="map-container">
                 <div id="map"></div>
 
+                <!-- Panel de Resumen de Ruta -->
+                <div id="routePanel" class="route-panel">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="font-size: 18px; font-weight: 700; color: #16a34a;">
+                            <i class="fas fa-route"></i> Resumen de Ruta
+                        </h3>
+                        <button onclick="cerrarPanelRuta()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 18px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div class="route-summary">
+                        <div class="route-stat">
+                            <span class="route-stat-label">
+                                <i class="fas fa-box"></i> Pedidos
+                            </span>
+                            <span class="route-stat-value" id="routePedidos">0</span>
+                        </div>
+                        <div class="route-stat">
+                            <span class="route-stat-label">
+                                <i class="fas fa-road"></i> Distancia
+                            </span>
+                            <span class="route-stat-value" id="routeDistancia">0 km</span>
+                        </div>
+                        <div class="route-stat">
+                            <span class="route-stat-label">
+                                <i class="fas fa-clock"></i> Tiempo Est.
+                            </span>
+                            <span class="route-stat-value" id="routeTiempo">0 min</span>
+                        </div>
+                        <div class="route-stat">
+                            <span class="route-stat-label">
+                                <i class="fas fa-dollar-sign"></i> Total
+                            </span>
+                            <span class="route-stat-value" id="routeTotal">$0</span>
+                        </div>
+                    </div>
+
+                    <button onclick="exportarRuta()" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+                        <i class="fas fa-download"></i>
+                        Exportar Ruta
+                    </button>
+                </div>
+
                 <!-- Botón flotante para toggle sidebar en mobile -->
                 <button onclick="toggleSidebar()"
                         class="btn btn-primary"
@@ -559,7 +870,7 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        console.log('🗺️ Iniciando sistema de delivery con mapa...');
+        console.log('🗺️ Iniciando Delivery Pro...');
 
         // Datos de pedidos
         const pedidos = <?= json_encode($pedidos_mapa) ?>;
@@ -567,8 +878,10 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
 
         // Configuración del mapa
         const MAP_CENTER = [-34.9214, -57.9544]; // La Plata, Buenos Aires
-        let map, markers = {};
+        let map, markers = {}, originMarker = null;
         let selectedPedidoId = null;
+        let rutaActual = [];
+        let origenCoords = null;
 
         // Inicializar mapa
         function initMap() {
@@ -678,25 +991,25 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                 className: 'custom-marker',
                 html: `<div style="
                     background-color: ${color};
-                    width: 30px;
-                    height: 30px;
+                    width: 32px;
+                    height: 32px;
                     border-radius: 50% 50% 50% 0;
                     border: 3px solid white;
                     transform: rotate(-45deg);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 ">
                     <span style="
                         transform: rotate(45deg);
                         color: white;
-                        font-weight: bold;
+                        font-weight: 700;
                         font-size: 12px;
                     ">${pedido.id}</span>
                 </div>`,
-                iconSize: [30, 30],
-                iconAnchor: [15, 30]
+                iconSize: [32, 32],
+                iconAnchor: [16, 32]
             });
 
             const marker = L.marker([lat, lng], { icon }).addTo(map);
@@ -712,11 +1025,11 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                         <strong>Teléfono:</strong> ${pedido.telefono}<br>
                         <strong>Dirección:</strong> ${pedido.direccion}<br>
                         <strong>Producto:</strong> ${pedido.producto.substring(0, 50)}...<br>
-                        <strong>Estado:</strong> <span style="color: ${color}; font-weight: bold;">${pedido.estado}</span><br>
-                        <strong>Precio:</strong> $${pedido.precio.toLocaleString()}
+                        <strong>Estado:</strong> <span style="color: ${color}; font-weight: 700;">${pedido.estado}</span><br>
+                        <strong>Precio:</strong> <span style="color: #16a34a; font-weight: 700;">$${pedido.precio.toLocaleString()}</span>
                     </div>
                     <div class="popup-actions">
-                        <button onclick="imprimir(${pedido.id})" class="btn btn-sm" style="background: #f97316; color: white;">
+                        <button onclick="imprimir(${pedido.id})" class="btn btn-sm" style="background: linear-gradient(135deg, #f97316, #ea580c); color: white;">
                             <i class="fas fa-print"></i> Imprimir
                         </button>
                         <a href="https://wa.me/54${pedido.telefono.replace(/[^0-9]/g, '')}"
@@ -731,7 +1044,7 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
                 </div>
             `;
 
-            marker.bindPopup(popupContent, { maxWidth: 300 });
+            marker.bindPopup(popupContent, { maxWidth: 320 });
 
             // Al hacer clic, seleccionar el pedido
             marker.on('click', () => {
@@ -779,47 +1092,134 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
             }
         }
 
-        // Optimizar ruta (algoritmo simple: nearest neighbor)
-        function optimizarRuta() {
+        // Set origen
+        function setOrigen(direccion) {
+            document.getElementById('origenInput').value = direccion;
+        }
+
+        // Seleccionar todos
+        function seleccionarTodos() {
+            document.querySelectorAll('.pedido-checkbox').forEach(cb => {
+                cb.checked = true;
+            });
+            actualizarSeleccion();
+        }
+
+        // Limpiar selección
+        function limpiarSeleccion() {
+            document.querySelectorAll('.pedido-checkbox').forEach(cb => {
+                cb.checked = false;
+            });
+            actualizarSeleccion();
+        }
+
+        // Seleccionar solo listos
+        function seleccionarListos() {
+            document.querySelectorAll('.pedido-checkbox').forEach(cb => {
+                const card = document.getElementById(`pedido-card-${cb.dataset.pedidoId}`);
+                if (card && card.classList.contains('estado-Listo')) {
+                    cb.checked = true;
+                } else {
+                    cb.checked = false;
+                }
+            });
+            actualizarSeleccion();
+        }
+
+        // Actualizar selección
+        function actualizarSeleccion() {
+            const seleccionados = document.querySelectorAll('.pedido-checkbox:checked').length;
+            document.getElementById('contadorSeleccion').innerHTML = `
+                <i class="fas fa-check-circle"></i> ${seleccionados} seleccionados
+            `;
+        }
+
+        // Optimizar ruta con pedidos seleccionados
+        async function optimizarRuta() {
             console.log('🔄 Optimizando ruta...');
 
-            // Solo pedidos listos con coordenadas
-            const pedidosListos = pedidos.filter(p => {
-                const card = document.getElementById(`pedido-card-${p.id}`);
-                return p.estado === 'Listo' && card && card.dataset.lat && card.dataset.lng;
+            // Obtener pedidos seleccionados con coordenadas
+            const seleccionados = [];
+            document.querySelectorAll('.pedido-checkbox:checked').forEach(cb => {
+                const pedidoId = cb.dataset.pedidoId;
+                const card = document.getElementById(`pedido-card-${pedidoId}`);
+
+                if (card && card.dataset.lat && card.dataset.lng) {
+                    const pedido = pedidos.find(p => p.id == pedidoId);
+                    if (pedido) {
+                        seleccionados.push({
+                            ...pedido,
+                            lat: parseFloat(card.dataset.lat),
+                            lng: parseFloat(card.dataset.lng)
+                        });
+                    }
+                }
             });
 
-            if (pedidosListos.length === 0) {
-                alert('⚠️ No hay pedidos listos para optimizar');
+            if (seleccionados.length === 0) {
+                alert('⚠️ Selecciona al menos un pedido con dirección válida');
                 return;
             }
 
-            // Algoritmo greedy: siempre ir al más cercano
-            const rutaOptimizada = [];
-            let actual = null;
-            let disponibles = [...pedidosListos];
+            // Obtener punto de origen
+            const origenInput = document.getElementById('origenInput').value.trim();
 
-            // Empezar desde el más antiguo
-            actual = disponibles.shift();
+            if (origenInput) {
+                // Geocodificar origen
+                const origenCoords = await geocodificar(origenInput);
+                if (origenCoords) {
+                    // Agregar marcador de origen si no existe
+                    if (originMarker) {
+                        map.removeLayer(originMarker);
+                    }
+
+                    const originIcon = L.divIcon({
+                        className: 'origin-marker',
+                        html: `<div style="
+                            background: linear-gradient(135deg, #16a34a, #15803d);
+                            width: 40px;
+                            height: 40px;
+                            border-radius: 50%;
+                            border: 4px solid white;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            box-shadow: 0 4px 15px rgba(22, 163, 74, 0.5);
+                        ">
+                            <i class="fas fa-home" style="color: white; font-size: 18px;"></i>
+                        </div>`,
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
+                    });
+
+                    originMarker = L.marker([origenCoords.lat, origenCoords.lon], { icon: originIcon }).addTo(map);
+                    originMarker.bindPopup('<strong>Punto de Partida</strong><br>' + origenInput);
+
+                    // Usar origen como punto inicial
+                    seleccionados.unshift({
+                        id: 'origen',
+                        lat: origenCoords.lat,
+                        lng: origenCoords.lon,
+                        direccion: origenInput
+                    });
+                }
+            }
+
+            // Algoritmo greedy: nearest neighbor
+            const rutaOptimizada = [];
+            let actual = seleccionados[0];
+            let disponibles = [...seleccionados.slice(1)];
+
             rutaOptimizada.push(actual);
 
             while (disponibles.length > 0) {
-                const card = document.getElementById(`pedido-card-${actual.id}`);
-                const latActual = parseFloat(card.dataset.lat);
-                const lngActual = parseFloat(card.dataset.lng);
-
-                // Encontrar el más cercano
                 let minDist = Infinity;
                 let mejorIdx = 0;
 
                 disponibles.forEach((pedido, idx) => {
-                    const cardPedido = document.getElementById(`pedido-card-${pedido.id}`);
-                    const lat = parseFloat(cardPedido.dataset.lat);
-                    const lng = parseFloat(cardPedido.dataset.lng);
-
-                    const dist = Math.sqrt(
-                        Math.pow(lat - latActual, 2) +
-                        Math.pow(lng - lngActual, 2)
+                    const dist = calcularDistancia(
+                        actual.lat, actual.lng,
+                        pedido.lat, pedido.lng
                     );
 
                     if (dist < minDist) {
@@ -835,22 +1235,32 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
 
             console.log('✅ Ruta optimizada:', rutaOptimizada.map(p => p.id));
 
+            // Guardar ruta actual
+            rutaActual = rutaOptimizada.filter(p => p.id !== 'origen');
+
             // Reorganizar sidebar
             const container = document.getElementById('pedidosList');
+
+            // Limpiar badges anteriores
+            document.querySelectorAll('.orden-badge').forEach(b => b.remove());
+
+            // Remover clases in-route
+            document.querySelectorAll('.pedido-card').forEach(c => c.classList.remove('in-route'));
+
             rutaOptimizada.forEach((pedido, idx) => {
+                if (pedido.id === 'origen') return;
+
                 const card = document.getElementById(`pedido-card-${pedido.id}`);
                 if (card) {
                     card.style.order = idx;
+                    card.classList.add('in-route');
 
                     // Agregar número de orden
-                    if (!card.querySelector('.orden-badge')) {
-                        const badge = document.createElement('span');
-                        badge.className = 'orden-badge';
-                        badge.style.cssText = 'position: absolute; top: 10px; right: 10px; background: #f59e0b; color: white; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 11px;';
-                        badge.textContent = `Orden ${idx + 1}`;
-                        card.style.position = 'relative';
-                        card.appendChild(badge);
-                    }
+                    const badge = document.createElement('span');
+                    badge.className = 'orden-badge';
+                    badge.textContent = `#${idx}`;
+                    card.style.position = 'relative';
+                    card.appendChild(badge);
                 }
             });
 
@@ -858,10 +1268,7 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
             container.style.flexDirection = 'column';
 
             // Dibujar ruta en el mapa
-            const coords = rutaOptimizada.map(p => {
-                const card = document.getElementById(`pedido-card-${p.id}`);
-                return [parseFloat(card.dataset.lat), parseFloat(card.dataset.lng)];
-            });
+            const coords = rutaOptimizada.map(p => [p.lat, p.lng]);
 
             if (window.rutaPolyline) {
                 map.removeLayer(window.rutaPolyline);
@@ -869,12 +1276,96 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
 
             window.rutaPolyline = L.polyline(coords, {
                 color: '#f59e0b',
-                weight: 4,
-                opacity: 0.7,
-                dashArray: '10, 10'
+                weight: 5,
+                opacity: 0.8,
+                dashArray: '15, 10',
+                lineJoin: 'round'
             }).addTo(map);
 
-            alert(`✅ Ruta optimizada con ${rutaOptimizada.length} pedidos`);
+            // Calcular estadísticas
+            const distanciaTotal = calcularDistanciaTotal(coords);
+            const tiempoEstimado = Math.round(distanciaTotal / 30 * 60); // 30 km/h promedio
+            const totalPedidos = rutaActual.length;
+            const totalVentas = rutaActual.reduce((sum, p) => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return sum + (card ? parseFloat(card.dataset.precio) : 0);
+            }, 0);
+
+            // Mostrar panel de resumen
+            document.getElementById('routePanel').classList.add('active');
+            document.getElementById('routePedidos').textContent = totalPedidos;
+            document.getElementById('routeDistancia').textContent = distanciaTotal.toFixed(1) + ' km';
+            document.getElementById('routeTiempo').textContent = tiempoEstimado + ' min';
+            document.getElementById('routeTotal').textContent = '$' + totalVentas.toLocaleString();
+
+            // Ajustar vista
+            map.fitBounds(window.rutaPolyline.getBounds().pad(0.1));
+
+            alert(`✅ Ruta optimizada con ${totalPedidos} pedidos\n📏 ${distanciaTotal.toFixed(1)} km - ⏱️ ${tiempoEstimado} min`);
+        }
+
+        // Calcular distancia entre dos puntos (Haversine)
+        function calcularDistancia(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Radio de la Tierra en km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a =
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Calcular distancia total de una ruta
+        function calcularDistanciaTotal(coords) {
+            let total = 0;
+            for (let i = 0; i < coords.length - 1; i++) {
+                total += calcularDistancia(
+                    coords[i][0], coords[i][1],
+                    coords[i+1][0], coords[i+1][1]
+                );
+            }
+            return total;
+        }
+
+        // Cerrar panel de ruta
+        function cerrarPanelRuta() {
+            document.getElementById('routePanel').classList.remove('active');
+        }
+
+        // Exportar ruta
+        function exportarRuta() {
+            if (rutaActual.length === 0) {
+                alert('⚠️ No hay ruta para exportar');
+                return;
+            }
+
+            const data = rutaActual.map((p, idx) => ({
+                orden: idx + 1,
+                pedido_id: p.id,
+                nombre: p.nombre + ' ' + p.apellido,
+                telefono: p.telefono,
+                direccion: p.direccion,
+                producto: p.producto,
+                precio: p.precio,
+                coordenadas: `${p.lat}, ${p.lng}`
+            }));
+
+            const csv = [
+                ['Orden', 'Pedido ID', 'Cliente', 'Teléfono', 'Dirección', 'Producto', 'Precio', 'Coordenadas'],
+                ...data.map(d => [d.orden, d.pedido_id, d.nombre, d.telefono, d.direccion, d.producto, d.precio, d.coordenadas])
+            ].map(row => row.join(',')).join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ruta_delivery_${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+
+            alert('✅ Ruta exportada correctamente');
         }
 
         // Filtrar por estado
@@ -959,9 +1450,10 @@ $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
         document.addEventListener('DOMContentLoaded', () => {
             initMap();
             checkResponsive();
+            actualizarSeleccion();
         });
 
-        console.log('✅ Sistema de delivery con mapa cargado');
+        console.log('✅ Delivery Pro cargado completamente');
     </script>
 </body>
 </html>
