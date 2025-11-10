@@ -5,6 +5,63 @@ requireLogin();
 
 $pdo = getConnection();
 
+// === CREAR TABLA DE CHOFERES SI NO EXISTE ===
+$sql_create = "CREATE TABLE IF NOT EXISTS choferes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    color VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
+    activo BOOLEAN NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)";
+$pdo->exec($sql_create);
+
+// Insertar choferes por defecto si la tabla está vacía
+$stmt = $pdo->query("SELECT COUNT(*) FROM choferes");
+if ($stmt->fetchColumn() == 0) {
+    $defaults = [
+        ['Juan', 'Pérez', '#3b82f6'],
+        ['María', 'González', '#22c55e'],
+        ['Carlos', 'Rodríguez', '#f59e0b'],
+        ['Ana', 'Martínez', '#6b7280']
+    ];
+
+    foreach ($defaults as $d) {
+        $pdo->prepare("INSERT INTO choferes (nombre, apellido, color, activo) VALUES (?, ?, ?, 1)")
+            ->execute($d);
+    }
+}
+
+// === MANEJAR ACCIONES DE CHOFERES ===
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    header('Content-Type: application/json');
+
+    try {
+        switch ($_POST['action']) {
+            case 'add_chofer':
+                $stmt = $pdo->prepare("INSERT INTO choferes (nombre, apellido, color, activo) VALUES (?, ?, ?, 1)");
+                $stmt->execute([$_POST['nombre'], $_POST['apellido'], $_POST['color']]);
+                echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
+                exit;
+
+            case 'edit_chofer':
+                $stmt = $pdo->prepare("UPDATE choferes SET nombre = ?, apellido = ?, color = ? WHERE id = ?");
+                $stmt->execute([$_POST['nombre'], $_POST['apellido'], $_POST['color'], $_POST['id']]);
+                echo json_encode(['success' => true]);
+                exit;
+
+            case 'toggle_chofer':
+                $stmt = $pdo->prepare("UPDATE choferes SET activo = NOT activo WHERE id = ?");
+                $stmt->execute([$_POST['id']]);
+                echo json_encode(['success' => true]);
+                exit;
+        }
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        exit;
+    }
+}
+
 // DIRECCIÓN FIJA DE SALIDA (FÁBRICA)
 define('DIRECCION_FABRICA', 'Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires');
 
@@ -79,13 +136,9 @@ $total_ventas = array_sum(array_column($pedidos, 'precio'));
 // Preparar datos para el mapa (solo pedidos con dirección)
 $pedidos_mapa = array_filter($pedidos, fn($p) => !empty($p['direccion']));
 
-// Choferes disponibles (simulado - podrías tenerlo en BD)
-$choferes = [
-    ['id' => 1, 'nombre' => 'Juan', 'apellido' => 'Pérez', 'activo' => true, 'color' => '#3b82f6'],
-    ['id' => 2, 'nombre' => 'María', 'apellido' => 'González', 'activo' => true, 'color' => '#22c55e'],
-    ['id' => 3, 'nombre' => 'Carlos', 'apellido' => 'Rodríguez', 'activo' => true, 'color' => '#f59e0b'],
-    ['id' => 4, 'nombre' => 'Ana', 'apellido' => 'Martínez', 'activo' => false, 'color' => '#6b7280'],
-];
+// Obtener choferes desde la base de datos
+$stmt = $pdo->query("SELECT id, nombre, apellido, color, activo FROM choferes ORDER BY activo DESC, nombre ASC");
+$choferes = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -559,24 +612,49 @@ $choferes = [
                     </div>
 
                     <!-- Choferes -->
-                    <div class="section-title">
-                        <i class="fas fa-user-tie"></i> Choferes Disponibles
+                    <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span><i class="fas fa-user-tie"></i> Choferes</span>
+                        <button onclick="abrirModalChofer()" class="btn btn-sm btn-primary" style="padding: 4px 8px; font-size: 10px;">
+                            <i class="fas fa-plus"></i> Nuevo
+                        </button>
                     </div>
 
-                    <?php foreach ($choferes as $chofer): ?>
-                        <div class="chofer-card <?= $chofer['activo'] ? 'activo' : '' ?>"
-                             onclick="seleccionarChofer(<?= $chofer['id'] ?>)">
-                            <div class="chofer-avatar" style="background: <?= $chofer['color'] ?>;">
-                                <?= substr($chofer['nombre'], 0, 1) ?>
-                            </div>
-                            <div class="chofer-info">
-                                <div class="chofer-nombre"><?= $chofer['nombre'] ?> <?= $chofer['apellido'] ?></div>
-                                <div class="chofer-estado">
-                                    <?= $chofer['activo'] ? '🟢 Disponible' : '⚫ No disponible' ?>
+                    <div style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); padding: 8px; border-radius: 8px; margin-bottom: 10px; font-size: 10px; line-height: 1.4; color: #1e40af;">
+                        <strong>💡 Tip:</strong> Selecciona un chofer antes de optimizar la ruta. La ruta usará su color.
+                    </div>
+
+                    <div id="choferesList">
+                        <?php foreach ($choferes as $chofer): ?>
+                            <div class="chofer-card <?= $chofer['activo'] ? 'activo' : '' ?>"
+                                 id="chofer-<?= $chofer['id'] ?>"
+                                 data-chofer-id="<?= $chofer['id'] ?>"
+                                 data-nombre="<?= htmlspecialchars($chofer['nombre']) ?>"
+                                 data-apellido="<?= htmlspecialchars($chofer['apellido']) ?>"
+                                 data-color="<?= $chofer['color'] ?>"
+                                 data-activo="<?= $chofer['activo'] ?>"
+                                 onclick="seleccionarChofer(<?= $chofer['id'] ?>)">
+                                <div class="chofer-avatar" style="background: <?= $chofer['color'] ?>;">
+                                    <?= substr($chofer['nombre'], 0, 1) ?>
+                                </div>
+                                <div class="chofer-info">
+                                    <div class="chofer-nombre"><?= $chofer['nombre'] ?> <?= $chofer['apellido'] ?></div>
+                                    <div class="chofer-estado">
+                                        <?= $chofer['activo'] ? '🟢 Disponible' : '⚫ No disponible' ?>
+                                    </div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 3px;" onclick="event.stopPropagation();">
+                                    <button onclick="editarChofer(<?= $chofer['id'] ?>)"
+                                            class="btn btn-sm" style="background: #3b82f6; color: white; padding: 2px 6px; font-size: 9px;">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="toggleChofer(<?= $chofer['id'] ?>)"
+                                            class="btn btn-sm" style="background: <?= $chofer['activo'] ? '#dc2626' : '#22c55e' ?>; color: white; padding: 2px 6px; font-size: 9px;">
+                                        <i class="fas fa-<?= $chofer['activo'] ? 'ban' : 'check' ?>"></i>
+                                    </button>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    </div>
 
                     <!-- Filtros -->
                     <div class="section-title">
@@ -763,6 +841,76 @@ $choferes = [
         </div>
     </div>
 
+    <!-- Modal para Agregar/Editar Chofer -->
+    <div id="choferModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 16px; padding: 24px; width: 90%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 id="choferModalTitle" style="font-size: 18px; font-weight: 700; color: #1f2937;">
+                    <i class="fas fa-user-tie"></i> Nuevo Chofer
+                </h3>
+                <button onclick="cerrarModalChofer()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 20px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <form id="choferForm" onsubmit="guardarChofer(event)">
+                <input type="hidden" id="choferId" name="id">
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                        Nombre *
+                    </label>
+                    <input type="text"
+                           id="choferNombre"
+                           name="nombre"
+                           required
+                           style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;"
+                           placeholder="Ej: Juan">
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                        Apellido *
+                    </label>
+                    <input type="text"
+                           id="choferApellido"
+                           name="apellido"
+                           required
+                           style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;"
+                           placeholder="Ej: Pérez">
+                </div>
+
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px;">
+                        Color de identificación *
+                    </label>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="color"
+                               id="choferColor"
+                               name="color"
+                               value="#3b82f6"
+                               style="width: 60px; height: 40px; border: 2px solid #e5e7eb; border-radius: 8px; cursor: pointer;">
+                        <span id="colorPreview" style="font-size: 12px; color: #6b7280;">#3b82f6</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button type="submit"
+                            class="btn btn-primary"
+                            style="flex: 1; padding: 12px; justify-content: center;">
+                        <i class="fas fa-save"></i> Guardar
+                    </button>
+                    <button type="button"
+                            onclick="cerrarModalChofer()"
+                            class="btn btn-secondary"
+                            style="padding: 12px;">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -785,6 +933,117 @@ $choferes = [
         let selectedChoferId = null;
         let rutaActual = [];
 
+        // === GESTIÓN DE CHOFERES ===
+
+        // Abrir modal para nuevo chofer
+        function abrirModalChofer() {
+            document.getElementById('choferModalTitle').innerHTML = '<i class="fas fa-user-tie"></i> Nuevo Chofer';
+            document.getElementById('choferForm').reset();
+            document.getElementById('choferId').value = '';
+            document.getElementById('choferColor').value = '#3b82f6';
+            document.getElementById('colorPreview').textContent = '#3b82f6';
+            document.getElementById('choferModal').style.display = 'flex';
+        }
+
+        // Cerrar modal
+        function cerrarModalChofer() {
+            document.getElementById('choferModal').style.display = 'none';
+        }
+
+        // Editar chofer existente
+        function editarChofer(id) {
+            const card = document.getElementById(`chofer-${id}`);
+            if (!card) return;
+
+            const nombre = card.dataset.nombre;
+            const apellido = card.dataset.apellido;
+            const color = card.dataset.color;
+
+            document.getElementById('choferModalTitle').innerHTML = '<i class="fas fa-edit"></i> Editar Chofer';
+            document.getElementById('choferId').value = id;
+            document.getElementById('choferNombre').value = nombre;
+            document.getElementById('choferApellido').value = apellido;
+            document.getElementById('choferColor').value = color;
+            document.getElementById('colorPreview').textContent = color;
+            document.getElementById('choferModal').style.display = 'flex';
+        }
+
+        // Guardar chofer (nuevo o editar)
+        async function guardarChofer(event) {
+            event.preventDefault();
+
+            const formData = new FormData(event.target);
+            const id = formData.get('id');
+            const action = id ? 'edit_chofer' : 'add_chofer';
+            formData.append('action', action);
+
+            try {
+                const response = await fetch('', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('✅ Chofer guardado exitosamente');
+                    cerrarModalChofer();
+                    location.reload(); // Recargar para ver cambios
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al guardar chofer');
+            }
+        }
+
+        // Activar/Desactivar chofer
+        async function toggleChofer(id) {
+            const card = document.getElementById(`chofer-${id}`);
+            const activo = card.dataset.activo === '1';
+            const accion = activo ? 'desactivar' : 'activar';
+
+            if (!confirm(`¿Seguro que quieres ${accion} este chofer?`)) {
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'toggle_chofer');
+                formData.append('id', id);
+
+                const response = await fetch('', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ Chofer ${activo ? 'desactivado' : 'activado'} exitosamente`);
+                    location.reload();
+                } else {
+                    alert('❌ Error: ' + (result.error || 'Error desconocido'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al cambiar estado del chofer');
+            }
+        }
+
+        // Actualizar preview del color
+        document.addEventListener('DOMContentLoaded', () => {
+            const colorInput = document.getElementById('choferColor');
+            if (colorInput) {
+                colorInput.addEventListener('input', (e) => {
+                    document.getElementById('colorPreview').textContent = e.target.value;
+                });
+            }
+        });
+
+        // === FIN GESTIÓN DE CHOFERES ===
+
         // Inicializar mapa
         function initMap() {
             console.log('🗺️ Inicializando mapa...');
@@ -801,17 +1060,29 @@ $choferes = [
             geocodificarPedidos();
         }
 
-        // Geocodificar
+        // Geocodificar - MEJORADO con mejor manejo de errores
         async function geocodificarPedidos() {
-            console.log('🔍 Geocodificando...');
+            console.log('🔍 Iniciando geocodificación de', pedidos.length, 'pedidos...');
 
-            for (const pedido of pedidos) {
-                if (!pedido.direccion) continue;
+            let procesados = 0;
+            let exitosos = 0;
+            let fallidos = 0;
+
+            for (let i = 0; i < pedidos.length; i++) {
+                const pedido = pedidos[i];
+
+                if (!pedido.direccion) {
+                    console.log(`⏭️ Pedido #${pedido.id}: Sin dirección, omitiendo`);
+                    continue;
+                }
+
+                console.log(`🔍 [${i+1}/${pedidos.length}] Geocodificando pedido #${pedido.id}: ${pedido.direccion}`);
 
                 try {
                     const coords = await geocodificar(pedido.direccion);
 
                     if (coords) {
+                        console.log(`✅ Pedido #${pedido.id} geocodificado:`, coords);
                         agregarMarcador(pedido, coords.lat, coords.lon);
 
                         const card = document.getElementById(`pedido-card-${pedido.id}`);
@@ -819,20 +1090,43 @@ $choferes = [
                             card.dataset.lat = coords.lat;
                             card.dataset.lng = coords.lon;
                         }
+
+                        exitosos++;
+                    } else {
+                        console.warn(`⚠️ Pedido #${pedido.id}: No se pudo geocodificar`);
+                        fallidos++;
                     }
 
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    procesados++;
+
+                    // Delay para respetar rate limit de Nominatim (1 req/sec)
+                    await new Promise(resolve => setTimeout(resolve, 1100));
 
                 } catch (error) {
-                    console.error(`❌ Error #${pedido.id}:`, error);
+                    console.error(`❌ Error geocodificando pedido #${pedido.id}:`, error);
+                    fallidos++;
+                    procesados++;
+
+                    // Continuar con el siguiente incluso si falla
+                    await new Promise(resolve => setTimeout(resolve, 1100));
                 }
             }
 
-            console.log('✅ Geocodificación completa');
+            console.log('✅ Geocodificación completa:', {
+                total: pedidos.length,
+                procesados: procesados,
+                exitosos: exitosos,
+                fallidos: fallidos,
+                marcadores: Object.keys(markers).length
+            });
 
+            // Ajustar vista del mapa
             if (Object.keys(markers).length > 0) {
                 const group = L.featureGroup(Object.values(markers));
                 map.fitBounds(group.getBounds().pad(0.1));
+                console.log('🗺️ Mapa ajustado a', Object.keys(markers).length, 'marcadores');
+            } else {
+                console.warn('⚠️ No se pudo geocodificar ningún pedido');
             }
         }
 
@@ -845,18 +1139,27 @@ $choferes = [
                     headers: { 'User-Agent': 'SantaCatalinaDelivery/1.0' }
                 });
 
+                if (!response.ok) {
+                    console.error(`HTTP Error: ${response.status} ${response.statusText}`);
+                    return null;
+                }
+
                 const data = await response.json();
 
                 if (data && data.length > 0) {
-                    return {
+                    const coords = {
                         lat: parseFloat(data[0].lat),
                         lon: parseFloat(data[0].lon)
                     };
+                    console.log(`  → Coordenadas encontradas: (${coords.lat}, ${coords.lon})`);
+                    return coords;
+                } else {
+                    console.warn(`  → No se encontraron resultados para: ${direccion}`);
+                    return null;
                 }
 
-                return null;
             } catch (error) {
-                console.error('Error geocodificación:', error);
+                console.error('  → Error en geocodificación:', error.message || error);
                 return null;
             }
         }
@@ -989,14 +1292,46 @@ $choferes = [
         }
 
         function seleccionarChofer(choferId) {
-            selectedChoferId = choferId;
-            console.log('🚗 Chofer seleccionado:', choferId);
-            // Aquí podrías resaltar el chofer seleccionado
+            // Quitar selección anterior
+            document.querySelectorAll('.chofer-card').forEach(card => {
+                card.style.border = '2px solid #e5e7eb';
+                card.style.transform = 'scale(1)';
+            });
+
+            // Marcar seleccionado
+            const card = document.getElementById(`chofer-${choferId}`);
+            if (card) {
+                const color = card.dataset.color;
+                card.style.border = `3px solid ${color}`;
+                card.style.transform = 'scale(1.05)';
+                card.style.transition = 'all 0.3s';
+
+                selectedChoferId = choferId;
+
+                const chofer = choferes.find(c => c.id == choferId);
+                console.log('🚗 Chofer seleccionado:', chofer ? `${chofer.nombre} ${chofer.apellido}` : choferId);
+                console.log('🎨 Color asignado:', color);
+            }
         }
 
-        // OPTIMIZAR RUTA - FIX: Tomar TODOS los seleccionados
+        // OPTIMIZAR RUTA - CON COLOR POR CHOFER
         async function optimizarRuta() {
             console.log('🔄 Optimizando ruta con TODOS los seleccionados...');
+
+            // Verificar si hay chofer seleccionado
+            let colorRuta = '#f59e0b'; // Color por defecto (naranja)
+            let nombreChofer = 'Sin asignar';
+
+            if (selectedChoferId) {
+                const chofer = choferes.find(c => c.id == selectedChoferId);
+                if (chofer) {
+                    colorRuta = chofer.color;
+                    nombreChofer = `${chofer.nombre} ${chofer.apellido}`;
+                    console.log('🚗 Ruta para chofer:', nombreChofer, '| Color:', colorRuta);
+                }
+            } else {
+                console.log('⚠️ No hay chofer seleccionado, usando color por defecto');
+            }
 
             // Obtener TODOS los pedidos seleccionados
             const checkboxes = document.querySelectorAll('.pedido-checkbox:checked');
@@ -1026,46 +1361,58 @@ $choferes = [
                 return;
             }
 
-            // Geocodificar origen (FÁBRICA FIJA)
-            console.log('📍 Geocodificando fábrica...');
-            const origenCoords = await geocodificar(DIRECCION_FABRICA);
+            // Geocodificar origen (FÁBRICA FIJA) - Mejorado con mejor búsqueda
+            console.log('📍 Geocodificando fábrica:', DIRECCION_FABRICA);
+            let origenCoords = await geocodificar(DIRECCION_FABRICA);
 
-            if (origenCoords) {
-                // Marcador de origen
-                if (originMarker) {
-                    map.removeLayer(originMarker);
-                }
-
-                const originIcon = L.divIcon({
-                    className: 'origin-marker',
-                    html: `<div style="
-                        background: linear-gradient(135deg, #16a34a, #15803d);
-                        width: 40px;
-                        height: 40px;
-                        border-radius: 50%;
-                        border: 4px solid white;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                        box-shadow: 0 4px 15px rgba(22, 163, 74, 0.5);
-                    ">
-                        <i class="fas fa-home" style="color: white; font-size: 18px;"></i>
-                    </div>`,
-                    iconSize: [40, 40],
-                    iconAnchor: [20, 20]
-                });
-
-                originMarker = L.marker([origenCoords.lat, origenCoords.lon], { icon: originIcon }).addTo(map);
-                originMarker.bindPopup('<strong>🏭 Fábrica</strong><br>' + DIRECCION_FABRICA);
-
-                // Agregar origen al inicio
-                seleccionados.unshift({
-                    id: 'origen',
-                    lat: origenCoords.lat,
-                    lng: origenCoords.lon,
-                    direccion: DIRECCION_FABRICA
-                });
+            // Si falla, intentar con coordenadas directas conocidas (Cno. Gral. Belgrano 7287)
+            if (!origenCoords) {
+                console.warn('⚠️ Geocodificación de fábrica falló, usando coordenadas fijas');
+                // Coordenadas aproximadas de Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez
+                origenCoords = {
+                    lat: -34.8077,
+                    lon: -58.2715
+                };
             }
+
+            console.log('✅ Coordenadas de fábrica:', origenCoords);
+
+            // Marcador de origen
+            if (originMarker) {
+                map.removeLayer(originMarker);
+            }
+
+            const originIcon = L.divIcon({
+                className: 'origin-marker',
+                html: `<div style="
+                    background: linear-gradient(135deg, #16a34a, #15803d);
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 50%;
+                    border: 4px solid white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 15px rgba(22, 163, 74, 0.5);
+                ">
+                    <i class="fas fa-home" style="color: white; font-size: 18px;"></i>
+                </div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            originMarker = L.marker([origenCoords.lat, origenCoords.lon], { icon: originIcon }).addTo(map);
+            originMarker.bindPopup('<strong>🏭 Fábrica (Origen)</strong><br>' + DIRECCION_FABRICA);
+
+            console.log('✅ Marcador de origen agregado al mapa');
+
+            // Agregar origen al inicio del array
+            seleccionados.unshift({
+                id: 'origen',
+                lat: origenCoords.lat,
+                lng: origenCoords.lon,
+                direccion: DIRECCION_FABRICA
+            });
 
             // Algoritmo Nearest Neighbor
             const rutaOptimizada = [];
@@ -1099,7 +1446,7 @@ $choferes = [
 
             rutaActual = rutaOptimizada.filter(p => p.id !== 'origen');
 
-            // Reorganizar sidebar
+            // Reorganizar sidebar con badges numerados en color del chofer
             document.querySelectorAll('.orden-badge').forEach(b => b.remove());
             document.querySelectorAll('.pedido-card').forEach(c => c.classList.remove('in-route'));
 
@@ -1111,15 +1458,18 @@ $choferes = [
                     card.style.order = idx;
                     card.classList.add('in-route');
 
+                    // Badge numerado con el color del chofer
                     const badge = document.createElement('span');
                     badge.className = 'orden-badge';
-                    badge.textContent = `#${idx}`;
+                    badge.textContent = `${idx}`; // Número de parada
+                    badge.style.background = `linear-gradient(135deg, ${colorRuta}, ${adjustColor(colorRuta, -20)})`;
+                    badge.style.boxShadow = `0 2px 8px ${colorRuta}80`;
                     card.style.position = 'relative';
                     card.appendChild(badge);
                 }
             });
 
-            // Dibujar ruta
+            // Dibujar ruta con el color del chofer
             const coords = rutaOptimizada.map(p => [p.lat, p.lng]);
 
             if (window.rutaPolyline) {
@@ -1127,15 +1477,21 @@ $choferes = [
             }
 
             window.rutaPolyline = L.polyline(coords, {
-                color: '#f59e0b',
+                color: colorRuta,
                 weight: 5,
                 opacity: 0.8,
                 dashArray: '15, 10',
                 lineJoin: 'round'
             }).addTo(map);
 
+            console.log('🎨 Ruta dibujada con color:', colorRuta);
+
             // Estadísticas
+            console.log('📊 Calculando estadísticas de ruta...');
+            console.log('Coordenadas para cálculo:', coords);
             const distanciaTotal = calcularDistanciaTotal(coords);
+            console.log('📏 Distancia total calculada:', distanciaTotal, 'km');
+
             const tiempoEstimado = Math.round(distanciaTotal / 30 * 60);
             const totalPedidos = rutaActual.length;
             const totalVentas = rutaActual.reduce((sum, p) => {
@@ -1152,7 +1508,32 @@ $choferes = [
 
             map.fitBounds(window.rutaPolyline.getBounds().pad(0.1));
 
-            alert(`✅ Ruta optimizada\n📦 ${totalPedidos} pedidos\n📏 ${distanciaTotal.toFixed(1)} km - ⏱️ ${tiempoEstimado} min`);
+            console.log('✅ Estadísticas:', {
+                pedidos: totalPedidos,
+                distancia: distanciaTotal + ' km',
+                tiempo: tiempoEstimado + ' min',
+                ventas: '$' + totalVentas.toLocaleString()
+            });
+
+            alert(`✅ Ruta optimizada\n👤 ${nombreChofer}\n📦 ${totalPedidos} pedidos\n📏 ${distanciaTotal.toFixed(1)} km - ⏱️ ${tiempoEstimado} min`);
+        }
+
+        // Helper para ajustar color (oscurecer/aclarar)
+        function adjustColor(color, amount) {
+            const clamp = (val) => Math.min(Math.max(val, 0), 255);
+
+            let usePound = false;
+            if (color[0] === '#') {
+                color = color.slice(1);
+                usePound = true;
+            }
+
+            const num = parseInt(color, 16);
+            let r = clamp((num >> 16) + amount);
+            let g = clamp(((num >> 8) & 0x00FF) + amount);
+            let b = clamp((num & 0x0000FF) + amount);
+
+            return (usePound ? '#' : '') + (r << 16 | g << 8 | b).toString(16).padStart(6, '0');
         }
 
         function calcularDistancia(lat1, lng1, lat2, lng2) {
