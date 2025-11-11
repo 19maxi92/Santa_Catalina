@@ -229,6 +229,14 @@ $choferes = $stmt->fetchAll();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
+    <!-- NUEVAS LIBRERÍAS -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -606,13 +614,186 @@ $choferes = $stmt->fetchAll();
             border-bottom: 2px solid #e5e7eb;
         }
 
+        /* === DRAG & DROP STYLES === */
+        .chofer-dropzone {
+            background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(249,250,251,0.95));
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            min-height: 80px;
+            transition: all 0.3s;
+        }
+
+        .chofer-dropzone.sortable-drag-over {
+            border-color: #16a34a;
+            background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+            transform: scale(1.02);
+        }
+
+        .chofer-dropzone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chofer-dropzone-header:hover {
+            transform: translateX(2px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .pedido-draggable {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 8px;
+            margin-bottom: 6px;
+            cursor: move;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pedido-draggable:hover {
+            border-color: #16a34a;
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .pedido-draggable.sortable-ghost {
+            opacity: 0.4;
+            background: #f3f4f6;
+        }
+
+        .pedido-draggable.sortable-drag {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            transform: rotate(2deg);
+        }
+
+        .drag-handle {
+            color: #9ca3af;
+            font-size: 16px;
+            cursor: grab;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .orden-badge-drag {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 11px;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        /* === PANEL FLOTANTE === */
+        .floating-assignment-panel {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border: 2px solid #e5e7eb;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+            z-index: 9999;
+            min-width: 250px;
+            display: none;
+            animation: fadeInScale 0.2s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .quick-assign-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .quick-assign-btn:hover {
+            border-color: #16a34a;
+            background: #f0fdf4;
+            transform: translateX(4px);
+        }
+
+        .orden-number-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 12px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orden-number-btn:hover {
+            background: #16a34a;
+            color: white;
+            border-color: #16a34a;
+            transform: scale(1.1);
+        }
+
+        /* === TIMELINE CONTAINER === */
+        .timeline-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            border-top: 2px solid #e5e7eb;
+            padding: 16px 20px;
+            z-index: 998;
+            max-height: 200px;
+            display: none;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+        }
+
+        .timeline-container.active {
+            display: block;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .sidebar-left {
                 width: 240px;
             }
             .sidebar-right {
-                width: 280px;
+                width: 300px;
             }
         }
 
@@ -801,32 +982,37 @@ $choferes = $stmt->fetchAll();
                 </div>
             </div>
 
-            <!-- SIDEBAR DERECHA - Lista de Pedidos -->
+            <!-- SIDEBAR DERECHA - DRAG & DROP -->
             <div class="sidebar-right">
                 <div class="sidebar-header">
-                    <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px; color: #1f2937;">
-                        <i class="fas fa-list"></i> Pedidos de Delivery
+                    <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px; color: #1f2937;">
+                        <i class="fas fa-truck"></i> Asignación de Rutas
                     </div>
-
-                    <!-- Selection Toolbar -->
-                    <div class="selection-toolbar">
-                        <button onclick="seleccionarTodos()" class="btn btn-sm btn-primary">
-                            <i class="fas fa-check-double"></i> Todos
-                        </button>
-                        <button onclick="limpiarSeleccion()" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-times"></i> Limpiar
-                        </button>
-                        <button onclick="seleccionarListos()" class="btn btn-sm" style="background: #22c55e; color: white;">
-                            <i class="fas fa-check"></i> Listos
-                        </button>
-                    </div>
-
-                    <div id="contadorSeleccion" style="font-size: 11px; font-weight: 600; color: #16a34a; margin-top: 8px;">
-                        <i class="fas fa-check-circle"></i> 0 seleccionados
+                    <div style="font-size: 10px; color: #6b7280; line-height: 1.4;">
+                        💡 <strong>Arrastrá</strong> los pedidos a un chofer o <strong>clickeá</strong> un marcador en el mapa
                     </div>
                 </div>
 
-                <div class="sidebar-content" id="pedidosList">
+                <div class="sidebar-content" style="padding: 12px;">
+                    <!-- ZONAS DE CHOFERES -->
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #4b5563; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="fas fa-users"></i> Choferes
+                        </div>
+                        <div id="choferesDropzones"></div>
+                    </div>
+
+                    <!-- PEDIDOS SIN ASIGNAR -->
+                    <div>
+                        <div style="font-size: 11px; font-weight: 700; color: #4b5563; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="fas fa-inbox"></i> Sin Asignar (<span id="sinAsignarCount">0</span>)
+                        </div>
+                        <div id="pedidosSinAsignar" style="min-height: 100px; max-height: 300px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+                <!-- VERSIÓN ANTIGUA OCULTA (backup) -->
+                <div id="pedidosList" style="display:none;">
                     <?php if (empty($pedidos)): ?>
                         <div class="text-center py-12 text-gray-500">
                             <i class="fas fa-motorcycle text-5xl mb-3 opacity-20"></i>
@@ -1032,11 +1218,44 @@ $choferes = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- PANEL FLOTANTE DE ASIGNACIÓN RÁPIDA -->
+    <div id="floatingAssignmentPanel" class="floating-assignment-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 14px; color: #1f2937;" id="floatingPanelTitle">
+                Pedido #123
+            </div>
+            <button onclick="cerrarPanelFlotante()" style="background: none; border: none; color: #6b7280; cursor: pointer; font-size: 16px;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div style="font-size: 10px; color: #6b7280; margin-bottom: 10px;" id="floatingPanelAddress">
+            Dirección...
+        </div>
+
+        <div id="floatingChofersList" style="margin-bottom: 10px;">
+            <!-- Se llena dinámicamente -->
+        </div>
+    </div>
+
+    <!-- TIMELINE VISUALIZATION -->
+    <div id="timelineContainer" class="timeline-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-weight: 700; font-size: 14px; color: #1f2937;">
+                <i class="fas fa-clock"></i> Timeline de Entregas
+            </div>
+            <button onclick="cerrarTimeline()" style="background: none; border: none; color: #6b7280; cursor: pointer;">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <canvas id="timelineChart" height="80"></canvas>
+    </div>
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        console.log('🗺️ Iniciando Delivery Pro - 3 Columnas...');
+        console.log('🗺️ Iniciando Delivery Pro PRO - Con Drag & Drop + OSRM...');
 
         // DIRECCIÓN FIJA DE FÁBRICA
         const DIRECCION_FABRICA = '<?= DIRECCION_FABRICA ?>';
@@ -1275,9 +1494,366 @@ $choferes = $stmt->fetchAll();
 
         // === FIN ASIGNACIÓN MANUAL ===
 
-        // Inicializar mapa
-        function initMap() {
-            console.log('🗺️ Inicializando mapa...');
+        // ============================================
+        // === SISTEMA DE DRAG & DROP CON SORTABLE ===
+        // ============================================
+
+        let sortableInstances = [];
+        let asignaciones = {}; // { pedidoId: { choferId, orden } }
+
+        // Renderizar zonas de choferes con drag & drop
+        function renderizarChoferesDropzones() {
+            const container = document.getElementById('choferesDropzones');
+            container.innerHTML = '';
+
+            const choferesActivos = choferes.filter(c => c.activo);
+
+            choferesActivos.forEach(chofer => {
+                const dropzone = document.createElement('div');
+                dropzone.className = 'chofer-dropzone';
+                dropzone.style.borderColor = chofer.color;
+                dropzone.id = `dropzone-chofer-${chofer.id}`;
+
+                // Header del chofer
+                const header = document.createElement('div');
+                header.className = 'chofer-dropzone-header';
+                header.style.borderLeft = `4px solid ${chofer.color}`;
+                header.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="width: 32px; height: 32px; border-radius: 50%; background: ${chofer.color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px;">
+                            ${chofer.nombre.charAt(0)}
+                        </div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 12px; color: #1f2937;">
+                                ${chofer.nombre} ${chofer.apellido}
+                            </div>
+                            <div style="font-size: 9px; color: #6b7280;" id="count-chofer-${chofer.id}">
+                                0 pedidos
+                            </div>
+                        </div>
+                    </div>
+                    <div style="font-size: 10px; color: ${chofer.color}; font-weight: 700;">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                `;
+
+                dropzone.appendChild(header);
+
+                // Container de pedidos
+                const pedidosContainer = document.createElement('div');
+                pedidosContainer.className = 'pedidos-container';
+                pedidosContainer.id = `pedidos-chofer-${chofer.id}`;
+                pedidosContainer.style.minHeight = '60px';
+                dropzone.appendChild(pedidosContainer);
+
+                container.appendChild(dropzone);
+
+                // Inicializar Sortable.js en esta zona
+                const sortable = new Sortable(pedidosContainer, {
+                    group: 'pedidos',
+                    animation: 150,
+                    handle: '.drag-handle',
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    onAdd: function(evt) {
+                        const pedidoId = evt.item.dataset.pedidoId;
+                        asignarPedidoAChofer(pedidoId, chofer.id);
+                    },
+                    onUpdate: function(evt) {
+                        recalcularOrdenesChofer(chofer.id);
+                    },
+                    onRemove: function(evt) {
+                        recalcularOrdenesChofer(chofer.id);
+                    }
+                });
+
+                sortableInstances.push(sortable);
+            });
+        }
+
+        // Renderizar pedidos sin asignar Y pedidos ya asignados
+        function renderizarPedidosSinAsignar() {
+            // Primero distribuir pedidos asignados en sus choferes
+            Object.entries(asignaciones).forEach(([pedidoId, asignacion]) => {
+                const pedido = pedidos.find(p => p.id == pedidoId);
+                if (pedido) {
+                    const container = document.getElementById(`pedidos-chofer-${asignacion.choferId}`);
+                    if (container) {
+                        const card = crearPedidoCard(pedido);
+                        container.appendChild(card);
+                        actualizarContadorChofer(asignacion.choferId);
+                    }
+                }
+            });
+
+            // Luego mostrar los sin asignar
+            const container = document.getElementById('pedidosSinAsignar');
+            container.innerHTML = '';
+
+            const sinAsignar = pedidos.filter(p => !asignaciones[p.id] && p.direccion);
+
+            document.getElementById('sinAsignarCount').textContent = sinAsignar.length;
+
+            if (sinAsignar.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 24px; color: #9ca3af; font-size: 11px;">
+                        <i class="fas fa-check-circle" style="font-size: 32px; margin-bottom: 8px; display: block;"></i>
+                        ¡Todos asignados!
+                    </div>
+                `;
+                return;
+            }
+
+            sinAsignar.forEach(pedido => {
+                const card = crearPedidoCard(pedido);
+                container.appendChild(card);
+            });
+
+            // Inicializar Sortable en pedidos sin asignar
+            new Sortable(container, {
+                group: 'pedidos',
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                dragClass: 'sortable-drag'
+            });
+        }
+
+        // Crear card de pedido draggable
+        function crearPedidoCard(pedido) {
+            const card = document.createElement('div');
+            card.className = 'pedido-draggable';
+            card.dataset.pedidoId = pedido.id;
+            card.onclick = () => mostrarPanelFlotante(pedido);
+
+            const estado_icon = {
+                'Pendiente': '⏱️',
+                'Preparando': '🔥',
+                'Listo': '✅',
+                'Entregado': '📦'
+            }[pedido.estado] || '❓';
+
+            const nombre = pedido.cliente_fijo_nombre ?
+                `${pedido.cliente_fijo_nombre} ${pedido.cliente_fijo_apellido}` :
+                `${pedido.nombre} ${pedido.apellido}`;
+
+            const asignacion = asignaciones[pedido.id];
+            const ordenBadge = asignacion ? `
+                <span class="orden-badge-drag">${asignacion.orden}</span>
+            ` : '';
+
+            card.innerHTML = `
+                <i class="fas fa-grip-vertical drag-handle"></i>
+                ${ordenBadge}
+                <div style="flex: 1;">
+                    <div style="font-weight: 700; font-size: 11px; color: #2563eb;">
+                        #${pedido.id} ${estado_icon}
+                    </div>
+                    <div style="font-size: 10px; color: #1f2937; font-weight: 600; margin-top: 2px;">
+                        ${nombre.substring(0, 20)}${nombre.length > 20 ? '...' : ''}
+                    </div>
+                    <div style="font-size: 9px; color: #6b7280; margin-top: 2px;">
+                        ${pedido.direccion ? pedido.direccion.substring(0, 25) + '...' : 'Sin dirección'}
+                    </div>
+                </div>
+                <div style="font-size: 13px; font-weight: 700; color: #16a34a;">
+                    $${pedido.precio.toLocaleString()}
+                </div>
+            `;
+
+            return card;
+        }
+
+        // Asignar pedido a chofer
+        async function asignarPedidoAChofer(pedidoId, choferId) {
+            // Calcular orden automáticamente
+            const pedidosEnChofer = Object.entries(asignaciones)
+                .filter(([_, asig]) => asig.choferId == choferId)
+                .length;
+
+            const orden = pedidosEnChofer + 1;
+
+            // Guardar localmente
+            asignaciones[pedidoId] = { choferId, orden };
+
+            // Guardar en servidor
+            try {
+                const formData = new FormData();
+                formData.append('action', 'asignar_pedido');
+                formData.append('pedido_id', pedidoId);
+                formData.append('chofer_id', choferId);
+                formData.append('orden', orden);
+
+                await fetch('', { method: 'POST', body: formData });
+
+                console.log(`✅ Pedido #${pedidoId} → Chofer ${choferId} → Orden ${orden}`);
+
+                // Actualizar contador
+                actualizarContadorChofer(choferId);
+
+                // Guardar en LocalForage
+                await guardarAsignacionesLocal();
+
+            } catch (error) {
+                console.error('Error al asignar:', error);
+            }
+        }
+
+        // Recalcular órdenes después de reordenar
+        function recalcularOrdenesChofer(choferId) {
+            const container = document.getElementById(`pedidos-chofer-${choferId}`);
+            const pedidoCards = container.querySelectorAll('.pedido-draggable');
+
+            pedidoCards.forEach((card, index) => {
+                const pedidoId = card.dataset.pedidoId;
+                const nuevoOrden = index + 1;
+
+                if (asignaciones[pedidoId]) {
+                    asignaciones[pedidoId].orden = nuevoOrden;
+
+                    // Actualizar badge
+                    const badge = card.querySelector('.orden-badge-drag');
+                    if (badge) {
+                        badge.textContent = nuevoOrden;
+                    }
+
+                    // Guardar en servidor
+                    const formData = new FormData();
+                    formData.append('action', 'asignar_pedido');
+                    formData.append('pedido_id', pedidoId);
+                    formData.append('chofer_id', choferId);
+                    formData.append('orden', nuevoOrden);
+
+                    fetch('', { method: 'POST', body: formData });
+                }
+            });
+
+            actualizarContadorChofer(choferId);
+            guardarAsignacionesLocal();
+        }
+
+        // Actualizar contador de pedidos por chofer
+        function actualizarContadorChofer(choferId) {
+            const count = Object.values(asignaciones)
+                .filter(a => a.choferId == choferId)
+                .length;
+
+            const countEl = document.getElementById(`count-chofer-${choferId}`);
+            if (countEl) {
+                countEl.textContent = `${count} ${count === 1 ? 'pedido' : 'pedidos'}`;
+            }
+        }
+
+        // ======================================
+        // === PANEL FLOTANTE AL CLICK EN MAPA ===
+        // ======================================
+
+        function mostrarPanelFlotante(pedido, event) {
+            const panel = document.getElementById('floatingAssignmentPanel');
+
+            document.getElementById('floatingPanelTitle').textContent = `Pedido #${pedido.id}`;
+            document.getElementById('floatingPanelAddress').textContent = pedido.direccion || 'Sin dirección';
+
+            // Renderizar choferes con botones de orden
+            const choferesListEl = document.getElementById('floatingChofersList');
+            choferesListEl.innerHTML = '';
+
+            choferes.filter(c => c.activo).forEach(chofer => {
+                const choferBtn = document.createElement('div');
+                choferBtn.className = 'quick-assign-btn';
+                choferBtn.style.borderColor = chofer.color;
+
+                const isAsignado = asignaciones[pedido.id]?.choferId == chofer.id;
+
+                choferBtn.innerHTML = `
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: ${chofer.color}; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 11px;">
+                        ${chofer.nombre.charAt(0)}
+                    </div>
+                    <div style="flex: 1; font-size: 11px;">
+                        ${chofer.nombre} ${chofer.apellido}
+                    </div>
+                    <div style="display: flex; gap: 3px;">
+                        ${[1,2,3,4].map(num => `
+                            <button class="orden-number-btn"
+                                    onclick="event.stopPropagation(); asignarRapido(${pedido.id}, ${chofer.id}, ${num})"
+                                    style="${isAsignado && asignaciones[pedido.id].orden == num ? `background: ${chofer.color}; color: white; border-color: ${chofer.color};` : ''}">
+                                ${num}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+
+                choferesListEl.appendChild(choferBtn);
+            });
+
+            // Posicionar panel
+            if (event) {
+                panel.style.left = `${event.clientX + 10}px`;
+                panel.style.top = `${event.clientY + 10}px`;
+            } else {
+                panel.style.left = '50%';
+                panel.style.top = '50%';
+                panel.style.transform = 'translate(-50%, -50%)';
+            }
+
+            panel.style.display = 'block';
+        }
+
+        function cerrarPanelFlotante() {
+            document.getElementById('floatingAssignmentPanel').style.display = 'none';
+        }
+
+        async function asignarRapido(pedidoId, choferId, orden) {
+            asignaciones[pedidoId] = { choferId, orden };
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'asignar_pedido');
+                formData.append('pedido_id', pedidoId);
+                formData.append('chofer_id', choferId);
+                formData.append('orden', orden);
+
+                await fetch('', { method: 'POST', body: formData });
+
+                console.log(`⚡ Asignación rápida: Pedido #${pedidoId} → Chofer ${choferId} → ${orden}`);
+
+                // Recargar para ver cambios
+                location.reload();
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error al asignar');
+            }
+        }
+
+        // ======================================
+        // === LOCALFORAGE - STORAGE OFFLINE ===
+        // ======================================
+
+        async function guardarAsignacionesLocal() {
+            try {
+                await localforage.setItem('asignaciones', asignaciones);
+                console.log('💾 Asignaciones guardadas localmente');
+            } catch (error) {
+                console.error('Error guardando localmente:', error);
+            }
+        }
+
+        async function cargarAsignacionesLocal() {
+            try {
+                const stored = await localforage.getItem('asignaciones');
+                if (stored) {
+                    asignaciones = stored;
+                    console.log('📂 Asignaciones cargadas desde storage local');
+                }
+            } catch (error) {
+                console.error('Error cargando localmente:', error);
+            }
+        }
+
+        // Inicializar mapa y drag & drop
+        async function initMap() {
+            console.log('🗺️ Inicializando Delivery Pro PRO...');
 
             map = L.map('map').setView(MAP_CENTER, 13);
 
@@ -1288,7 +1864,35 @@ $choferes = $stmt->fetchAll();
 
             console.log('✅ Mapa listo');
 
+            // Cargar asignaciones desde LocalForage
+            await cargarAsignacionesLocal();
+
+            // Cargar asignaciones desde BD (las que ya existen)
+            await cargarAsignacionesDesdeDB();
+
+            // Renderizar zonas de drag & drop
+            renderizarChoferesDropzones();
+            renderizarPedidosSinAsignar();
+
+            // Iniciar geocodificación
             geocodificarPedidos();
+
+            console.log('✅ Sistema de Drag & Drop inicializado');
+        }
+
+        // Cargar asignaciones desde la base de datos
+        async function cargarAsignacionesDesdeDB() {
+            // Las asignaciones ya vienen en los datos de pedidos
+            pedidos.forEach(pedido => {
+                if (pedido.asignado_chofer_id && pedido.asignado_orden) {
+                    asignaciones[pedido.id] = {
+                        choferId: pedido.asignado_chofer_id,
+                        orden: pedido.asignado_orden
+                    };
+                }
+            });
+
+            console.log('📊 Asignaciones cargadas desde BD:', Object.keys(asignaciones).length);
         }
 
         // Geocodificar - MEJORADO con mejor manejo de errores
@@ -1529,8 +2133,10 @@ $choferes = $stmt->fetchAll();
 
             marker.bindPopup(popupContent, { maxWidth: 250 });
 
-            marker.on('click', () => {
+            // NUEVO: Abrir panel flotante al clickear marcador
+            marker.on('click', (e) => {
                 selectPedido(pedido.id);
+                mostrarPanelFlotante(pedido, e.originalEvent);
             });
 
             markers[pedido.id] = marker;
@@ -1617,30 +2223,114 @@ $choferes = $stmt->fetchAll();
             }
         }
 
-        // ARMAR RUTAS MANUALES - Múltiples choferes con colores diferentes
+        // ============================
+        // === TIMELINE CON CHART.JS ===
+        // ============================
+
+        let timelineChart = null;
+
+        function mostrarTimeline() {
+            document.getElementById('timelineContainer').classList.add('active');
+
+            // Preparar datos por chofer
+            const datasetsPorChofer = [];
+
+            Object.entries(asignaciones).forEach(([pedidoId, asig]) => {
+                const pedido = pedidos.find(p => p.id == pedidoId);
+                const chofer = choferes.find(c => c.id == asig.choferId);
+
+                if (!pedido || !chofer) return;
+
+                let dataset = datasetsPorChofer.find(d => d.choferId == chofer.id);
+                if (!dataset) {
+                    dataset = {
+                        choferId: chofer.id,
+                        label: `${chofer.nombre} ${chofer.apellido}`,
+                        data: [],
+                        backgroundColor: chofer.color,
+                        borderColor: chofer.color
+                    };
+                    datasetsPorChofer.push(dataset);
+                }
+
+                // Simular tiempos (15 min por pedido)
+                const tiempoEstimado = asig.orden * 15;
+                dataset.data.push({ x: tiempoEstimado, y: 1, pedidoId });
+            });
+
+            // Crear gráfico
+            const ctx = document.getElementById('timelineChart').getContext('2d');
+
+            if (timelineChart) {
+                timelineChart.destroy();
+            }
+
+            timelineChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: datasetsPorChofer.map((ds, idx) => ({
+                        ...ds,
+                        y: idx + 1,
+                        pointRadius: 8,
+                        pointHoverRadius: 12
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'right'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.x} min`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Tiempo (minutos desde inicio)'
+                            },
+                            min: 0
+                        },
+                        y: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function cerrarTimeline() {
+            document.getElementById('timelineContainer').classList.remove('active');
+        }
+
+        // ====================================
+        // === ARMAR RUTAS CON OSRM ROUTING ===
+        // ====================================
+
+        // ARMAR RUTAS MANUALES - Usa asignaciones del drag & drop
         async function armarRutasManuales() {
             console.log('🗺️ Armando rutas manuales...');
 
-            // Obtener TODOS los pedidos del DOM (no solo los que tienen checkbox marcado)
+            // Obtener pedidos desde el objeto asignaciones
             const pedidosAsignados = [];
 
-            pedidos.forEach(pedido => {
-                const card = document.getElementById(`pedido-card-${pedido.id}`);
-                if (!card) return;
+            Object.entries(asignaciones).forEach(([pedidoId, asignacion]) => {
+                const pedido = pedidos.find(p => p.id == pedidoId);
+                const card = document.getElementById(`pedido-card-${pedidoId}`);
 
-                const choferSelect = document.getElementById(`chofer-select-${pedido.id}`);
-                const ordenSelect = document.getElementById(`orden-select-${pedido.id}`);
-
-                if (!choferSelect || !ordenSelect) return;
-
-                const choferId = parseInt(choferSelect.value);
-                const orden = parseInt(ordenSelect.value);
-
-                if (choferId && orden && card.dataset.lat && card.dataset.lng) {
+                if (pedido && card && card.dataset.lat && card.dataset.lng) {
                     pedidosAsignados.push({
                         ...pedido,
-                        choferId: choferId,
-                        orden: orden,
+                        choferId: asignacion.choferId,
+                        orden: asignacion.orden,
                         lat: parseFloat(card.dataset.lat),
                         lng: parseFloat(card.dataset.lng)
                     });
@@ -1776,6 +2466,9 @@ $choferes = $stmt->fetchAll();
             console.log(`   📦 Pedidos: ${totalPedidosAsignados}`);
             console.log(`   📏 Distancia total: ${totalDistancia.toFixed(1)} km`);
             console.log(`   ⏱️ Tiempo estimado: ${tiempoEstimado} min`);
+
+            // Mostrar timeline
+            mostrarTimeline();
 
             alert(`✅ Rutas armadas exitosamente\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n📏 ${totalDistancia.toFixed(1)} km totales\n⏱️ ~${tiempoEstimado} min`);
         }
