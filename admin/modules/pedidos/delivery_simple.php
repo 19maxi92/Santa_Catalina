@@ -41,6 +41,17 @@ $sql_asignaciones = "CREATE TABLE IF NOT EXISTS pedido_asignaciones (
 )";
 $pdo->exec($sql_asignaciones);
 
+// === AGREGAR CAMPO DE FECHA DE ENTREGA SI NO EXISTE ===
+try {
+    $pdo->exec("ALTER TABLE pedidos ADD COLUMN fecha_entrega DATE DEFAULT NULL AFTER created_at");
+    error_log("✅ Campo fecha_entrega agregado");
+} catch (PDOException $e) {
+    // Ya existe, no pasa nada
+    if (strpos($e->getMessage(), 'Duplicate column') === false) {
+        error_log("⚠️ Error al agregar fecha_entrega: " . $e->getMessage());
+    }
+}
+
 // Insertar choferes por defecto si la tabla está vacía
 $stmt = $pdo->query("SELECT COUNT(*) FROM choferes");
 if ($stmt->fetchColumn() == 0) {
@@ -147,10 +158,11 @@ $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $busqueda = $_GET['buscar'] ?? '';
 
-// Por defecto: pedidos de hoy que no estén entregados
+// Por defecto: pedidos activos (desde ayer en adelante)
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado) {
-    $fecha_desde = date('Y-m-d');
-    $fecha_hasta = date('Y-m-d');
+    // Mostrar pedidos desde ayer (por si quedaron pendientes) hacia adelante
+    $fecha_desde = date('Y-m-d', strtotime('-1 day'));
+    // No establecer fecha_hasta para mostrar todos los pedidos futuros
     $filtro_estado = 'pendientes';
 }
 
@@ -176,12 +188,14 @@ if ($filtro_estado && $filtro_estado === 'pendientes') {
 }
 
 if ($fecha_desde) {
-    $sql .= " AND DATE(p.created_at) >= ?";
+    // Filtrar por fecha_entrega si está definida, sino por created_at
+    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) >= ?";
     $params[] = $fecha_desde;
 }
 
 if ($fecha_hasta) {
-    $sql .= " AND DATE(p.created_at) <= ?";
+    // Filtrar por fecha_entrega si está definida, sino por created_at
+    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) <= ?";
     $params[] = $fecha_hasta;
 }
 
