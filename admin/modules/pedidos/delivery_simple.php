@@ -251,6 +251,11 @@ $choferes = $stmt->fetchAll();
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 
+    <!-- Leaflet Markercluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -781,6 +786,55 @@ $choferes = $stmt->fetchAll();
             transform: scale(1.1);
         }
 
+        /* === MARKER CLUSTER STYLES (FASE 3) === */
+        .marker-cluster-small {
+            background-color: rgba(59, 130, 246, 0.6);
+        }
+
+        .marker-cluster-small div {
+            background-color: rgba(59, 130, 246, 0.9);
+        }
+
+        .marker-cluster-medium {
+            background-color: rgba(234, 179, 8, 0.6);
+        }
+
+        .marker-cluster-medium div {
+            background-color: rgba(234, 179, 8, 0.9);
+        }
+
+        .marker-cluster-large {
+            background-color: rgba(239, 68, 68, 0.6);
+        }
+
+        .marker-cluster-large div {
+            background-color: rgba(239, 68, 68, 0.9);
+        }
+
+        .marker-cluster {
+            background-clip: padding-box;
+            border-radius: 50%;
+        }
+
+        .marker-cluster div {
+            width: 30px;
+            height: 30px;
+            margin-left: 5px;
+            margin-top: 5px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 12px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .marker-cluster span {
+            line-height: 30px;
+        }
+
         /* === TIMELINE CONTAINER === */
         .timeline-container {
             position: fixed;
@@ -1288,6 +1342,8 @@ $choferes = $stmt->fetchAll();
         let rutaActual = [];
         let routingControls = {}; // Almacenar routing controls por chofer
         let routingLayers = []; // Capas de rutas para control de visibilidad
+        let markerClusterGroup = null; // Grupo de clustering para marcadores
+        let usarClustering = true; // Toggle para activar/desactivar clustering
 
         // === GESTIÓN DE CHOFERES ===
 
@@ -1881,6 +1937,39 @@ $choferes = $stmt->fetchAll();
                 maxZoom: 19
             }).addTo(map);
 
+            // Inicializar Marker Cluster Group (FASE 3)
+            markerClusterGroup = L.markerClusterGroup({
+                maxClusterRadius: 50, // Radio de agrupación en pixeles
+                spiderfyOnMaxZoom: true, // Expandir clusters en zoom máximo
+                showCoverageOnHover: false, // No mostrar área de cobertura al hover
+                zoomToBoundsOnClick: true, // Zoom al hacer click en cluster
+                iconCreateFunction: function(cluster) {
+                    const count = cluster.getChildCount();
+                    let size = 'small';
+                    let className = 'marker-cluster-small';
+
+                    if (count >= 10) {
+                        size = 'large';
+                        className = 'marker-cluster-large';
+                    } else if (count >= 5) {
+                        size = 'medium';
+                        className = 'marker-cluster-medium';
+                    }
+
+                    return L.divIcon({
+                        html: '<div><span>' + count + '</span></div>',
+                        className: 'marker-cluster ' + className,
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+
+            // Agregar cluster group al mapa si está activado
+            if (usarClustering && pedidos.length > 10) {
+                map.addLayer(markerClusterGroup);
+                console.log('✅ Marker clustering activado');
+            }
+
             console.log('✅ Mapa listo');
 
             // Cargar asignaciones desde LocalForage
@@ -2127,7 +2216,14 @@ $choferes = $stmt->fetchAll();
                 iconAnchor: [15, 30]
             });
 
-            const marker = L.marker([lat, lng], { icon }).addTo(map);
+            // Agregar al cluster group si está habilitado y hay más de 10 pedidos, sino directamente al mapa
+            const marker = L.marker([lat, lng], { icon });
+
+            if (usarClustering && markerClusterGroup && pedidos.length > 10) {
+                markerClusterGroup.addLayer(marker);
+            } else {
+                marker.addTo(map);
+            }
 
             const popupContent = `
                 <div style="font-family: Inter, sans-serif; min-width: 200px;">
@@ -2847,6 +2943,174 @@ $choferes = $stmt->fetchAll();
                 control.addTo(map);
                 console.log(`👁️ Ruta del chofer ${choferId} visible`);
             }
+        }
+
+        // ============================================
+        // === ANÁLISIS GEOESPACIAL CON TURF.JS (FASE 3) ===
+        // ============================================
+
+        /**
+         * Calcular el centro geográfico de todos los pedidos
+         */
+        function calcularCentroGeografico() {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng;
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)];
+            });
+
+            if (pedidosConCoords.length === 0) {
+                console.warn('⚠️ No hay pedidos con coordenadas');
+                return null;
+            }
+
+            // Crear FeatureCollection de puntos
+            const points = turf.points(pedidosConCoords);
+
+            // Calcular centroid
+            const centroid = turf.center(points);
+
+            console.log('📍 Centro geográfico calculado:', centroid.geometry.coordinates);
+
+            return {
+                lng: centroid.geometry.coordinates[0],
+                lat: centroid.geometry.coordinates[1]
+            };
+        }
+
+        /**
+         * Crear área de cobertura (buffer) alrededor de la fábrica
+         */
+        function mostrarAreaCobertura(radioKm = 10) {
+            if (!originMarker) {
+                console.warn('⚠️ No hay marcador de origen');
+                return;
+            }
+
+            const coords = originMarker.getLatLng();
+            const point = turf.point([coords.lng, coords.lat]);
+
+            // Crear buffer de radioKm alrededor del punto
+            const buffered = turf.buffer(point, radioKm, { units: 'kilometers' });
+
+            // Convertir a formato Leaflet y dibujar
+            const bufferLayer = L.geoJSON(buffered, {
+                style: {
+                    color: '#16a34a',
+                    weight: 2,
+                    opacity: 0.5,
+                    fillColor: '#22c55e',
+                    fillOpacity: 0.1
+                }
+            }).addTo(map);
+
+            bufferLayer.bindPopup(`Área de cobertura: ${radioKm} km`);
+
+            console.log(`✅ Área de cobertura de ${radioKm} km creada`);
+
+            return bufferLayer;
+        }
+
+        /**
+         * Analizar densidad de pedidos por cuadrantes
+         */
+        function analizarDensidadPedidos() {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng;
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return {
+                    id: p.id,
+                    coords: [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)],
+                    precio: p.precio
+                };
+            });
+
+            if (pedidosConCoords.length === 0) {
+                console.warn('⚠️ No hay pedidos con coordenadas');
+                return;
+            }
+
+            // Calcular bounding box
+            const points = turf.points(pedidosConCoords.map(p => p.coords));
+            const bbox = turf.bbox(points);
+
+            console.log('📊 Análisis de densidad:', {
+                totalPedidos: pedidosConCoords.length,
+                bbox: bbox,
+                precioTotal: pedidosConCoords.reduce((sum, p) => sum + p.precio, 0)
+            });
+
+            return {
+                total: pedidosConCoords.length,
+                bbox: bbox,
+                precioTotal: pedidosConCoords.reduce((sum, p) => sum + p.precio, 0)
+            };
+        }
+
+        /**
+         * Sugerir zonas óptimas de entrega basado en clustering de pedidos
+         */
+        function sugerirZonasEntrega(numZonas = 3) {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng && !asignaciones[p.id];
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return {
+                    id: p.id,
+                    coords: [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)],
+                    precio: p.precio
+                };
+            });
+
+            if (pedidosConCoords.length < numZonas) {
+                console.warn('⚠️ No hay suficientes pedidos para crear zonas');
+                return null;
+            }
+
+            // Usar turf.clustersKmeans para agrupar pedidos
+            const points = turf.featureCollection(
+                pedidosConCoords.map(p => turf.point(p.coords, { pedidoId: p.id, precio: p.precio }))
+            );
+
+            const clustered = turf.clustersKmeans(points, { numberOfClusters: numZonas });
+
+            // Analizar cada cluster
+            const zonas = [];
+            for (let i = 0; i < numZonas; i++) {
+                const clusterPoints = clustered.features.filter(f => f.properties.cluster === i);
+                if (clusterPoints.length === 0) continue;
+
+                const centroid = turf.center(turf.featureCollection(clusterPoints));
+
+                zonas.push({
+                    zona: i + 1,
+                    numPedidos: clusterPoints.length,
+                    centro: centroid.geometry.coordinates,
+                    pedidos: clusterPoints.map(f => f.properties.pedidoId),
+                    precioTotal: clusterPoints.reduce((sum, f) => sum + f.properties.precio, 0)
+                });
+            }
+
+            console.log('🎯 Zonas óptimas sugeridas:', zonas);
+
+            return zonas;
+        }
+
+        /**
+         * Calcular distancia real de ruta usando Turf.js
+         */
+        function calcularDistanciaRutaTurf(waypoints) {
+            if (waypoints.length < 2) return 0;
+
+            const line = turf.lineString(waypoints.map(wp => [wp[1], wp[0]])); // [lng, lat]
+            const length = turf.length(line, { units: 'kilometers' });
+
+            return length;
         }
 
         function cerrarPanelRuta() {
