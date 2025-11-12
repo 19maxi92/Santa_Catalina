@@ -250,6 +250,18 @@ $pdo = getConnection();
                             </div>
                         </div>
 
+                        <!-- Fecha de Entrega -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Fecha de Entrega *
+                                <span class="text-xs text-gray-500">(¿Para cuándo es el pedido?)</span>
+                            </label>
+                            <input type="date" id="fecha_entrega" required
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-lg"
+                                   value="<?php echo date('Y-m-d'); ?>"
+                                   min="<?php echo date('Y-m-d'); ?>">
+                        </div>
+
                         <!-- Turno -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-3">Turno de Entrega *</label>
@@ -703,6 +715,7 @@ function validarPaso1() {
         modalidad: modalidad.value,
         direccion: document.getElementById('direccion').value.trim(),
         ubicacion: ubicacion.value,
+        fecha_entrega: document.getElementById('fecha_entrega').value,
         turno: turno.value,
         formaPago: formaPago.value,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
@@ -1051,6 +1064,7 @@ function finalizarYCrearPedidos() {
             producto: item.producto,
             cantidad: item.cantidad,
             ubicacion: datosCliente.ubicacion,
+            fecha_entrega: datosCliente.fecha_entrega,
             estado: 'Pendiente',
             observaciones: observacionesCompletas
         };

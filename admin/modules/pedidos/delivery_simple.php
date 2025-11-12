@@ -41,6 +41,17 @@ $sql_asignaciones = "CREATE TABLE IF NOT EXISTS pedido_asignaciones (
 )";
 $pdo->exec($sql_asignaciones);
 
+// === AGREGAR CAMPO DE FECHA DE ENTREGA SI NO EXISTE ===
+try {
+    $pdo->exec("ALTER TABLE pedidos ADD COLUMN fecha_entrega DATE DEFAULT NULL AFTER created_at");
+    error_log("✅ Campo fecha_entrega agregado");
+} catch (PDOException $e) {
+    // Ya existe, no pasa nada
+    if (strpos($e->getMessage(), 'Duplicate column') === false) {
+        error_log("⚠️ Error al agregar fecha_entrega: " . $e->getMessage());
+    }
+}
+
 // Insertar choferes por defecto si la tabla está vacía
 $stmt = $pdo->query("SELECT COUNT(*) FROM choferes");
 if ($stmt->fetchColumn() == 0) {
@@ -147,10 +158,11 @@ $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $busqueda = $_GET['buscar'] ?? '';
 
-// Por defecto: pedidos de hoy que no estén entregados
+// Por defecto: pedidos activos (desde ayer en adelante)
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado) {
-    $fecha_desde = date('Y-m-d');
-    $fecha_hasta = date('Y-m-d');
+    // Mostrar pedidos desde ayer (por si quedaron pendientes) hacia adelante
+    $fecha_desde = date('Y-m-d', strtotime('-1 day'));
+    // No establecer fecha_hasta para mostrar todos los pedidos futuros
     $filtro_estado = 'pendientes';
 }
 
@@ -176,12 +188,14 @@ if ($filtro_estado && $filtro_estado === 'pendientes') {
 }
 
 if ($fecha_desde) {
-    $sql .= " AND DATE(p.created_at) >= ?";
+    // Filtrar por fecha_entrega si está definida, sino por created_at
+    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) >= ?";
     $params[] = $fecha_desde;
 }
 
 if ($fecha_hasta) {
-    $sql .= " AND DATE(p.created_at) <= ?";
+    // Filtrar por fecha_entrega si está definida, sino por created_at
+    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) <= ?";
     $params[] = $fecha_hasta;
 }
 
@@ -236,6 +250,11 @@ $choferes = $stmt->fetchAll();
     <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+
+    <!-- Leaflet Markercluster -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -767,6 +786,55 @@ $choferes = $stmt->fetchAll();
             transform: scale(1.1);
         }
 
+        /* === MARKER CLUSTER STYLES (FASE 3) === */
+        .marker-cluster-small {
+            background-color: rgba(59, 130, 246, 0.6);
+        }
+
+        .marker-cluster-small div {
+            background-color: rgba(59, 130, 246, 0.9);
+        }
+
+        .marker-cluster-medium {
+            background-color: rgba(234, 179, 8, 0.6);
+        }
+
+        .marker-cluster-medium div {
+            background-color: rgba(234, 179, 8, 0.9);
+        }
+
+        .marker-cluster-large {
+            background-color: rgba(239, 68, 68, 0.6);
+        }
+
+        .marker-cluster-large div {
+            background-color: rgba(239, 68, 68, 0.9);
+        }
+
+        .marker-cluster {
+            background-clip: padding-box;
+            border-radius: 50%;
+        }
+
+        .marker-cluster div {
+            width: 30px;
+            height: 30px;
+            margin-left: 5px;
+            margin-top: 5px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 12px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .marker-cluster span {
+            line-height: 30px;
+        }
+
         /* === TIMELINE CONTAINER === */
         .timeline-container {
             position: fixed;
@@ -1272,6 +1340,10 @@ $choferes = $stmt->fetchAll();
         let selectedPedidoId = null;
         let selectedChoferId = null;
         let rutaActual = [];
+        let routingControls = {}; // Almacenar routing controls por chofer
+        let routingLayers = []; // Capas de rutas para control de visibilidad
+        let markerClusterGroup = null; // Grupo de clustering para marcadores
+        let usarClustering = true; // Toggle para activar/desactivar clustering
 
         // === GESTIÓN DE CHOFERES ===
 
@@ -1529,6 +1601,9 @@ $choferes = $stmt->fetchAll();
                             </div>
                             <div style="font-size: 9px; color: #6b7280;" id="count-chofer-${chofer.id}">
                                 0 pedidos
+                            </div>
+                            <div id="route-info-${chofer.id}" class="route-info" style="font-size: 8px; color: ${chofer.color}; font-weight: 600; margin-top: 2px;">
+                                <!-- Distancia y tiempo aparecerán aquí -->
                             </div>
                         </div>
                     </div>
@@ -1862,6 +1937,39 @@ $choferes = $stmt->fetchAll();
                 maxZoom: 19
             }).addTo(map);
 
+            // Inicializar Marker Cluster Group (FASE 3)
+            markerClusterGroup = L.markerClusterGroup({
+                maxClusterRadius: 50, // Radio de agrupación en pixeles
+                spiderfyOnMaxZoom: true, // Expandir clusters en zoom máximo
+                showCoverageOnHover: false, // No mostrar área de cobertura al hover
+                zoomToBoundsOnClick: true, // Zoom al hacer click en cluster
+                iconCreateFunction: function(cluster) {
+                    const count = cluster.getChildCount();
+                    let size = 'small';
+                    let className = 'marker-cluster-small';
+
+                    if (count >= 10) {
+                        size = 'large';
+                        className = 'marker-cluster-large';
+                    } else if (count >= 5) {
+                        size = 'medium';
+                        className = 'marker-cluster-medium';
+                    }
+
+                    return L.divIcon({
+                        html: '<div><span>' + count + '</span></div>',
+                        className: 'marker-cluster ' + className,
+                        iconSize: L.point(40, 40)
+                    });
+                }
+            });
+
+            // Agregar cluster group al mapa si está activado
+            if (usarClustering && pedidos.length > 10) {
+                map.addLayer(markerClusterGroup);
+                console.log('✅ Marker clustering activado');
+            }
+
             console.log('✅ Mapa listo');
 
             // Cargar asignaciones desde LocalForage
@@ -2108,7 +2216,14 @@ $choferes = $stmt->fetchAll();
                 iconAnchor: [15, 30]
             });
 
-            const marker = L.marker([lat, lng], { icon }).addTo(map);
+            // Agregar al cluster group si está habilitado y hay más de 10 pedidos, sino directamente al mapa
+            const marker = L.marker([lat, lng], { icon });
+
+            if (usarClustering && markerClusterGroup && pedidos.length > 10) {
+                markerClusterGroup.addLayer(marker);
+            } else {
+                marker.addTo(map);
+            }
 
             const popupContent = `
                 <div style="font-family: Inter, sans-serif; min-width: 200px;">
@@ -2360,11 +2475,8 @@ $choferes = $stmt->fetchAll();
 
             console.log('👥 Choferes con pedidos asignados:', Object.keys(gruposPorChofer).length);
 
-            // Limpiar rutas anteriores
-            if (window.rutasPolylines) {
-                window.rutasPolylines.forEach(polyline => map.removeLayer(polyline));
-            }
-            window.rutasPolylines = [];
+            // Limpiar rutas anteriores (polylines y routing controls)
+            limpiarRutas();
 
             // Geocodificar origen (FÁBRICA)
             console.log('📍 Geocodificando fábrica...');
@@ -2413,38 +2525,31 @@ $choferes = $stmt->fetchAll();
                 const pedidosChofer = gruposPorChofer[choferId];
                 console.log(`\n🚗 Ruta de ${chofer.nombre} ${chofer.apellido} (${pedidosChofer.length} pedidos):`);
 
-                // Construir ruta: Fábrica → Pedidos en orden
-                const rutaCoords = [[origenCoords.lat, origenCoords.lon]];
+                // Construir waypoints: Fábrica → Pedidos en orden
+                const waypoints = [[origenCoords.lat, origenCoords.lon]];
 
                 pedidosChofer.forEach(p => {
-                    rutaCoords.push([p.lat, p.lng]);
+                    waypoints.push([p.lat, p.lng]);
                     console.log(`   ${p.orden}. Pedido #${p.id} → ${p.direccion}`);
                 });
 
-                // Dibujar polyline con color del chofer
-                const polyline = L.polyline(rutaCoords, {
-                    color: chofer.color,
-                    weight: 4,
-                    opacity: 0.8,
-                    dashArray: '10, 5',
-                    lineJoin: 'round'
-                }).addTo(map);
+                // Crear ruta real con OSRM
+                const routingControl = crearRutaReal(
+                    waypoints,
+                    chofer.color,
+                    choferId,
+                    {
+                        nombreChofer: `${chofer.nombre} ${chofer.apellido}`,
+                        numPedidos: pedidosChofer.length,
+                        pedidos: pedidosChofer
+                    }
+                );
 
-                window.rutasPolylines.push(polyline);
+                // Guardar routing control
+                routingControls[choferId] = routingControl;
 
-                // Calcular distancia para esta ruta
-                const distanciaChofer = calcularDistanciaTotal(rutaCoords);
-                totalDistancia += distanciaChofer;
+                // El conteo de distancia y tiempo se hará en el evento 'routesfound'
                 totalPedidosAsignados += pedidosChofer.length;
-
-                console.log(`   📏 Distancia: ${distanciaChofer.toFixed(1)} km`);
-
-                // Popup en la polyline con info del chofer
-                polyline.bindPopup(`
-                    <strong style="color: ${chofer.color};">${chofer.nombre} ${chofer.apellido}</strong><br>
-                    📦 ${pedidosChofer.length} pedidos<br>
-                    📏 ${distanciaChofer.toFixed(1)} km
-                `);
             }
 
             // Ajustar vista del mapa
@@ -2458,19 +2563,17 @@ $choferes = $stmt->fetchAll();
             }
 
             // Resumen
-            const tiempoEstimado = Math.round(totalDistancia / 30 * 60);
             const choferesCantidad = Object.keys(gruposPorChofer).length;
 
             console.log(`\n✅ RESUMEN:`);
             console.log(`   👥 Choferes: ${choferesCantidad}`);
             console.log(`   📦 Pedidos: ${totalPedidosAsignados}`);
-            console.log(`   📏 Distancia total: ${totalDistancia.toFixed(1)} km`);
-            console.log(`   ⏱️ Tiempo estimado: ${tiempoEstimado} min`);
+            console.log(`   🛣️ Calculando rutas reales con OSRM...`);
 
             // Mostrar timeline
             mostrarTimeline();
 
-            alert(`✅ Rutas armadas exitosamente\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n📏 ${totalDistancia.toFixed(1)} km totales\n⏱️ ~${tiempoEstimado} min`);
+            alert(`✅ Rutas reales calculándose con OSRM\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n\n🛣️ Las rutas siguen las calles reales.\nLas distancias y tiempos aparecerán en unos segundos.`);
         }
 
         // OPTIMIZAR RUTA - CON COLOR POR CHOFER (Auto-optimización)
@@ -2716,6 +2819,298 @@ $choferes = $stmt->fetchAll();
                 );
             }
             return total;
+        }
+
+        // ============================================
+        // === RUTAS REALES CON OSRM (FASE 2) ===
+        // ============================================
+
+        /**
+         * Crear una ruta real usando OSRM que sigue las calles
+         * @param {Array} waypoints - Array de coordenadas [lat, lng]
+         * @param {String} color - Color de la ruta
+         * @param {String} choferId - ID del chofer (opcional)
+         * @param {Object} metadata - Información adicional (opcional)
+         * @returns {Object} - Routing control de Leaflet
+         */
+        function crearRutaReal(waypoints, color = '#3b82f6', choferId = null, metadata = {}) {
+            console.log('🛣️ Creando ruta real con', waypoints.length, 'puntos');
+
+            // Convertir waypoints al formato de Leaflet Routing Machine
+            const latLngs = waypoints.map(wp => L.latLng(wp[0], wp[1]));
+
+            // Crear el routing control con OSRM
+            const routingControl = L.Routing.control({
+                waypoints: latLngs,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1',
+                    profile: 'car', // Perfil de conducción: car, bike, foot
+                    useHints: false
+                }),
+                lineOptions: {
+                    styles: [
+                        { color: 'white', opacity: 0.8, weight: 8 }, // Borde blanco
+                        { color: color, opacity: 0.9, weight: 5 }     // Línea de color
+                    ],
+                    extendToWaypoints: true,
+                    missingRouteTolerance: 0
+                },
+                show: false, // No mostrar el panel de instrucciones
+                addWaypoints: false, // No permitir agregar waypoints arrastrando
+                routeWhileDragging: false,
+                fitSelectedRoutes: false, // No hacer zoom automático
+                createMarker: function() { return null; } // No crear marcadores en waypoints
+            }).addTo(map);
+
+            // Guardar metadata en el control
+            routingControl._metadata = {
+                choferId: choferId,
+                color: color,
+                ...metadata
+            };
+
+            // Evento cuando la ruta está lista
+            routingControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                const summary = routes[0].summary;
+
+                // Distancia en km, tiempo en minutos
+                const distanciaKm = (summary.totalDistance / 1000).toFixed(1);
+                const tiempoMin = Math.round(summary.totalTime / 60);
+
+                console.log(`✅ Ruta calculada: ${distanciaKm} km, ${tiempoMin} min`);
+
+                // Guardar info en metadata
+                routingControl._metadata.distancia = distanciaKm;
+                routingControl._metadata.tiempo = tiempoMin;
+
+                // Si hay chofer, actualizar info en la UI
+                if (choferId && metadata.nombreChofer) {
+                    const infoEl = document.getElementById(`route-info-${choferId}`);
+                    if (infoEl) {
+                        infoEl.innerHTML = `📏 ${distanciaKm} km • ⏱️ ${tiempoMin} min`;
+                    }
+                }
+            });
+
+            routingControl.on('routingerror', function(e) {
+                console.error('❌ Error calculando ruta:', e);
+            });
+
+            return routingControl;
+        }
+
+        /**
+         * Limpiar todas las rutas del mapa
+         */
+        function limpiarRutas() {
+            console.log('🧹 Limpiando rutas anteriores...');
+
+            // Eliminar routing controls
+            Object.values(routingControls).forEach(control => {
+                if (control && map.hasLayer(control)) {
+                    map.removeControl(control);
+                }
+            });
+            routingControls = {};
+
+            // Eliminar polylines antiguas
+            if (window.rutasPolylines) {
+                window.rutasPolylines.forEach(polyline => {
+                    if (map.hasLayer(polyline)) {
+                        map.removeLayer(polyline);
+                    }
+                });
+                window.rutasPolylines = [];
+            }
+
+            console.log('✅ Rutas limpiadas');
+        }
+
+        /**
+         * Mostrar/ocultar rutas de un chofer específico
+         */
+        function toggleRutaChofer(choferId) {
+            const control = routingControls[choferId];
+            if (!control) return;
+
+            const isVisible = map.hasLayer(control);
+
+            if (isVisible) {
+                map.removeControl(control);
+                console.log(`👁️ Ruta del chofer ${choferId} ocultada`);
+            } else {
+                control.addTo(map);
+                console.log(`👁️ Ruta del chofer ${choferId} visible`);
+            }
+        }
+
+        // ============================================
+        // === ANÁLISIS GEOESPACIAL CON TURF.JS (FASE 3) ===
+        // ============================================
+
+        /**
+         * Calcular el centro geográfico de todos los pedidos
+         */
+        function calcularCentroGeografico() {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng;
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)];
+            });
+
+            if (pedidosConCoords.length === 0) {
+                console.warn('⚠️ No hay pedidos con coordenadas');
+                return null;
+            }
+
+            // Crear FeatureCollection de puntos
+            const points = turf.points(pedidosConCoords);
+
+            // Calcular centroid
+            const centroid = turf.center(points);
+
+            console.log('📍 Centro geográfico calculado:', centroid.geometry.coordinates);
+
+            return {
+                lng: centroid.geometry.coordinates[0],
+                lat: centroid.geometry.coordinates[1]
+            };
+        }
+
+        /**
+         * Crear área de cobertura (buffer) alrededor de la fábrica
+         */
+        function mostrarAreaCobertura(radioKm = 10) {
+            if (!originMarker) {
+                console.warn('⚠️ No hay marcador de origen');
+                return;
+            }
+
+            const coords = originMarker.getLatLng();
+            const point = turf.point([coords.lng, coords.lat]);
+
+            // Crear buffer de radioKm alrededor del punto
+            const buffered = turf.buffer(point, radioKm, { units: 'kilometers' });
+
+            // Convertir a formato Leaflet y dibujar
+            const bufferLayer = L.geoJSON(buffered, {
+                style: {
+                    color: '#16a34a',
+                    weight: 2,
+                    opacity: 0.5,
+                    fillColor: '#22c55e',
+                    fillOpacity: 0.1
+                }
+            }).addTo(map);
+
+            bufferLayer.bindPopup(`Área de cobertura: ${radioKm} km`);
+
+            console.log(`✅ Área de cobertura de ${radioKm} km creada`);
+
+            return bufferLayer;
+        }
+
+        /**
+         * Analizar densidad de pedidos por cuadrantes
+         */
+        function analizarDensidadPedidos() {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng;
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return {
+                    id: p.id,
+                    coords: [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)],
+                    precio: p.precio
+                };
+            });
+
+            if (pedidosConCoords.length === 0) {
+                console.warn('⚠️ No hay pedidos con coordenadas');
+                return;
+            }
+
+            // Calcular bounding box
+            const points = turf.points(pedidosConCoords.map(p => p.coords));
+            const bbox = turf.bbox(points);
+
+            console.log('📊 Análisis de densidad:', {
+                totalPedidos: pedidosConCoords.length,
+                bbox: bbox,
+                precioTotal: pedidosConCoords.reduce((sum, p) => sum + p.precio, 0)
+            });
+
+            return {
+                total: pedidosConCoords.length,
+                bbox: bbox,
+                precioTotal: pedidosConCoords.reduce((sum, p) => sum + p.precio, 0)
+            };
+        }
+
+        /**
+         * Sugerir zonas óptimas de entrega basado en clustering de pedidos
+         */
+        function sugerirZonasEntrega(numZonas = 3) {
+            const pedidosConCoords = pedidos.filter(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return card && card.dataset.lat && card.dataset.lng && !asignaciones[p.id];
+            }).map(p => {
+                const card = document.getElementById(`pedido-card-${p.id}`);
+                return {
+                    id: p.id,
+                    coords: [parseFloat(card.dataset.lng), parseFloat(card.dataset.lat)],
+                    precio: p.precio
+                };
+            });
+
+            if (pedidosConCoords.length < numZonas) {
+                console.warn('⚠️ No hay suficientes pedidos para crear zonas');
+                return null;
+            }
+
+            // Usar turf.clustersKmeans para agrupar pedidos
+            const points = turf.featureCollection(
+                pedidosConCoords.map(p => turf.point(p.coords, { pedidoId: p.id, precio: p.precio }))
+            );
+
+            const clustered = turf.clustersKmeans(points, { numberOfClusters: numZonas });
+
+            // Analizar cada cluster
+            const zonas = [];
+            for (let i = 0; i < numZonas; i++) {
+                const clusterPoints = clustered.features.filter(f => f.properties.cluster === i);
+                if (clusterPoints.length === 0) continue;
+
+                const centroid = turf.center(turf.featureCollection(clusterPoints));
+
+                zonas.push({
+                    zona: i + 1,
+                    numPedidos: clusterPoints.length,
+                    centro: centroid.geometry.coordinates,
+                    pedidos: clusterPoints.map(f => f.properties.pedidoId),
+                    precioTotal: clusterPoints.reduce((sum, f) => sum + f.properties.precio, 0)
+                });
+            }
+
+            console.log('🎯 Zonas óptimas sugeridas:', zonas);
+
+            return zonas;
+        }
+
+        /**
+         * Calcular distancia real de ruta usando Turf.js
+         */
+        function calcularDistanciaRutaTurf(waypoints) {
+            if (waypoints.length < 2) return 0;
+
+            const line = turf.lineString(waypoints.map(wp => [wp[1], wp[0]])); // [lng, lat]
+            const length = turf.length(line, { units: 'kilometers' });
+
+            return length;
         }
 
         function cerrarPanelRuta() {

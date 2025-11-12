@@ -49,9 +49,11 @@ try {
     $nombre = trim($data['nombre']);
     $apellido = trim($data['apellido'] ?? '');
     $telefono = trim($data['telefono'] ?? '');
+    $direccion = trim($data['direccion'] ?? '');
     $modalidad = $data['modalidad'];
     $forma_pago = $data['forma_pago'];
     $ubicacion = $data['ubicacion'];
+    $fecha_entrega = $data['fecha_entrega'] ?? null;
     $observaciones = trim($data['observaciones'] ?? '');
     $tipo_pedido = $data['tipo_pedido'];
     $precio = (float)$data['precio'];
@@ -134,13 +136,13 @@ try {
     // Insertar en base de datos
     $stmt = $pdo->prepare("
         INSERT INTO pedidos (
-            nombre, apellido, telefono, producto, cantidad, precio,
+            nombre, apellido, telefono, direccion, producto, cantidad, precio,
             modalidad, forma_pago, ubicacion, estado, observaciones,
-            fecha_pedido, created_at
+            fecha_entrega, fecha_pedido, created_at
         ) VALUES (
-            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            NOW(), NOW()
+            ?, NOW(), NOW()
         )
     ");
 
@@ -148,6 +150,7 @@ try {
         $nombre,
         $apellido,
         $telefono,
+        $direccion,
         $producto,
         $cantidad,
         $precio,
@@ -155,7 +158,8 @@ try {
         $forma_pago,
         $ubicacion,
         $estado,
-        $observaciones
+        $observaciones,
+        $fecha_entrega
     ]);
 
     if (!$result) {
