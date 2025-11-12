@@ -1286,6 +1286,8 @@ $choferes = $stmt->fetchAll();
         let selectedPedidoId = null;
         let selectedChoferId = null;
         let rutaActual = [];
+        let routingControls = {}; // Almacenar routing controls por chofer
+        let routingLayers = []; // Capas de rutas para control de visibilidad
 
         // === GESTIÓN DE CHOFERES ===
 
@@ -1543,6 +1545,9 @@ $choferes = $stmt->fetchAll();
                             </div>
                             <div style="font-size: 9px; color: #6b7280;" id="count-chofer-${chofer.id}">
                                 0 pedidos
+                            </div>
+                            <div id="route-info-${chofer.id}" class="route-info" style="font-size: 8px; color: ${chofer.color}; font-weight: 600; margin-top: 2px;">
+                                <!-- Distancia y tiempo aparecerán aquí -->
                             </div>
                         </div>
                     </div>
@@ -2374,11 +2379,8 @@ $choferes = $stmt->fetchAll();
 
             console.log('👥 Choferes con pedidos asignados:', Object.keys(gruposPorChofer).length);
 
-            // Limpiar rutas anteriores
-            if (window.rutasPolylines) {
-                window.rutasPolylines.forEach(polyline => map.removeLayer(polyline));
-            }
-            window.rutasPolylines = [];
+            // Limpiar rutas anteriores (polylines y routing controls)
+            limpiarRutas();
 
             // Geocodificar origen (FÁBRICA)
             console.log('📍 Geocodificando fábrica...');
@@ -2427,38 +2429,31 @@ $choferes = $stmt->fetchAll();
                 const pedidosChofer = gruposPorChofer[choferId];
                 console.log(`\n🚗 Ruta de ${chofer.nombre} ${chofer.apellido} (${pedidosChofer.length} pedidos):`);
 
-                // Construir ruta: Fábrica → Pedidos en orden
-                const rutaCoords = [[origenCoords.lat, origenCoords.lon]];
+                // Construir waypoints: Fábrica → Pedidos en orden
+                const waypoints = [[origenCoords.lat, origenCoords.lon]];
 
                 pedidosChofer.forEach(p => {
-                    rutaCoords.push([p.lat, p.lng]);
+                    waypoints.push([p.lat, p.lng]);
                     console.log(`   ${p.orden}. Pedido #${p.id} → ${p.direccion}`);
                 });
 
-                // Dibujar polyline con color del chofer
-                const polyline = L.polyline(rutaCoords, {
-                    color: chofer.color,
-                    weight: 4,
-                    opacity: 0.8,
-                    dashArray: '10, 5',
-                    lineJoin: 'round'
-                }).addTo(map);
+                // Crear ruta real con OSRM
+                const routingControl = crearRutaReal(
+                    waypoints,
+                    chofer.color,
+                    choferId,
+                    {
+                        nombreChofer: `${chofer.nombre} ${chofer.apellido}`,
+                        numPedidos: pedidosChofer.length,
+                        pedidos: pedidosChofer
+                    }
+                );
 
-                window.rutasPolylines.push(polyline);
+                // Guardar routing control
+                routingControls[choferId] = routingControl;
 
-                // Calcular distancia para esta ruta
-                const distanciaChofer = calcularDistanciaTotal(rutaCoords);
-                totalDistancia += distanciaChofer;
+                // El conteo de distancia y tiempo se hará en el evento 'routesfound'
                 totalPedidosAsignados += pedidosChofer.length;
-
-                console.log(`   📏 Distancia: ${distanciaChofer.toFixed(1)} km`);
-
-                // Popup en la polyline con info del chofer
-                polyline.bindPopup(`
-                    <strong style="color: ${chofer.color};">${chofer.nombre} ${chofer.apellido}</strong><br>
-                    📦 ${pedidosChofer.length} pedidos<br>
-                    📏 ${distanciaChofer.toFixed(1)} km
-                `);
             }
 
             // Ajustar vista del mapa
@@ -2472,19 +2467,17 @@ $choferes = $stmt->fetchAll();
             }
 
             // Resumen
-            const tiempoEstimado = Math.round(totalDistancia / 30 * 60);
             const choferesCantidad = Object.keys(gruposPorChofer).length;
 
             console.log(`\n✅ RESUMEN:`);
             console.log(`   👥 Choferes: ${choferesCantidad}`);
             console.log(`   📦 Pedidos: ${totalPedidosAsignados}`);
-            console.log(`   📏 Distancia total: ${totalDistancia.toFixed(1)} km`);
-            console.log(`   ⏱️ Tiempo estimado: ${tiempoEstimado} min`);
+            console.log(`   🛣️ Calculando rutas reales con OSRM...`);
 
             // Mostrar timeline
             mostrarTimeline();
 
-            alert(`✅ Rutas armadas exitosamente\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n📏 ${totalDistancia.toFixed(1)} km totales\n⏱️ ~${tiempoEstimado} min`);
+            alert(`✅ Rutas reales calculándose con OSRM\n\n👥 ${choferesCantidad} choferes\n📦 ${totalPedidosAsignados} pedidos\n\n🛣️ Las rutas siguen las calles reales.\nLas distancias y tiempos aparecerán en unos segundos.`);
         }
 
         // OPTIMIZAR RUTA - CON COLOR POR CHOFER (Auto-optimización)
@@ -2730,6 +2723,130 @@ $choferes = $stmt->fetchAll();
                 );
             }
             return total;
+        }
+
+        // ============================================
+        // === RUTAS REALES CON OSRM (FASE 2) ===
+        // ============================================
+
+        /**
+         * Crear una ruta real usando OSRM que sigue las calles
+         * @param {Array} waypoints - Array de coordenadas [lat, lng]
+         * @param {String} color - Color de la ruta
+         * @param {String} choferId - ID del chofer (opcional)
+         * @param {Object} metadata - Información adicional (opcional)
+         * @returns {Object} - Routing control de Leaflet
+         */
+        function crearRutaReal(waypoints, color = '#3b82f6', choferId = null, metadata = {}) {
+            console.log('🛣️ Creando ruta real con', waypoints.length, 'puntos');
+
+            // Convertir waypoints al formato de Leaflet Routing Machine
+            const latLngs = waypoints.map(wp => L.latLng(wp[0], wp[1]));
+
+            // Crear el routing control con OSRM
+            const routingControl = L.Routing.control({
+                waypoints: latLngs,
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1',
+                    profile: 'car', // Perfil de conducción: car, bike, foot
+                    useHints: false
+                }),
+                lineOptions: {
+                    styles: [
+                        { color: 'white', opacity: 0.8, weight: 8 }, // Borde blanco
+                        { color: color, opacity: 0.9, weight: 5 }     // Línea de color
+                    ],
+                    extendToWaypoints: true,
+                    missingRouteTolerance: 0
+                },
+                show: false, // No mostrar el panel de instrucciones
+                addWaypoints: false, // No permitir agregar waypoints arrastrando
+                routeWhileDragging: false,
+                fitSelectedRoutes: false, // No hacer zoom automático
+                createMarker: function() { return null; } // No crear marcadores en waypoints
+            }).addTo(map);
+
+            // Guardar metadata en el control
+            routingControl._metadata = {
+                choferId: choferId,
+                color: color,
+                ...metadata
+            };
+
+            // Evento cuando la ruta está lista
+            routingControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                const summary = routes[0].summary;
+
+                // Distancia en km, tiempo en minutos
+                const distanciaKm = (summary.totalDistance / 1000).toFixed(1);
+                const tiempoMin = Math.round(summary.totalTime / 60);
+
+                console.log(`✅ Ruta calculada: ${distanciaKm} km, ${tiempoMin} min`);
+
+                // Guardar info en metadata
+                routingControl._metadata.distancia = distanciaKm;
+                routingControl._metadata.tiempo = tiempoMin;
+
+                // Si hay chofer, actualizar info en la UI
+                if (choferId && metadata.nombreChofer) {
+                    const infoEl = document.getElementById(`route-info-${choferId}`);
+                    if (infoEl) {
+                        infoEl.innerHTML = `📏 ${distanciaKm} km • ⏱️ ${tiempoMin} min`;
+                    }
+                }
+            });
+
+            routingControl.on('routingerror', function(e) {
+                console.error('❌ Error calculando ruta:', e);
+            });
+
+            return routingControl;
+        }
+
+        /**
+         * Limpiar todas las rutas del mapa
+         */
+        function limpiarRutas() {
+            console.log('🧹 Limpiando rutas anteriores...');
+
+            // Eliminar routing controls
+            Object.values(routingControls).forEach(control => {
+                if (control && map.hasLayer(control)) {
+                    map.removeControl(control);
+                }
+            });
+            routingControls = {};
+
+            // Eliminar polylines antiguas
+            if (window.rutasPolylines) {
+                window.rutasPolylines.forEach(polyline => {
+                    if (map.hasLayer(polyline)) {
+                        map.removeLayer(polyline);
+                    }
+                });
+                window.rutasPolylines = [];
+            }
+
+            console.log('✅ Rutas limpiadas');
+        }
+
+        /**
+         * Mostrar/ocultar rutas de un chofer específico
+         */
+        function toggleRutaChofer(choferId) {
+            const control = routingControls[choferId];
+            if (!control) return;
+
+            const isVisible = map.hasLayer(control);
+
+            if (isVisible) {
+                map.removeControl(control);
+                console.log(`👁️ Ruta del chofer ${choferId} ocultada`);
+            } else {
+                control.addTo(map);
+                console.log(`👁️ Ruta del chofer ${choferId} visible`);
+            }
         }
 
         function cerrarPanelRuta() {
