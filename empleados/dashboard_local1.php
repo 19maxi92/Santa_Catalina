@@ -786,14 +786,56 @@ $auto_impresion_activa = isset($_SESSION['auto_impresion']) && $_SESSION['auto_i
         let pedidoSeleccionado = null;
         let precioBase = 0;
 
-        // Precios predefinidos
-        const precios = {
+        // IMPORTANTE: Precios ahora se cargan dinámicamente desde la base de datos
+        // Valores por defecto (se actualizan al abrir el modal)
+        let precios = {
             'jyq24': 18000,
             'jyq48': 22000,
             'surtido_clasico48': 20000,
             'surtido_especial48': 25000,
             'personalizado_base': 750 // por sándwich
         };
+
+        // Función para cargar precios dinámicamente desde la API
+        async function cargarPreciosActualizados() {
+            try {
+                const response = await fetch('/api_precios.php');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Actualizar el objeto precios con los valores de la base de datos
+                    const preciosAPI = data.precios;
+
+                    precios['jyq24'] = preciosAPI['jyq24'].precio;
+                    precios['jyq48'] = preciosAPI['jyq48'].precio;
+                    precios['surtido_clasico48'] = preciosAPI['surtido_clasico48'].precio;
+                    precios['surtido_especial48'] = preciosAPI['surtido_especial48'].precio;
+                    if (preciosAPI['personalizado_base']) {
+                        precios['personalizado_base'] = preciosAPI['personalizado_base'].precio;
+                    }
+
+                    // Actualizar los textos de precios en el HTML
+                    const cards = document.querySelectorAll('#modalPedidoExpress .bg-white.rounded-lg.border');
+                    cards.forEach(card => {
+                        const radioInput = card.querySelector('input[name="pedido_tipo"]');
+                        if (radioInput) {
+                            const tipo = radioInput.value;
+                            const precioDisplay = card.querySelector('.text-green-600.text-lg');
+                            if (precioDisplay && precios[tipo]) {
+                                precioDisplay.textContent = '$' + new Intl.NumberFormat('es-AR').format(precios[tipo]);
+                            }
+                        }
+                    });
+
+                    console.log('Precios actualizados correctamente:', precios);
+                } else {
+                    console.error('Error al cargar precios:', data.error);
+                }
+            } catch (error) {
+                console.error('Error al cargar precios desde API:', error);
+                // En caso de error, se usan los precios por defecto
+            }
+        }
 
         // Actualizar hora actual
         function actualizarHora() {
@@ -804,9 +846,12 @@ $auto_impresion_activa = isset($_SESSION['auto_impresion']) && $_SESSION['auto_i
         actualizarHora();
 
         // Funciones del modal
-        function abrirPedidoExpress() {
+        async function abrirPedidoExpress() {
             document.getElementById('modalPedidoExpress').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+
+            // IMPORTANTE: Cargar precios actualizados desde la base de datos
+            await cargarPreciosActualizados();
         }
 
         function cerrarPedidoExpress() {

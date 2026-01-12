@@ -1,6 +1,9 @@
 <?php
 // admin/config.php - Versión corregida con manejo de rutas mejorado
 
+// IMPORTANTE: Configurar timezone de Argentina (GMT-3) para solucionar diferencia de horarios
+date_default_timezone_set('America/Argentina/Buenos_Aires');
+
 // Auto-detectar si estamos en subdirectorio admin o no
 $base_dir = dirname(__FILE__);
 $is_in_admin = basename($base_dir) === 'admin';
@@ -38,6 +41,11 @@ function getConnection() {
                 PDO::ATTR_EMULATE_PREPARES => false
             ]
         );
+
+        // IMPORTANTE: Configurar timezone de MySQL a Argentina (GMT-3)
+        // Esto soluciona el problema de diferencia de 3 horas en los timestamps
+        $pdo->exec("SET time_zone = '-03:00'");
+
         return $pdo;
     } catch (PDOException $e) {
         // Log error instead of die for better error handling
