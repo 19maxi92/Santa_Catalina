@@ -1019,12 +1019,51 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 
-const precios = {
+// IMPORTANTE: Precios ahora se cargan dinámicamente desde la base de datos
+// Valores por defecto (se actualizan al abrir el modal)
+let precios = {
     'jyq24': { nombre: 'Jamón y Queso x24', precio: 18000, cantidad: 24 },
     'jyq48': { nombre: 'Jamón y Queso x48', precio: 22000, cantidad: 48 },
     'surtido_clasico48': { nombre: 'Surtido Clásico x48', precio: 20000, cantidad: 48 },
     'surtido_especial48': { nombre: 'Surtido Especial x48', precio: 25000, cantidad: 48 }
 };
+
+// Función para cargar precios dinámicamente desde la API
+async function cargarPreciosActualizados() {
+    try {
+        const response = await fetch('/api_precios.php');
+        const data = await response.json();
+
+        if (data.success) {
+            // Actualizar el objeto precios con los valores de la base de datos
+            precios = data.precios;
+
+            // Actualizar los elementos HTML con los nuevos precios
+            document.querySelectorAll('.combo-item').forEach(item => {
+                const tipo = item.dataset.tipo;
+                if (precios[tipo]) {
+                    const precioValor = precios[tipo].precio;
+
+                    // Actualizar data-precio
+                    item.dataset.precio = precioValor;
+
+                    // Actualizar el texto del precio mostrado
+                    const precioDisplay = item.querySelector('.text-green-600');
+                    if (precioDisplay) {
+                        precioDisplay.textContent = '$' + new Intl.NumberFormat('es-AR').format(precioValor);
+                    }
+                }
+            });
+
+            console.log('Precios actualizados correctamente:', precios);
+        } else {
+            console.error('Error al cargar precios:', data.error);
+        }
+    } catch (error) {
+        console.error('Error al cargar precios desde API:', error);
+        // En caso de error, se usan los precios por defecto
+    }
+}
 
 const saboresComunes = [
     'Jamón y Queso', 'Lechuga', 'Tomate', 'Huevo',
@@ -1040,9 +1079,13 @@ const saboresPremium = [
 // FUNCIONES DE NAVEGACIÓN
 // ============================================
 
-function abrirPedidoExpress() {
+async function abrirPedidoExpress() {
     document.getElementById('modalPedidoExpress').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
+
+    // IMPORTANTE: Cargar precios actualizados desde la base de datos
+    await cargarPreciosActualizados();
+
     irAPaso(1);
 }
 

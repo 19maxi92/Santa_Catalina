@@ -643,6 +643,43 @@ let historial = [];
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
 
+// Función para cargar precios dinámicamente desde la API
+async function cargarPreciosActualizados() {
+    try {
+        const response = await fetch('/api_precios.php');
+        const data = await response.json();
+
+        if (data.success) {
+            // Actualizar el objeto precios con los valores de la base de datos
+            precios = data.precios;
+
+            // Actualizar los elementos HTML con los nuevos precios
+            document.querySelectorAll('.combo-item').forEach(item => {
+                const tipo = item.dataset.tipo;
+                if (precios[tipo]) {
+                    const precioValor = precios[tipo].precio;
+
+                    // Actualizar data-precio
+                    item.dataset.precio = precioValor;
+
+                    // Actualizar el texto del precio mostrado
+                    const precioDisplay = item.querySelector('.text-blue-600');
+                    if (precioDisplay) {
+                        precioDisplay.textContent = '$' + new Intl.NumberFormat('es-AR').format(precioValor);
+                    }
+                }
+            });
+
+            console.log('Precios actualizados correctamente:', precios);
+        } else {
+            console.error('Error al cargar precios:', data.error);
+        }
+    } catch (error) {
+        console.error('Error al cargar precios desde API:', error);
+        // En caso de error, se usan los precios por defecto
+    }
+}
+
 const saboresComunes = [
     'Jamón y Queso', 'Lechuga', 'Tomate', 'Huevo',
     'Choclo', 'Aceitunas', 'Zanahoria y Queso', 'Zanahoria y Huevo'
@@ -1165,6 +1202,9 @@ function finalizarYCrearPedidos() {
 }
 
 console.log('🚀 Sistema Express Admin cargado');
+
+// Cargar precios actualizados al iniciar
+cargarPreciosActualizados();
     </script>
 
 </body>
