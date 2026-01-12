@@ -3,6 +3,45 @@ require_once '../../config.php';
 requireLogin();
 
 $pdo = getConnection();
+
+// OBTENER PRECIOS ACTUALIZADOS DESDE LA BASE DE DATOS
+$preciosDB = [
+    'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio' => 18000, 'cantidad' => 24],
+    'jyq48' => ['nombre' => 'Jamón y Queso x48', 'precio' => 22000, 'cantidad' => 48],
+    'surtido_clasico48' => ['nombre' => 'Surtido Clásico x48', 'precio' => 20000, 'cantidad' => 48],
+    'surtido_especial48' => ['nombre' => 'Surtido Especial x48', 'precio' => 25000, 'cantidad' => 48]
+];
+
+try {
+    $stmt = $pdo->query("SELECT nombre, precio_efectivo FROM productos WHERE activo = 1");
+    while ($producto = $stmt->fetch()) {
+        $nombre_lower = strtolower($producto['nombre']);
+
+        // Detectar y mapear productos a las claves de pedidos express
+        if (strpos($nombre_lower, 'jamón') !== false && strpos($nombre_lower, 'queso') !== false) {
+            if (strpos($nombre_lower, '24') !== false || strpos($nombre_lower, 'x24') !== false) {
+                $preciosDB['jyq24']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq24']['nombre'] = $producto['nombre'];
+            } elseif (strpos($nombre_lower, '48') !== false || strpos($nombre_lower, 'x48') !== false) {
+                $preciosDB['jyq48']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq48']['nombre'] = $producto['nombre'];
+            }
+        }
+
+        if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'clásico') !== false) {
+            $preciosDB['surtido_clasico48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_clasico48']['nombre'] = $producto['nombre'];
+        }
+
+        if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'especial') !== false) {
+            $preciosDB['surtido_especial48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_especial48']['nombre'] = $producto['nombre'];
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error al cargar precios: " . $e->getMessage());
+    // Usar precios por defecto si falla
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -373,12 +412,12 @@ $pdo = getConnection();
 
                         <div class="space-y-3 mb-6">
                             <!-- JyQ x24 -->
-                            <div class="combo-item" data-tipo="jyq24" data-precio="18000">
+                            <div class="combo-item" data-tipo="jyq24" data-precio="<?= $preciosDB['jyq24']['precio'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
-                                        <div class="font-bold text-lg">Jamón y Queso x24</div>
-                                        <div class="text-blue-600 font-bold text-xl">$18.000</div>
+                                        <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq24']['nombre']) ?></div>
+                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq24']['precio']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -389,12 +428,12 @@ $pdo = getConnection();
                             </div>
 
                             <!-- JyQ x48 -->
-                            <div class="combo-item" data-tipo="jyq48" data-precio="22000">
+                            <div class="combo-item" data-tipo="jyq48" data-precio="<?= $preciosDB['jyq48']['precio'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
-                                        <div class="font-bold text-lg">Jamón y Queso x48</div>
-                                        <div class="text-blue-600 font-bold text-xl">$22.000</div>
+                                        <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq48']['nombre']) ?></div>
+                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq48']['precio']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -405,12 +444,12 @@ $pdo = getConnection();
                             </div>
 
                             <!-- Surtido Clásico -->
-                            <div class="combo-item" data-tipo="surtido_clasico48" data-precio="20000">
+                            <div class="combo-item" data-tipo="surtido_clasico48" data-precio="<?= $preciosDB['surtido_clasico48']['precio'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
-                                        <div class="font-bold text-lg">Surtido Clásico x48</div>
-                                        <div class="text-blue-600 font-bold text-xl">$20.000</div>
+                                        <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_clasico48']['nombre']) ?></div>
+                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_clasico48']['precio']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -421,12 +460,12 @@ $pdo = getConnection();
                             </div>
 
                             <!-- Surtido Especial -->
-                            <div class="combo-item" data-tipo="surtido_especial48" data-precio="25000">
+                            <div class="combo-item" data-tipo="surtido_especial48" data-precio="<?= $preciosDB['surtido_especial48']['precio'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
-                                        <div class="font-bold text-lg">Surtido Especial x48</div>
-                                        <div class="text-blue-600 font-bold text-xl">$25.000</div>
+                                        <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_especial48']['nombre']) ?></div>
+                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_especial48']['precio']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -601,14 +640,8 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 
-// IMPORTANTE: Precios ahora se cargan dinámicamente desde la base de datos
-// Valores por defecto (se actualizan al cargar la página)
-let precios = {
-    'jyq24': { nombre: 'Jamón y Queso x24', precio: 18000, cantidad: 24 },
-    'jyq48': { nombre: 'Jamón y Queso x48', precio: 22000, cantidad: 48 },
-    'surtido_clasico48': { nombre: 'Surtido Clásico x48', precio: 20000, cantidad: 48 },
-    'surtido_especial48': { nombre: 'Surtido Especial x48', precio: 25000, cantidad: 48 }
-};
+// IMPORTANTE: Precios cargados desde la base de datos (PHP)
+const precios = <?= json_encode($preciosDB) ?>;
 
 // Función para cargar precios dinámicamente desde la API
 async function cargarPreciosActualizados() {
