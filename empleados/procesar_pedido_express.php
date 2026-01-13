@@ -122,7 +122,8 @@ try {
     $observaciones = trim($observaciones . $empleado_info);
     
     // Generar fecha formateada para mostrar (timezone Argentina)
-    $fecha_display = date('d/m H:i');
+    $dt = new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires'));
+    $fecha_display = $dt->format('d/m H:i');
 
     // Insertar en base de datos
     $stmt = $pdo->prepare("
