@@ -65,6 +65,20 @@ function formatPrice($price) {
     return '$' . number_format($price, 0, ',', '.');
 }
 
+// Formatear fecha con timezone correcto de Argentina
+function formatDateTime($datetime, $format = 'd/m H:i') {
+    if (empty($datetime)) return '';
+
+    // Crear DateTime en UTC (como viene de MySQL)
+    $dt = new DateTime($datetime, new DateTimeZone('UTC'));
+
+    // Convertir a timezone de Argentina
+    $dt->setTimezone(new DateTimeZone('America/Argentina/Buenos_Aires'));
+
+    // Retornar formateado
+    return $dt->format($format);
+}
+
 // Verificar login ADMIN
 function isLoggedIn() {
     if (session_status() == PHP_SESSION_NONE) {

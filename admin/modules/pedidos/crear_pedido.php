@@ -551,10 +551,14 @@ try {
 
                         <!-- Precio -->
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Precio Total *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Precio Total *
+                                <span id="formaPagoIndicador" class="ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700"></span>
+                            </label>
                             <input type="number" id="precioPersonalizado" step="500" required
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-lg"
                                    placeholder="Ej: 14500">
+                            <p class="text-xs text-gray-500 mt-1">Ingresá el precio según la forma de pago seleccionada</p>
                         </div>
 
                         <!-- Observaciones -->
@@ -1219,11 +1223,28 @@ function finalizarYCrearPedidos() {
         });
 }
 
+// Actualizar indicador de forma de pago en pedido personalizado
+function actualizarIndicadorFormaPago() {
+    const formaPagoSeleccionada = document.querySelector('input[name="forma_pago"]:checked');
+    const indicador = document.getElementById('formaPagoIndicador');
+
+    if (formaPagoSeleccionada && indicador) {
+        const formaPago = formaPagoSeleccionada.value;
+        indicador.textContent = `💳 Forma de pago: ${formaPago}`;
+        indicador.className = formaPago === 'Efectivo'
+            ? 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700'
+            : 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700';
+    }
+}
+
 // Actualizar precios cuando cambia la forma de pago
 document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
     radio.addEventListener('change', function() {
         const formaPago = this.value;
         const items = document.querySelectorAll('.combo-item');
+
+        // Actualizar indicador de forma de pago
+        actualizarIndicadorFormaPago();
 
         items.forEach(item => {
             const precioDisplay = item.querySelector('.precio-display');

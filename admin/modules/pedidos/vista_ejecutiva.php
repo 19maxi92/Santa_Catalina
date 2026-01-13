@@ -428,7 +428,7 @@ unset($_SESSION['mensaje'], $_SESSION['error']);
                                 </td>
                                 <td><?= htmlspecialchars($pedido['modalidad']) ?></td>
                                 <td><?= htmlspecialchars($pedido['ubicacion']) ?></td>
-                                <td><?= date('d/m/Y H:i', strtotime($pedido['created_at'])) ?></td>
+                                <td><?= formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?></td>
                                 <td>
                                     <?php if ($pedido['fecha_entrega']): ?>
                                         <strong><?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></strong>

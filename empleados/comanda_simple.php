@@ -327,7 +327,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <div class="info-admin">
                 Modalidad: <?= $pedido['modalidad'] ?> | Pago: <?= $pedido['forma_pago'] ?>
                 <br>
-                <?= date('d/m/Y H:i', strtotime($pedido['created_at'])) ?>
+                <?= formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?>
             </div>
             
         </div>
