@@ -287,7 +287,7 @@ $ultimos_pedidos = $pdo->query("
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i><span class="hidden lg:inline">Sync...</span>';
 
-        fetch('migrations/api_reparar_fechas.php')
+        fetch('../migrations/api_reparar_fechas.php')
             .then(response => response.json())
             .then(data => {
                 btn.disabled = false;
