@@ -278,7 +278,7 @@ $ultimos_pedidos = $pdo->query("
     </main>
 
     <script>
-    // Función para sincronizar fechas
+    // Función para sincronizar fechas (silenciosa)
     function sincronizarFechas() {
         const btn = document.getElementById('btnSincronizar');
         const originalHTML = btn.innerHTML;
@@ -287,35 +287,25 @@ $ultimos_pedidos = $pdo->query("
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i><span class="hidden lg:inline">Sync...</span>';
 
-        fetch('migrations/reparar_fechas.php')
-            .then(response => response.text())
+        fetch('migrations/api_reparar_fechas.php')
+            .then(response => response.json())
             .then(data => {
-                // Restaurar botón
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
 
-                // Mostrar resultado
-                if (data.includes('✅ REPARACIÓN COMPLETADA')) {
-                    // Mensaje de éxito
-                    const successMsg = document.createElement('div');
-                    successMsg.className = 'fixed top-20 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in';
-                    successMsg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Fechas sincronizadas correctamente';
-                    document.body.appendChild(successMsg);
-
-                    // Recargar página después de 2 segundos
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
+                if (data.success) {
+                    // Recargar página silenciosamente
+                    location.reload();
                 } else {
-                    alert('Error al sincronizar fechas. Ver consola para detalles.');
-                    console.error(data);
+                    console.error('Error al sincronizar:', data.error);
+                    alert('Error al sincronizar fechas');
                 }
             })
             .catch(error => {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
-                alert('Error de conexión: ' + error.message);
-                console.error(error);
+                console.error('Error:', error);
+                alert('Error de conexión');
             });
     }
     </script>
