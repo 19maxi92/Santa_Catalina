@@ -30,7 +30,9 @@ try {
 
 // Últimos pedidos
 $ultimos_pedidos = $pdo->query("
-    SELECT id, nombre, apellido, producto, precio, estado, created_at
+    SELECT id, nombre, apellido, producto, precio, estado,
+           DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '-03:00'), '%d/%m %H:%i') as fecha_formateada,
+           created_at
     FROM pedidos
     ORDER BY created_at DESC
     LIMIT 5
@@ -244,7 +246,7 @@ $ultimos_pedidos = $pdo->query("
                                         </span>
                                     </td>
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
-                                        <?= date('d/m H:i', strtotime($pedido['created_at'])) ?>
+                                        <?= $pedido['fecha_formateada'] ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

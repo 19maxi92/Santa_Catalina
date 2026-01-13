@@ -11,35 +11,39 @@ $pdo = getConnection();
 
 // OBTENER PRECIOS ACTUALIZADOS DESDE LA BASE DE DATOS
 $preciosDB = [
-    'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio' => 18000, 'cantidad' => 24],
-    'jyq48' => ['nombre' => 'Jamón y Queso x48', 'precio' => 22000, 'cantidad' => 48],
-    'surtido_clasico48' => ['nombre' => 'Surtido Clásico x48', 'precio' => 20000, 'cantidad' => 48],
-    'surtido_especial48' => ['nombre' => 'Surtido Especial x48', 'precio' => 25000, 'cantidad' => 48]
+    'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio_efectivo' => 18000, 'precio_transferencia' => 20000, 'cantidad' => 24],
+    'jyq48' => ['nombre' => 'Jamón y Queso x48', 'precio_efectivo' => 22000, 'precio_transferencia' => 24000, 'cantidad' => 48],
+    'surtido_clasico48' => ['nombre' => 'Surtido Clásico x48', 'precio_efectivo' => 20000, 'precio_transferencia' => 22000, 'cantidad' => 48],
+    'surtido_especial48' => ['nombre' => 'Surtido Especial x48', 'precio_efectivo' => 25000, 'precio_transferencia' => 27000, 'cantidad' => 48]
 ];
 
 try {
-    $stmt = $pdo->query("SELECT nombre, precio_efectivo FROM productos WHERE activo = 1");
+    $stmt = $pdo->query("SELECT nombre, precio_efectivo, precio_transferencia FROM productos WHERE activo = 1");
     while ($producto = $stmt->fetch()) {
         $nombre_lower = strtolower($producto['nombre']);
 
         // Detectar y mapear productos a las claves de pedidos express
         if (strpos($nombre_lower, 'jamón') !== false && strpos($nombre_lower, 'queso') !== false) {
             if (strpos($nombre_lower, '24') !== false || strpos($nombre_lower, 'x24') !== false) {
-                $preciosDB['jyq24']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq24']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq24']['precio_transferencia'] = (float)$producto['precio_transferencia'];
                 $preciosDB['jyq24']['nombre'] = $producto['nombre'];
             } elseif (strpos($nombre_lower, '48') !== false || strpos($nombre_lower, 'x48') !== false) {
-                $preciosDB['jyq48']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
                 $preciosDB['jyq48']['nombre'] = $producto['nombre'];
             }
         }
 
         if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'clásico') !== false) {
-            $preciosDB['surtido_clasico48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_clasico48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_clasico48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
             $preciosDB['surtido_clasico48']['nombre'] = $producto['nombre'];
         }
 
         if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'especial') !== false) {
-            $preciosDB['surtido_especial48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_especial48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_especial48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
             $preciosDB['surtido_especial48']['nombre'] = $producto['nombre'];
         }
     }
