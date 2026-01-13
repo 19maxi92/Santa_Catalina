@@ -327,7 +327,7 @@ function generarComandaLocalModerna($pedido, $nombre_completo, $es_cliente_fijo,
         <!-- Footer -->
         <div class="footer">
             <div class="separador">════════════════════════════════</div>
-            <p><strong>Pedido tomado:</strong> <?= formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?></p>
+            <p><strong>Pedido tomado:</strong> <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?></p>
             <p><strong>Estado:</strong> <?= $pedido['estado'] ?></p>
             <?php if ($minutos_transcurridos > 0): ?>
                 <p><strong>Tiempo:</strong> Hace <?= $minutos_transcurridos ?> minutos</p>
