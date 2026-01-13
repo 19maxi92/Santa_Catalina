@@ -135,20 +135,24 @@ if ($_POST) {
                 throw new Exception("Error en los datos del producto. Producto: '$producto', Cantidad: $cantidad, Precio: $precio");
             }
             
+            // Generar fecha formateada para mostrar (timezone Argentina)
+            $dt = new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires'));
+            $fecha_display = $dt->format('d/m H:i');
+
             // Insertar pedido
             $stmt = $pdo->prepare("
-                INSERT INTO pedidos (nombre, apellido, telefono, direccion, producto, cantidad, precio, 
-                                   forma_pago, modalidad, ubicacion, observaciones, cliente_fijo_id, 
-                                   fecha_entrega, hora_entrega, notas_horario) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO pedidos (nombre, apellido, telefono, direccion, producto, cantidad, precio,
+                                   forma_pago, modalidad, ubicacion, observaciones, cliente_fijo_id,
+                                   fecha_entrega, hora_entrega, notas_horario, fecha_display)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            
+
             $cliente_fijo_id = $cliente_seleccionado ? $cliente_seleccionado['id'] : null;
-            
+
             $result = $stmt->execute([
                 $nombre, $apellido, $telefono, $direccion, $producto, $cantidad, $precio,
                 $forma_pago, $modalidad, $ubicacion, $observaciones, $cliente_fijo_id,
-                $fecha_entrega, $hora_entrega, $notas_horario
+                $fecha_entrega, $hora_entrega, $notas_horario, $fecha_display
             ]);
             
             if ($result) {

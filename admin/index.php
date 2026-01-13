@@ -67,6 +67,9 @@ $ultimos_pedidos = $pdo->query("
                 <a href="modules/empleados/index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Gestión de Empleados">
                     <i class="fas fa-users sm:mr-1"></i><span class="hidden lg:inline">Empleados</span>
                 </a>
+                <button onclick="sincronizarFechas()" id="btnSincronizar" class="bg-green-500 hover:bg-green-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Sincronizar fechas de pedidos">
+                    <i class="fas fa-sync-alt sm:mr-1"></i><span class="hidden lg:inline">Sync</span>
+                </button>
                 <span class="text-sm text-gray-600 hidden xl:inline">Hola, <?= $_SESSION['admin_name'] ?></span>
                 <a href="logout.php" class="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm">
                     <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
@@ -273,5 +276,48 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
     </main>
+
+    <script>
+    // Función para sincronizar fechas
+    function sincronizarFechas() {
+        const btn = document.getElementById('btnSincronizar');
+        const originalHTML = btn.innerHTML;
+
+        // Mostrar loading
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i><span class="hidden lg:inline">Sync...</span>';
+
+        fetch('migrations/reparar_fechas.php')
+            .then(response => response.text())
+            .then(data => {
+                // Restaurar botón
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+
+                // Mostrar resultado
+                if (data.includes('✅ REPARACIÓN COMPLETADA')) {
+                    // Mensaje de éxito
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'fixed top-20 right-4 bg-green-500 text-white px-4 py-3 rounded-lg shadow-lg z-50 animate-fade-in';
+                    successMsg.innerHTML = '<i class="fas fa-check-circle mr-2"></i>Fechas sincronizadas correctamente';
+                    document.body.appendChild(successMsg);
+
+                    // Recargar página después de 2 segundos
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    alert('Error al sincronizar fechas. Ver consola para detalles.');
+                    console.error(data);
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                alert('Error de conexión: ' + error.message);
+                console.error(error);
+            });
+    }
+    </script>
 </body>
 </html>
