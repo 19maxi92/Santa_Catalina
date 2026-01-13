@@ -371,7 +371,7 @@ if ($minutos_transcurridos > 60) {
     <!-- Footer -->
     <div class="footer">
         <div class="separador">════════════════════════════════</div>
-        <p style="font-size: 10px; margin: 2px 0;"><strong>Pedido tomado:</strong> <?= date('d/m/Y H:i', strtotime($pedido['created_at'])) ?></p> <!-- Aumentado -->
+        <p style="font-size: 10px; margin: 2px 0;"><strong>Pedido tomado:</strong> <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?></p> <!-- Aumentado -->
         <p style="font-size: 10px; margin: 2px 0;"><strong>Estado:</strong> <?= $pedido['estado'] ?></p> <!-- Aumentado -->
         <?php if ($minutos_transcurridos > 0): ?>
             <p style="font-size: 10px; margin: 2px 0;"><strong>Tiempo:</strong> Hace <?= $minutos_transcurridos ?> minutos</p> <!-- Aumentado -->

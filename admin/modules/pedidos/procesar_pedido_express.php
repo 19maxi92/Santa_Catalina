@@ -133,16 +133,19 @@ try {
     $admin_info .= "\nFecha/Hora: " . date('d/m/Y H:i:s');
     $observaciones = trim($observaciones . $admin_info);
 
+    // Generar fecha formateada para mostrar (timezone Argentina)
+    $fecha_display = date('d/m H:i');
+
     // Insertar en base de datos
     $stmt = $pdo->prepare("
         INSERT INTO pedidos (
             nombre, apellido, telefono, direccion, producto, cantidad, precio,
             modalidad, forma_pago, ubicacion, estado, observaciones,
-            fecha_entrega, fecha_pedido, created_at
+            fecha_entrega, fecha_pedido, created_at, fecha_display
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, NOW(), NOW()
+            ?, NOW(), NOW(), ?
         )
     ");
 
@@ -159,7 +162,8 @@ try {
         $ubicacion,
         $estado,
         $observaciones,
-        $fecha_entrega
+        $fecha_entrega,
+        $fecha_display
     ]);
 
     if (!$result) {

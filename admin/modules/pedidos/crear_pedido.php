@@ -6,35 +6,39 @@ $pdo = getConnection();
 
 // OBTENER PRECIOS ACTUALIZADOS DESDE LA BASE DE DATOS
 $preciosDB = [
-    'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio' => 18000, 'cantidad' => 24],
-    'jyq48' => ['nombre' => 'Jamón y Queso x48', 'precio' => 22000, 'cantidad' => 48],
-    'surtido_clasico48' => ['nombre' => 'Surtido Clásico x48', 'precio' => 20000, 'cantidad' => 48],
-    'surtido_especial48' => ['nombre' => 'Surtido Especial x48', 'precio' => 25000, 'cantidad' => 48]
+    'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio_efectivo' => 18000, 'precio_transferencia' => 20000, 'cantidad' => 24],
+    'jyq48' => ['nombre' => 'Jamón y Queso x48', 'precio_efectivo' => 22000, 'precio_transferencia' => 24000, 'cantidad' => 48],
+    'surtido_clasico48' => ['nombre' => 'Surtido Clásico x48', 'precio_efectivo' => 20000, 'precio_transferencia' => 22000, 'cantidad' => 48],
+    'surtido_especial48' => ['nombre' => 'Surtido Especial x48', 'precio_efectivo' => 25000, 'precio_transferencia' => 27000, 'cantidad' => 48]
 ];
 
 try {
-    $stmt = $pdo->query("SELECT nombre, precio_efectivo FROM productos WHERE activo = 1");
+    $stmt = $pdo->query("SELECT nombre, precio_efectivo, precio_transferencia FROM productos WHERE activo = 1");
     while ($producto = $stmt->fetch()) {
         $nombre_lower = strtolower($producto['nombre']);
 
         // Detectar y mapear productos a las claves de pedidos express
         if (strpos($nombre_lower, 'jamón') !== false && strpos($nombre_lower, 'queso') !== false) {
             if (strpos($nombre_lower, '24') !== false || strpos($nombre_lower, 'x24') !== false) {
-                $preciosDB['jyq24']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq24']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq24']['precio_transferencia'] = (float)$producto['precio_transferencia'];
                 $preciosDB['jyq24']['nombre'] = $producto['nombre'];
             } elseif (strpos($nombre_lower, '48') !== false || strpos($nombre_lower, 'x48') !== false) {
-                $preciosDB['jyq48']['precio'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+                $preciosDB['jyq48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
                 $preciosDB['jyq48']['nombre'] = $producto['nombre'];
             }
         }
 
         if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'clásico') !== false) {
-            $preciosDB['surtido_clasico48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_clasico48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_clasico48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
             $preciosDB['surtido_clasico48']['nombre'] = $producto['nombre'];
         }
 
         if (strpos($nombre_lower, 'surtido') !== false && strpos($nombre_lower, 'especial') !== false) {
-            $preciosDB['surtido_especial48']['precio'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_especial48']['precio_efectivo'] = (float)$producto['precio_efectivo'];
+            $preciosDB['surtido_especial48']['precio_transferencia'] = (float)$producto['precio_transferencia'];
             $preciosDB['surtido_especial48']['nombre'] = $producto['nombre'];
         }
     }
@@ -412,12 +416,14 @@ try {
 
                         <div class="space-y-3 mb-6">
                             <!-- JyQ x24 -->
-                            <div class="combo-item" data-tipo="jyq24" data-precio="<?= $preciosDB['jyq24']['precio'] ?>">
+                            <div class="combo-item" data-tipo="jyq24"
+                                 data-precio-efectivo="<?= $preciosDB['jyq24']['precio_efectivo'] ?>"
+                                 data-precio-transferencia="<?= $preciosDB['jyq24']['precio_transferencia'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq24']['nombre']) ?></div>
-                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq24']['precio']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq24']['precio_efectivo']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -428,12 +434,14 @@ try {
                             </div>
 
                             <!-- JyQ x48 -->
-                            <div class="combo-item" data-tipo="jyq48" data-precio="<?= $preciosDB['jyq48']['precio'] ?>">
+                            <div class="combo-item" data-tipo="jyq48"
+                                 data-precio-efectivo="<?= $preciosDB['jyq48']['precio_efectivo'] ?>"
+                                 data-precio-transferencia="<?= $preciosDB['jyq48']['precio_transferencia'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq48']['nombre']) ?></div>
-                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq48']['precio']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq48']['precio_efectivo']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -444,12 +452,14 @@ try {
                             </div>
 
                             <!-- Surtido Clásico -->
-                            <div class="combo-item" data-tipo="surtido_clasico48" data-precio="<?= $preciosDB['surtido_clasico48']['precio'] ?>">
+                            <div class="combo-item" data-tipo="surtido_clasico48"
+                                 data-precio-efectivo="<?= $preciosDB['surtido_clasico48']['precio_efectivo'] ?>"
+                                 data-precio-transferencia="<?= $preciosDB['surtido_clasico48']['precio_transferencia'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_clasico48']['nombre']) ?></div>
-                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_clasico48']['precio']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_clasico48']['precio_efectivo']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -460,12 +470,14 @@ try {
                             </div>
 
                             <!-- Surtido Especial -->
-                            <div class="combo-item" data-tipo="surtido_especial48" data-precio="<?= $preciosDB['surtido_especial48']['precio'] ?>">
+                            <div class="combo-item" data-tipo="surtido_especial48"
+                                 data-precio-efectivo="<?= $preciosDB['surtido_especial48']['precio_efectivo'] ?>"
+                                 data-precio-transferencia="<?= $preciosDB['surtido_especial48']['precio_transferencia'] ?>">
                                 <label class="flex items-center p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 cursor-pointer transition-all">
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_especial48']['nombre']) ?></div>
-                                        <div class="text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_especial48']['precio']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_especial48']['precio_efectivo']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -539,10 +551,14 @@ try {
 
                         <!-- Precio -->
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Precio Total *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Precio Total *
+                                <span id="formaPagoIndicador" class="ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700"></span>
+                            </label>
                             <input type="number" id="precioPersonalizado" step="500" required
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-lg"
                                    placeholder="Ej: 14500">
+                            <p class="text-xs text-gray-500 mt-1">Ingresá el precio según la forma de pago seleccionada</p>
                         </div>
 
                         <!-- Observaciones -->
@@ -873,6 +889,9 @@ function agregarPedidosComunes() {
     const combosSeleccionados = [];
     const items = document.querySelectorAll('.combo-item');
 
+    // Obtener la forma de pago seleccionada
+    const formaPago = datosCliente.formaPago;
+
     items.forEach(item => {
         const checkbox = item.querySelector('.combo-checkbox');
         if (checkbox.checked) {
@@ -880,13 +899,16 @@ function agregarPedidosComunes() {
             const cantidad = parseInt(item.querySelector('.cantidad-display').textContent);
             const info = precios[tipo];
 
+            // Seleccionar precio según forma de pago
+            const precioFinal = formaPago === 'Efectivo' ? info.precio_efectivo : info.precio_transferencia;
+
             // Crear un pedido por cada cantidad
             for (let i = 0; i < cantidad; i++) {
                 combosSeleccionados.push({
                     tipo_pedido: tipo,
                     producto: info.nombre,
                     cantidad: info.cantidad,
-                    precio: info.precio,
+                    precio: precioFinal,
                     observaciones: document.getElementById('observaciones_comun').value.trim()
                 });
             }
@@ -1200,6 +1222,48 @@ function finalizarYCrearPedidos() {
             btn.disabled = false;
         });
 }
+
+// Actualizar indicador de forma de pago en pedido personalizado
+function actualizarIndicadorFormaPago() {
+    const formaPagoSeleccionada = document.querySelector('input[name="forma_pago"]:checked');
+    const indicador = document.getElementById('formaPagoIndicador');
+
+    if (formaPagoSeleccionada && indicador) {
+        const formaPago = formaPagoSeleccionada.value;
+        indicador.textContent = `💳 Forma de pago: ${formaPago}`;
+        indicador.className = formaPago === 'Efectivo'
+            ? 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700'
+            : 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700';
+    }
+}
+
+// Actualizar precios cuando cambia la forma de pago
+document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const formaPago = this.value;
+        const items = document.querySelectorAll('.combo-item');
+
+        // Actualizar indicador de forma de pago
+        actualizarIndicadorFormaPago();
+
+        items.forEach(item => {
+            const precioDisplay = item.querySelector('.precio-display');
+            if (precioDisplay) {
+                const precioEfectivo = parseFloat(item.dataset.precioEfectivo);
+                const precioTransferencia = parseFloat(item.dataset.precioTransferencia);
+                const precioAMostrar = formaPago === 'Efectivo' ? precioEfectivo : precioTransferencia;
+
+                // Formatear precio con separador de miles
+                const precioFormateado = '$' + precioAMostrar.toLocaleString('es-AR', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0
+                });
+
+                precioDisplay.textContent = precioFormateado;
+            }
+        });
+    });
+});
 
 console.log('🚀 Sistema Express Admin cargado');
 

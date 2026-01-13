@@ -31,8 +31,7 @@ try {
 // Últimos pedidos
 $ultimos_pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado,
-           DATE_FORMAT(CONVERT_TZ(created_at, '+00:00', '-03:00'), '%d/%m %H:%i') as fecha_formateada,
-           created_at
+           fecha_display, created_at
     FROM pedidos
     ORDER BY created_at DESC
     LIMIT 5
@@ -46,6 +45,11 @@ $ultimos_pedidos = $pdo->query("
     <title><?= APP_NAME ?> - Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Day.js para formateo de fechas con timezone -->
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/utc.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1/plugin/timezone.js"></script>
 </head>
 <body class="bg-gray-100">
     <!-- Header Sticky Responsive -->
@@ -246,7 +250,7 @@ $ultimos_pedidos = $pdo->query("
                                         </span>
                                     </td>
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
-                                        <?= $pedido['fecha_formateada'] ?>
+                                        <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m H:i') ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

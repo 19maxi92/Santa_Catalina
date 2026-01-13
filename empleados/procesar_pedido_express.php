@@ -121,29 +121,33 @@ try {
     $empleado_info .= "\nFecha/Hora: " . date('d/m/Y H:i:s');
     $observaciones = trim($observaciones . $empleado_info);
     
+    // Generar fecha formateada para mostrar (timezone Argentina)
+    $fecha_display = date('d/m H:i');
+
     // Insertar en base de datos
     $stmt = $pdo->prepare("
         INSERT INTO pedidos (
-            nombre, apellido, telefono, producto, cantidad, precio, 
+            nombre, apellido, telefono, producto, cantidad, precio,
             modalidad, forma_pago, ubicacion, estado, observaciones,
-            fecha_pedido, created_at
+            fecha_pedido, created_at, fecha_display
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, 
+            ?, ?, ?, ?, ?, ?,
             ?, ?, 'Local 1', 'Pendiente', ?,
-            NOW(), NOW()
+            NOW(), NOW(), ?
         )
     ");
-    
+
     $result = $stmt->execute([
-        $nombre, 
-        $apellido, 
-        $telefono, 
-        $producto, 
-        $cantidad, 
+        $nombre,
+        $apellido,
+        $telefono,
+        $producto,
+        $cantidad,
         $precio,
-        $modalidad, 
-        $forma_pago, 
-        $observaciones
+        $modalidad,
+        $forma_pago,
+        $observaciones,
+        $fecha_display
     ]);
     
     if (!$result) {
