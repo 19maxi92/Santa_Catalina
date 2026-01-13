@@ -78,18 +78,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
 $pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado, modalidad,
            observaciones, direccion, telefono, forma_pago, cantidad,
-           created_at, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
+           created_at, fecha_display, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
            impreso
-    FROM pedidos 
+    FROM pedidos
     WHERE ubicacion = 'Local 1'
     AND DATE(created_at) = CURDATE()
     AND estado != 'Entregado'
-    ORDER BY 
-        CASE estado 
-            WHEN 'Pendiente' THEN 1 
-            WHEN 'Preparando' THEN 2 
-            WHEN 'Listo' THEN 3 
-        END, 
+    ORDER BY
+        CASE estado
+            WHEN 'Pendiente' THEN 1
+            WHEN 'Preparando' THEN 2
+            WHEN 'Listo' THEN 3
+        END,
         created_at ASC
 ")->fetchAll();
 
