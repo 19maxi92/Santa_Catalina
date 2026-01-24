@@ -681,22 +681,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         };
                         ?>
                         
-                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?> <?= !empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d') ? 'border-l-4 border-purple-500' : '' ?>">
-                            <!-- HEADER: Aviso de pedido programado -->
-                            <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                            <div class="bg-purple-100 border-l-4 border-purple-500 text-purple-900 px-3 py-2 mb-2 rounded flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <i class="fas fa-calendar-alt text-purple-600"></i>
-                                    <span class="font-bold text-sm">📅 PEDIDO PROGRAMADO</span>
-                                </div>
-                                <div class="text-sm">
-                                    <span class="text-gray-600">Creado:</span> <span class="font-semibold"><?= $pedido['fecha_display'] ?? date('d/m H:i', strtotime($pedido['created_at'])) ?></span>
-                                    <span class="mx-2">→</span>
-                                    <span class="text-gray-600">Entrega:</span> <span class="font-bold text-purple-700"><?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></span>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-
+                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>">
                             <div class="flex items-center gap-3">
 
                                 <!-- CHECKBOX -->
@@ -710,12 +695,20 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                     <!-- ID + TIEMPO + BADGES -->
                                     <div class="flex items-center gap-2 min-w-[120px]">
                                         <span class="text-xl font-bold text-blue-600">#<?= $pedido['id'] ?></span>
-                                        <span class="text-xs text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
+                                        <div class="flex flex-col text-xs">
+                                            <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
+                                            <span class="text-gray-600 font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : date('d/m H:i', strtotime($pedido['created_at'])) ?></span>
+                                        </div>
                                         <?php if ($pedido['prioridad'] === 'urgente'): ?>
                                             <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
                                         <?php endif; ?>
                                         <?php if (!$pedido['impreso']): ?>
                                             <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>
+                                        <?php endif; ?>
+                                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
+                                            <span class="bg-purple-500 text-white text-xs px-2 py-0.5 rounded font-bold" title="Programado para: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">
+                                                📅 <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
+                                            </span>
                                         <?php endif; ?>
                                     </div>
                                     
@@ -739,9 +732,6 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                                 <span title="<?= $pedido['ubicacion'] ?>">
                                                     <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : '🏭' ?>
                                                 </span>
-                                                <?php if (!empty($pedido['fecha_entrega'])): ?>
-                                                    <span title="Entrega programada: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">📅</span>
-                                                <?php endif; ?>
                                                 <?php if ($pedido['observaciones']): ?>
                                                     <i class="fas fa-sticky-note text-yellow-600" title="<?= htmlspecialchars($pedido['observaciones']) ?>"></i>
                                                 <?php endif; ?>
