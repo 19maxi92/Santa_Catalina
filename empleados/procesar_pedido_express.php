@@ -118,7 +118,9 @@ try {
     if (isset($_SESSION['empleado_nombre'])) {
         $empleado_info .= " (" . $_SESSION['empleado_nombre'] . ")";
     }
-    $empleado_info .= "\nFecha/Hora: " . date('d/m/Y H:i:s');
+    // Usar DateTime con timezone explícito
+    $dt_info = new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires'));
+    $empleado_info .= "\nFecha/Hora: " . $dt_info->format('d/m/Y H:i:s');
     $observaciones = trim($observaciones . $empleado_info);
     
     // Generar fecha formateada para mostrar (timezone Argentina)
