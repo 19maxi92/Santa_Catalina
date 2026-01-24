@@ -130,12 +130,14 @@ if ($filtro_ubicacion) {
 }
 
 if ($fecha_desde) {
-    $sql .= " AND DATE(p.created_at) >= ?";
+    $sql .= " AND (DATE(p.created_at) >= ? OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) >= ?))";
+    $params[] = $fecha_desde;
     $params[] = $fecha_desde;
 }
 
 if ($fecha_hasta) {
-    $sql .= " AND DATE(p.created_at) <= ?";
+    $sql .= " AND (DATE(p.created_at) <= ? OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) <= ?))";
+    $params[] = $fecha_hasta;
     $params[] = $fecha_hasta;
 }
 

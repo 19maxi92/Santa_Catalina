@@ -79,23 +79,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
 // Obtener pedidos activos de Local 1
 try {
     $stmt = $pdo->prepare("
-        SELECT p.*, 
+        SELECT p.*,
                TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos,
-               CASE 
+               CASE
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 120 THEN 'urgente'
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 60 THEN 'atencion'
                    ELSE 'normal'
                END as prioridad
         FROM pedidos p
-        WHERE p.ubicacion = 'Local 1' 
-          AND DATE(p.created_at) = CURDATE()
+        WHERE p.ubicacion = 'Local 1'
+          AND (
+              (p.fecha_entrega IS NULL AND DATE(p.created_at) = CURDATE())
+              OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) = CURDATE())
+          )
           AND p.estado != 'Entregado'
-        ORDER BY 
-            CASE p.estado 
-                WHEN 'Pendiente' THEN 1 
-                WHEN 'Preparando' THEN 2 
-                WHEN 'Listo' THEN 3 
-            END, 
+        ORDER BY
+            CASE p.estado
+                WHEN 'Pendiente' THEN 1
+                WHEN 'Preparando' THEN 2
+                WHEN 'Listo' THEN 3
+            END,
             p.created_at ASC
     ");
     $stmt->execute();

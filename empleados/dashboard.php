@@ -78,11 +78,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
 $pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado, modalidad,
            observaciones, direccion, telefono, forma_pago, cantidad,
-           created_at, fecha_display, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
+           created_at, fecha_display, fecha_entrega,
+           TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
            impreso
     FROM pedidos
     WHERE ubicacion = 'Local 1'
-    AND DATE(created_at) = CURDATE()
+    AND (
+        (fecha_entrega IS NULL AND DATE(created_at) = CURDATE())
+        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
+    )
     AND estado != 'Entregado'
     ORDER BY
         CASE estado
@@ -241,8 +245,8 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                 </div>
 
                 <div class="flex items-center space-x-1 sm:space-x-2">
-                    <a href="pedidos.php" class="bg-blue-500 hover:bg-blue-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
-                        <i class="fas fa-list sm:mr-1"></i><span class="hidden sm:inline">Ver Todos</span>
+                    <a href="pedidos.php" class="bg-green-500 hover:bg-green-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs" title="Ver historial completo y filtrar pedidos">
+                        <i class="fas fa-history sm:mr-1"></i><span class="hidden sm:inline">Historial</span><span class="sm:hidden">Hist</span>
                     </a>
                     <a href="logout.php" class="bg-red-500 hover:bg-red-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
                         <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
