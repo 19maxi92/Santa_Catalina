@@ -328,6 +328,13 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 
                                 <!-- COLUMNA 3: OBSERVACIONES -->
                                 <div>
+                                    <?php if (!empty($pedido['fecha_entrega'])): ?>
+                                        <div class="text-xs mb-2">
+                                            <span class="badge bg-purple-500 text-white">
+                                                📅 Entrega: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>
+                                            </span>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if ($pedido['observaciones']): ?>
                                         <details>
                                             <summary class="text-xs text-blue-600 cursor-pointer hover:underline">

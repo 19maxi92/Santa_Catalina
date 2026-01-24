@@ -724,6 +724,9 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                                 <span title="<?= $pedido['ubicacion'] ?>">
                                                     <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : '🏭' ?>
                                                 </span>
+                                                <?php if (!empty($pedido['fecha_entrega'])): ?>
+                                                    <span title="Entrega programada: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">📅</span>
+                                                <?php endif; ?>
                                                 <?php if ($pedido['observaciones']): ?>
                                                     <i class="fas fa-sticky-note text-yellow-600" title="<?= htmlspecialchars($pedido['observaciones']) ?>"></i>
                                                 <?php endif; ?>
