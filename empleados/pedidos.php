@@ -288,23 +288,10 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
         <?php else: ?>
             <div class="pedidos-container space-y-2"> <!-- REDUCIDO: antes era space-y-2, ahora más compacto -->
                 <?php foreach ($pedidos as $pedido): ?>
-                    <div class="pedido-item pedido-<?= strtolower($pedido['estado']) ?>
+                    <div class="pedido-item pedido-<?= strtolower($pedido['estado']) ?> 
                                 <?= $pedido['minutos_transcurridos'] > 60 && $pedido['estado'] !== 'Entregado' ? 'urgente' : '' ?>
                                 bg-white rounded-lg shadow p-3"> <!-- REDUCIDO: antes era p-4 -->
-
-                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                        <div class="bg-purple-100 border border-purple-300 text-purple-900 px-3 py-2 mb-3 rounded">
-                            <div class="flex items-center justify-between flex-wrap gap-2">
-                                <span class="font-bold text-xs sm:text-sm">📅 PEDIDO PROGRAMADO</span>
-                                <span class="text-xs">
-                                    Creado: <strong><?php echo !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : date('d/m H:i', strtotime($pedido['created_at'])); ?></strong>
-                                    →
-                                    Para: <strong class="text-purple-700"><?php echo date('d/m/Y', strtotime($pedido['fecha_entrega'])); ?></strong>
-                                </span>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-
+                        
                         <div class="flex items-start justify-between gap-4">
                             <!-- INFO PRINCIPAL (70%) -->
                             <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
