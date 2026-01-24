@@ -682,28 +682,13 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         ?>
                         
                         <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>">
-
-                            <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                            <div class="bg-purple-100 border-l-4 border-purple-500 text-purple-900 px-3 py-2 mb-3 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                <div class="flex items-center gap-2">
-                                    <i class="fas fa-calendar-alt text-purple-600"></i>
-                                    <span class="font-bold text-sm">PEDIDO PROGRAMADO</span>
-                                </div>
-                                <div class="text-xs sm:text-sm">
-                                    <span class="text-gray-600">Creado:</span> <span class="font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : date('d/m H:i', strtotime($pedido['created_at'])) ?></span>
-                                    <span class="mx-2">→</span>
-                                    <span class="text-gray-600">Para:</span> <span class="font-bold text-purple-700"><?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></span>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-
                             <div class="flex items-center gap-3">
-
+                                
                                 <!-- CHECKBOX -->
-                                <input type="checkbox" name="pedidos[]" value="<?= $pedido['id'] ?>"
+                                <input type="checkbox" name="pedidos[]" value="<?= $pedido['id'] ?>" 
                                        class="checkbox-pedido checkbox-custom"
                                        onchange="actualizarContador()">
-
+                                
                                 <!-- INFO COMPACTA EN UNA SOLA LÍNEA -->
                                 <div class="flex-1 flex items-center justify-between gap-4">
                                     
