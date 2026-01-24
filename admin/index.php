@@ -67,6 +67,9 @@ $ultimos_pedidos = $pdo->query("
                 <a href="modules/empleados/index.php" class="bg-purple-500 hover:bg-purple-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Gestión de Empleados">
                     <i class="fas fa-users sm:mr-1"></i><span class="hidden lg:inline">Empleados</span>
                 </a>
+                <button onclick="sincronizarFechas()" id="btnSincronizar" class="bg-green-500 hover:bg-green-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm" title="Sincronizar fechas de pedidos">
+                    <i class="fas fa-sync-alt sm:mr-1"></i><span class="hidden lg:inline">Sync</span>
+                </button>
                 <span class="text-sm text-gray-600 hidden xl:inline">Hola, <?= $_SESSION['admin_name'] ?></span>
                 <a href="logout.php" class="bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm">
                     <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
@@ -273,5 +276,38 @@ $ultimos_pedidos = $pdo->query("
             </div>
         </div>
     </main>
+
+    <script>
+    // Función para sincronizar fechas (silenciosa)
+    function sincronizarFechas() {
+        const btn = document.getElementById('btnSincronizar');
+        const originalHTML = btn.innerHTML;
+
+        // Mostrar loading
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i><span class="hidden lg:inline">Sync...</span>';
+
+        fetch('../migrations/api_reparar_fechas.php')
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+
+                if (data.success) {
+                    // Recargar página silenciosamente
+                    location.reload();
+                } else {
+                    console.error('Error al sincronizar:', data.error);
+                    alert('Error al sincronizar fechas');
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                console.error('Error:', error);
+                alert('Error de conexión');
+            });
+    }
+    </script>
 </body>
 </html>

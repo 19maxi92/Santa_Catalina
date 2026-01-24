@@ -41,10 +41,14 @@ $where_ubicacion = $ubicacion_filtro === 'todas' ? '' : "AND ubicacion = :ubicac
 $query = "
     SELECT id, nombre, apellido, producto, precio, estado, modalidad,
            observaciones, direccion, telefono, forma_pago, cantidad,
-           created_at, TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
+           created_at, fecha_entrega, fecha_display,
+           TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos,
            impreso, ubicacion
     FROM pedidos
-    WHERE DATE(created_at) = CURDATE()
+    WHERE (
+        (fecha_entrega IS NULL AND DATE(created_at) = CURDATE())
+        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
+    )
     AND estado != 'Entregado'
     $where_ubicacion
     ORDER BY
@@ -71,7 +75,14 @@ $listos = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Listo'));
 $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
 
 // Obtener ubicaciones disponibles
-$ubicaciones = $pdo->query("SELECT DISTINCT ubicacion FROM pedidos WHERE DATE(created_at) = CURDATE() ORDER BY ubicacion")->fetchAll(PDO::FETCH_COLUMN);
+$ubicaciones = $pdo->query("
+    SELECT DISTINCT ubicacion FROM pedidos
+    WHERE (
+        (fecha_entrega IS NULL AND DATE(created_at) = CURDATE())
+        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
+    )
+    ORDER BY ubicacion
+")->fetchAll(PDO::FETCH_COLUMN);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -221,8 +232,8 @@ $ubicaciones = $pdo->query("SELECT DISTINCT ubicacion FROM pedidos WHERE DATE(cr
                     <a href="../../index.php" class="bg-orange-500 hover:bg-orange-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
                         <i class="fas fa-home sm:mr-1"></i><span class="hidden sm:inline">Inicio</span>
                     </a>
-                    <a href="ver_pedidos.php" class="bg-orange-500 hover:bg-orange-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
-                        <i class="fas fa-list sm:mr-1"></i><span class="hidden sm:inline">Ver Todos</span>
+                    <a href="ver_pedidos.php" class="bg-green-500 hover:bg-green-400 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs" title="Ver historial completo y filtrar pedidos">
+                        <i class="fas fa-history sm:mr-1"></i><span class="hidden sm:inline">Historial</span><span class="sm:hidden">Hist</span>
                     </a>
                     <a href="../../logout.php" class="bg-red-500 hover:bg-red-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs">
                         <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">Salir</span>
