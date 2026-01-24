@@ -682,13 +682,27 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         ?>
                         
                         <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>">
+
+                            <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
+                            <div class="bg-purple-100 border border-purple-300 text-purple-900 px-3 py-2 mb-3 rounded">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <span class="font-bold text-xs sm:text-sm">📅 PEDIDO PROGRAMADO</span>
+                                    <span class="text-xs">
+                                        Creado: <strong><?php echo !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : date('d/m H:i', strtotime($pedido['created_at'])); ?></strong>
+                                        →
+                                        Para: <strong class="text-purple-700"><?php echo date('d/m/Y', strtotime($pedido['fecha_entrega'])); ?></strong>
+                                    </span>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
                             <div class="flex items-center gap-3">
-                                
+
                                 <!-- CHECKBOX -->
-                                <input type="checkbox" name="pedidos[]" value="<?= $pedido['id'] ?>" 
+                                <input type="checkbox" name="pedidos[]" value="<?= $pedido['id'] ?>"
                                        class="checkbox-pedido checkbox-custom"
                                        onchange="actualizarContador()">
-                                
+
                                 <!-- INFO COMPACTA EN UNA SOLA LÍNEA -->
                                 <div class="flex-1 flex items-center justify-between gap-4">
                                     
