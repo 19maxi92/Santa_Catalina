@@ -303,19 +303,6 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                     <div class="text-xs text-gray-600">
                                         <i class="fas fa-phone"></i> <?= htmlspecialchars($pedido['telefono']) ?>
                                     </div>
-                                    <div class="text-xs text-gray-700 mt-1">
-                                        <i class="fas fa-calendar"></i>
-                                        <?php if (!empty($pedido['fecha_display'])): ?>
-                                            <?= htmlspecialchars($pedido['fecha_display']) ?>
-                                        <?php else: ?>
-                                            <?= date('d/m H:i', strtotime($pedido['created_at'])) ?>
-                                        <?php endif; ?>
-                                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                                            <span class="badge bg-purple-500 text-white ml-1" title="Pedido programado para: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">
-                                                PROGRAMADO <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
                                     <div class="text-xs text-gray-500 mt-1">
                                         <i class="fas fa-clock"></i> <?= $pedido['minutos_transcurridos'] ?>min
                                         <?php if ($pedido['minutos_transcurridos'] > 60 && $pedido['estado'] !== 'Entregado'): ?>

@@ -702,9 +702,6 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                         <?php if (!$pedido['impreso']): ?>
                                             <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>
                                         <?php endif; ?>
-                                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                                            <i class="fas fa-calendar-check text-purple-600 text-xs" title="Programado para: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>"></i>
-                                        <?php endif; ?>
                                     </div>
                                     
                                     <!-- CLIENTE -->
@@ -836,8 +833,6 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             'estado' => $p['estado'],
             'observaciones' => $p['observaciones'] ?? '',
             'created_at' => $p['created_at'],
-            'fecha_entrega' => $p['fecha_entrega'] ?? null,
-            'fecha_display' => $p['fecha_display'] ?? null,
             'minutos' => $p['minutos_transcurridos'],
             'impreso' => $p['impreso']
         ];
@@ -1005,28 +1000,14 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                     <div class="detalle-valor font-medium">${pedido.observaciones}</div>
                 </div>
                 ` : ''}
-
-                <!-- Fecha de Entrega (si está programado) -->
-                ${pedido.fecha_entrega && pedido.fecha_entrega !== '<?= date('Y-m-d') ?>' ? `
-                <div class="detalle-row bg-purple-50 border-l-4 border-purple-500">
-                    <div class="detalle-label">
-                        <i class="fas fa-calendar-check mr-2"></i>Fecha Entrega
-                    </div>
-                    <div class="detalle-valor font-medium">
-                        <span class="badge bg-purple-500 text-white">
-                            📅 PROGRAMADO: ${new Date(pedido.fecha_entrega + 'T00:00:00').toLocaleDateString('es-AR', {day: '2-digit', month: '2-digit', year: 'numeric'})}
-                        </span>
-                    </div>
-                </div>
-                ` : ''}
-
+                
                 <!-- Fecha y Tiempo -->
                 <div class="detalle-row">
                     <div class="detalle-label">
                         <i class="far fa-clock mr-2"></i>Creado
                     </div>
                     <div class="detalle-valor">
-                        ${pedido.fecha_display || fechaFormateada}
+                        ${fechaFormateada}
                         <span class="text-sm text-gray-500 ml-2">(${pedido.minutos} minutos)</span>
                     </div>
                 </div>
