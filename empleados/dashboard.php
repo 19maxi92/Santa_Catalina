@@ -596,6 +596,17 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         </div>
                     </div>
 
+                    <!-- Estado de pago (para clientes por WhatsApp) -->
+                    <div class="mb-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="yaPagado" name="ya_pagado" value="1" class="w-5 h-5 text-green-600 mr-3">
+                            <div>
+                                <span class="font-bold text-gray-800">✅ Ya está pagado</span>
+                                <p class="text-xs text-gray-600 mt-1">(Para clientes que pagaron por WhatsApp/anticipado)</p>
+                            </div>
+                        </label>
+                    </div>
+
                     <!-- Botón siguiente -->
                     <div class="flex justify-end">
                         <button type="button" onclick="irAPaso(2)" 
@@ -1108,9 +1119,10 @@ function validarPaso1() {
         apellido: apellido,
         telefono: document.getElementById('telefono').value.trim(),
         turno: turno.value,
-        formaPago: formaPago.value
+        formaPago: formaPago.value,
+        yaPagado: document.getElementById('yaPagado').checked
     };
-    
+
     return true;
 }
 
@@ -1419,9 +1431,9 @@ function finalizarYCrearPedidos() {
             cantidad: item.cantidad,
             ubicacion: 'Local 1',
             estado: 'Pendiente',
-            observaciones: `Turno: ${datosCliente.turno}\n${item.observaciones || ''}`
+            observaciones: `Turno: ${datosCliente.turno}${datosCliente.yaPagado ? '\n✅ PAGADO (WhatsApp)' : ''}\n${item.observaciones || ''}`
         };
-        
+
         if (pedidosAcumulados.length > 1) {
             pedidoCompleto.observaciones += `\n🔗 PEDIDO COMBINADO (${index + 1}/${pedidosAcumulados.length})`;
         }
