@@ -9,10 +9,23 @@ $fecha_inicio = $_GET['fecha_inicio'] ?? date('Y-m-d', strtotime('-30 days'));
 $fecha_fin = $_GET['fecha_fin'] ?? date('Y-m-d');
 
 // ============================================
-// ESTADÍSTICAS GENERALES
+// ESTADÍSTICAS DE HOY (Vista rápida)
 // ============================================
+$stmt = $pdo->query("
+    SELECT
+        COUNT(*) as total_hoy,
+        COALESCE(SUM(precio), 0) as ventas_hoy,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes_hoy,
+        SUM(CASE WHEN impreso = 0 AND estado != 'Entregado' THEN 1 ELSE 0 END) as sin_imprimir
+    FROM pedidos
+    WHERE DATE(created_at) = CURDATE()
+    AND estado != 'Cancelado'
+");
+$hoy = $stmt->fetch();
 
-// Total de ventas en el período
+// ============================================
+// ESTADÍSTICAS DEL PERÍODO
+// ============================================
 $stmt = $pdo->prepare("
     SELECT
         COUNT(*) as total_pedidos,
@@ -25,39 +38,8 @@ $stmt = $pdo->prepare("
 $stmt->execute([$fecha_inicio, $fecha_fin]);
 $stats = $stmt->fetch();
 
-// Pedidos por estado
-$stmt = $pdo->prepare("
-    SELECT
-        estado,
-        COUNT(*) as cantidad,
-        SUM(precio) as total
-    FROM pedidos
-    WHERE DATE(created_at) BETWEEN ? AND ?
-    GROUP BY estado
-    ORDER BY cantidad DESC
-");
-$stmt->execute([$fecha_inicio, $fecha_fin]);
-$pedidos_por_estado = $stmt->fetchAll();
-
 // ============================================
-// VENTAS POR DÍA (GRÁFICO DE LÍNEA)
-// ============================================
-$stmt = $pdo->prepare("
-    SELECT
-        DATE(created_at) as fecha,
-        COUNT(*) as cantidad_pedidos,
-        SUM(precio) as total_ventas
-    FROM pedidos
-    WHERE DATE(created_at) BETWEEN ? AND ?
-    AND estado != 'Cancelado'
-    GROUP BY DATE(created_at)
-    ORDER BY fecha ASC
-");
-$stmt->execute([$fecha_inicio, $fecha_fin]);
-$ventas_por_dia = $stmt->fetchAll();
-
-// ============================================
-// PRODUCTOS MÁS VENDIDOS
+// TOP 5 PRODUCTOS MÁS VENDIDOS
 // ============================================
 $stmt = $pdo->prepare("
     SELECT
@@ -69,10 +51,26 @@ $stmt = $pdo->prepare("
     AND estado != 'Cancelado'
     GROUP BY producto
     ORDER BY cantidad DESC
-    LIMIT 10
+    LIMIT 5
 ");
 $stmt->execute([$fecha_inicio, $fecha_fin]);
-$productos_mas_vendidos = $stmt->fetchAll();
+$top_productos = $stmt->fetchAll();
+
+// ============================================
+// VENTAS POR DÍA (Últimos 14 días)
+// ============================================
+$stmt = $pdo->query("
+    SELECT
+        DATE(created_at) as fecha,
+        COUNT(*) as cantidad_pedidos,
+        SUM(precio) as total_ventas
+    FROM pedidos
+    WHERE DATE(created_at) >= CURDATE() - INTERVAL 14 DAY
+    AND estado != 'Cancelado'
+    GROUP BY DATE(created_at)
+    ORDER BY fecha ASC
+");
+$ventas_14dias = $stmt->fetchAll();
 
 // ============================================
 // VENTAS POR UBICACIÓN
@@ -89,7 +87,7 @@ $stmt = $pdo->prepare("
     ORDER BY total_ventas DESC
 ");
 $stmt->execute([$fecha_inicio, $fecha_fin]);
-$ventas_por_ubicacion = $stmt->fetchAll();
+$por_ubicacion = $stmt->fetchAll();
 
 // ============================================
 // VENTAS POR FORMA DE PAGO
@@ -106,60 +104,35 @@ $stmt = $pdo->prepare("
     ORDER BY total_ventas DESC
 ");
 $stmt->execute([$fecha_inicio, $fecha_fin]);
-$ventas_por_pago = $stmt->fetchAll();
+$por_pago = $stmt->fetchAll();
 
 // ============================================
-// VENTAS POR MODALIDAD
+// VENTAS: HOY vs AYER
 // ============================================
-$stmt = $pdo->prepare("
+$stmt = $pdo->query("
     SELECT
-        modalidad,
-        COUNT(*) as cantidad,
-        SUM(precio) as total_ventas
+        COUNT(*) as pedidos_ayer,
+        COALESCE(SUM(precio), 0) as ventas_ayer
     FROM pedidos
-    WHERE DATE(created_at) BETWEEN ? AND ?
+    WHERE DATE(created_at) = CURDATE() - INTERVAL 1 DAY
     AND estado != 'Cancelado'
-    GROUP BY modalidad
-    ORDER BY total_ventas DESC
 ");
-$stmt->execute([$fecha_inicio, $fecha_fin]);
-$ventas_por_modalidad = $stmt->fetchAll();
+$ayer = $stmt->fetch();
 
-// ============================================
-// DÍA DE LA SEMANA CON MÁS VENTAS
-// ============================================
-$stmt = $pdo->prepare("
-    SELECT
-        DAYNAME(created_at) as dia_semana,
-        DAYOFWEEK(created_at) as dia_num,
-        COUNT(*) as cantidad,
-        SUM(precio) as total_ventas
-    FROM pedidos
-    WHERE DATE(created_at) BETWEEN ? AND ?
-    AND estado != 'Cancelado'
-    GROUP BY dia_semana, dia_num
-    ORDER BY total_ventas DESC
-");
-$stmt->execute([$fecha_inicio, $fecha_fin]);
-$ventas_por_dia_semana = $stmt->fetchAll();
-
-// Traducir nombres de días
-$dias_es = [
-    'Monday' => 'Lunes',
-    'Tuesday' => 'Martes',
-    'Wednesday' => 'Miércoles',
-    'Thursday' => 'Jueves',
-    'Friday' => 'Viernes',
-    'Saturday' => 'Sábado',
-    'Sunday' => 'Domingo'
-];
+// Calcular porcentaje de cambio
+$cambio_ventas = $ayer['ventas_ayer'] > 0
+    ? (($hoy['ventas_hoy'] - $ayer['ventas_ayer']) / $ayer['ventas_ayer']) * 100
+    : 0;
+$cambio_pedidos = $ayer['pedidos_ayer'] > 0
+    ? (($hoy['total_hoy'] - $ayer['pedidos_ayer']) / $ayer['pedidos_ayer']) * 100
+    : 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard de Ventas - <?= APP_NAME ?></title>
+    <title>Dashboard - <?= APP_NAME ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -168,237 +141,254 @@ $dias_es = [
             transition: all 0.3s ease;
         }
         .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
         }
+        .badge-up { color: #10b981; }
+        .badge-down { color: #ef4444; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-50">
 
     <!-- Header -->
-    <header class="bg-white shadow-md sticky top-0 z-50">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center">
                 <a href="../../index.php" class="text-gray-600 hover:text-gray-800 mr-4">
-                    <i class="fas fa-arrow-left text-xl"></i>
+                    <i class="fas fa-arrow-left text-lg"></i>
                 </a>
-                <h1 class="text-xl font-bold text-gray-800">
-                    <i class="fas fa-chart-line text-blue-500 mr-2"></i>Dashboard de Ventas
+                <h1 class="text-2xl font-bold text-gray-800">
+                    <i class="fas fa-chart-bar text-blue-500 mr-2"></i>Dashboard
                 </h1>
             </div>
             <div class="text-sm text-gray-600">
-                <i class="fas fa-calendar-alt mr-1"></i>
-                <?= date('d/m/Y', strtotime($fecha_inicio)) ?> - <?= date('d/m/Y', strtotime($fecha_fin)) ?>
+                <i class="fas fa-user mr-1"></i>
+                <?= $_SESSION['admin_name'] ?? 'Admin' ?>
             </div>
         </div>
     </header>
 
-    <main class="container mx-auto px-4 py-6">
+    <main class="container mx-auto px-4 py-6 max-w-7xl">
 
-        <!-- Filtros de fecha -->
-        <div class="bg-white rounded-lg shadow p-4 mb-6">
-            <form method="GET" class="flex flex-wrap items-end gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
-                    <input type="date" name="fecha_inicio" value="<?= $fecha_inicio ?>"
-                           class="px-3 py-2 border rounded-lg">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Fin</label>
-                    <input type="date" name="fecha_fin" value="<?= $fecha_fin ?>"
-                           class="px-3 py-2 border rounded-lg">
-                </div>
-                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                    <i class="fas fa-filter mr-2"></i>Filtrar
-                </button>
-                <a href="?" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
-                    <i class="fas fa-refresh mr-2"></i>Últimos 30 días
-                </a>
-            </form>
-        </div>
-
-        <!-- Tarjetas de estadísticas -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <!-- Total Ventas -->
-            <div class="stat-card bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-6">
-                <div class="flex items-center justify-between">
+        <!-- Alertas de HOY -->
+        <?php if ($hoy['pendientes_hoy'] > 0 || $hoy['sin_imprimir'] > 0): ?>
+        <div class="mb-6 space-y-2">
+            <?php if ($hoy['sin_imprimir'] > 0): ?>
+            <div class="bg-orange-50 border-l-4 border-orange-400 p-4 rounded">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-orange-500 text-xl mr-3"></i>
                     <div>
-                        <p class="text-blue-100 text-sm mb-1">Total Ventas</p>
-                        <p class="text-3xl font-bold">$<?= number_format($stats['total_ventas'], 0, ',', '.') ?></p>
+                        <p class="font-semibold text-orange-800">
+                            <?= $hoy['sin_imprimir'] ?> pedido(s) sin imprimir
+                        </p>
+                        <p class="text-sm text-orange-700">Revisá el módulo de pedidos</p>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($hoy['pendientes_hoy'] > 5): ?>
+            <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                <div class="flex items-center">
+                    <i class="fas fa-info-circle text-blue-500 text-xl mr-3"></i>
+                    <div>
+                        <p class="font-semibold text-blue-800">
+                            <?= $hoy['pendientes_hoy'] ?> pedidos pendientes hoy
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <!-- Tarjetas de HOY -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <!-- Ventas de Hoy -->
+            <div class="stat-card bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <p class="text-blue-100 text-xs font-medium uppercase tracking-wide">Ventas Hoy</p>
+                        <p class="text-3xl font-bold mt-1">$<?= number_format($hoy['ventas_hoy'], 0, ',', '.') ?></p>
                     </div>
                     <div class="text-5xl opacity-20">
                         <i class="fas fa-dollar-sign"></i>
                     </div>
                 </div>
-            </div>
-
-            <!-- Total Pedidos -->
-            <div class="stat-card bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow-lg p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-green-100 text-sm mb-1">Total Pedidos</p>
-                        <p class="text-3xl font-bold"><?= $stats['total_pedidos'] ?></p>
-                    </div>
-                    <div class="text-5xl opacity-20">
-                        <i class="fas fa-shopping-cart"></i>
-                    </div>
+                <div class="text-xs text-blue-100 mt-2">
+                    <?php if ($cambio_ventas > 0): ?>
+                        <i class="fas fa-arrow-up"></i> <?= number_format($cambio_ventas, 1) ?>% vs ayer
+                    <?php elseif ($cambio_ventas < 0): ?>
+                        <i class="fas fa-arrow-down"></i> <?= number_format(abs($cambio_ventas), 1) ?>% vs ayer
+                    <?php else: ?>
+                        = Sin cambio vs ayer
+                    <?php endif; ?>
                 </div>
             </div>
 
-            <!-- Ticket Promedio -->
-            <div class="stat-card bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow-lg p-6">
-                <div class="flex items-center justify-between">
+            <!-- Pedidos de Hoy -->
+            <div class="stat-card bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-2">
                     <div>
-                        <p class="text-purple-100 text-sm mb-1">Ticket Promedio</p>
-                        <p class="text-3xl font-bold">$<?= number_format($stats['ticket_promedio'], 0, ',', '.') ?></p>
+                        <p class="text-green-100 text-xs font-medium uppercase tracking-wide">Pedidos Hoy</p>
+                        <p class="text-3xl font-bold mt-1"><?= $hoy['total_hoy'] ?></p>
                     </div>
                     <div class="text-5xl opacity-20">
                         <i class="fas fa-receipt"></i>
                     </div>
                 </div>
-            </div>
-
-            <!-- Mejor Día -->
-            <div class="stat-card bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow-lg p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-orange-100 text-sm mb-1">Mejor Día</p>
-                        <p class="text-2xl font-bold"><?= $dias_es[$ventas_por_dia_semana[0]['dia_semana']] ?? 'N/A' ?></p>
-                        <p class="text-sm text-orange-100">$<?= number_format($ventas_por_dia_semana[0]['total_ventas'] ?? 0, 0, ',', '.') ?></p>
-                    </div>
-                    <div class="text-5xl opacity-20">
-                        <i class="fas fa-calendar-day"></i>
-                    </div>
+                <div class="text-xs text-green-100 mt-2">
+                    <?php if ($cambio_pedidos > 0): ?>
+                        <i class="fas fa-arrow-up"></i> <?= number_format($cambio_pedidos, 1) ?>% vs ayer
+                    <?php elseif ($cambio_pedidos < 0): ?>
+                        <i class="fas fa-arrow-down"></i> <?= number_format(abs($cambio_pedidos), 1) ?>% vs ayer
+                    <?php else: ?>
+                        = Sin cambio vs ayer
+                    <?php endif; ?>
                 </div>
             </div>
+
+            <!-- Ticket Promedio (Período) -->
+            <div class="stat-card bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <p class="text-purple-100 text-xs font-medium uppercase tracking-wide">Ticket Promedio</p>
+                        <p class="text-3xl font-bold mt-1">$<?= number_format($stats['ticket_promedio'], 0, ',', '.') ?></p>
+                    </div>
+                    <div class="text-5xl opacity-20">
+                        <i class="fas fa-shopping-bag"></i>
+                    </div>
+                </div>
+                <div class="text-xs text-purple-100 mt-2">
+                    Últimos <?= (strtotime($fecha_fin) - strtotime($fecha_inicio)) / 86400 ?> días
+                </div>
+            </div>
+
+            <!-- Total Período -->
+            <div class="stat-card bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <div>
+                        <p class="text-orange-100 text-xs font-medium uppercase tracking-wide">Total Período</p>
+                        <p class="text-3xl font-bold mt-1">$<?= number_format($stats['total_ventas'], 0, ',', '.') ?></p>
+                    </div>
+                    <div class="text-5xl opacity-20">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                </div>
+                <div class="text-xs text-orange-100 mt-2">
+                    <?= $stats['total_pedidos'] ?> pedidos totales
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtros de Período -->
+        <div class="bg-white rounded-xl shadow p-4 mb-6">
+            <form method="GET" class="flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Desde</label>
+                    <input type="date" name="fecha_inicio" value="<?= $fecha_inicio ?>"
+                           class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Hasta</label>
+                    <input type="date" name="fecha_fin" value="<?= $fecha_fin ?>"
+                           class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                    <i class="fas fa-search mr-1"></i>Filtrar
+                </button>
+                <a href="?" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium">
+                    <i class="fas fa-redo mr-1"></i>Últimos 30 días
+                </a>
+            </form>
         </div>
 
         <!-- Gráficos principales -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
-            <!-- Gráfico de Ventas por Día -->
-            <div class="bg-white rounded-lg shadow p-6">
+            <!-- Ventas de los últimos 14 días -->
+            <div class="bg-white rounded-xl shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <i class="fas fa-chart-line text-blue-500 mr-2"></i>
-                    Ventas por Día
+                    Últimos 14 Días
                 </h3>
-                <canvas id="chartVentasPorDia"></canvas>
+                <canvas id="chartVentas14Dias" height="250"></canvas>
             </div>
 
-            <!-- Gráfico de Productos Más Vendidos -->
-            <div class="bg-white rounded-lg shadow p-6">
+            <!-- Top 5 Productos -->
+            <div class="bg-white rounded-xl shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-trophy text-yellow-500 mr-2"></i>
-                    Top 10 Productos Más Vendidos
+                    <i class="fas fa-medal text-yellow-500 mr-2"></i>
+                    Top 5 Productos
                 </h3>
-                <canvas id="chartProductos"></canvas>
+                <canvas id="chartTopProductos" height="250"></canvas>
             </div>
 
         </div>
 
-        <!-- Gráficos secundarios -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Datos por Ubicación y Forma de Pago -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <!-- Ventas por Ubicación -->
-            <div class="bg-white rounded-lg shadow p-6">
+            <!-- Por Ubicación -->
+            <div class="bg-white rounded-xl shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <i class="fas fa-map-marker-alt text-red-500 mr-2"></i>
-                    Por Ubicación
+                    Ventas por Ubicación
                 </h3>
-                <canvas id="chartUbicacion"></canvas>
+                <div class="space-y-3">
+                    <?php foreach ($por_ubicacion as $loc): ?>
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-sm font-medium text-gray-700"><?= htmlspecialchars($loc['ubicacion']) ?></span>
+                            <span class="text-sm font-bold text-gray-900">$<?= number_format($loc['total_ventas'], 0, ',', '.') ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-600 h-2 rounded-full" style="width: <?= ($loc['total_ventas'] / $stats['total_ventas']) * 100 ?>%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1"><?= $loc['cantidad'] ?> pedidos</div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
-            <!-- Ventas por Forma de Pago -->
-            <div class="bg-white rounded-lg shadow p-6">
+            <!-- Por Forma de Pago -->
+            <div class="bg-white rounded-xl shadow p-6">
                 <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
                     <i class="fas fa-credit-card text-green-500 mr-2"></i>
-                    Por Forma de Pago
+                    Formas de Pago
                 </h3>
-                <canvas id="chartPago"></canvas>
+                <canvas id="chartFormaPago" height="250"></canvas>
             </div>
 
-            <!-- Ventas por Modalidad -->
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                    <i class="fas fa-truck text-purple-500 mr-2"></i>
-                    Por Modalidad
-                </h3>
-                <canvas id="chartModalidad"></canvas>
-            </div>
-
-        </div>
-
-        <!-- Tabla de Pedidos por Estado -->
-        <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <i class="fas fa-list text-indigo-500 mr-2"></i>
-                Pedidos por Estado
-            </h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Ventas</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Promedio</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-                        <?php foreach ($pedidos_por_estado as $estado): ?>
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                                    <?= $estado['estado'] === 'Entregado' ? 'bg-green-100 text-green-800' :
-                                        ($estado['estado'] === 'Cancelado' ? 'bg-red-100 text-red-800' :
-                                        'bg-yellow-100 text-yellow-800') ?>">
-                                    <?= $estado['estado'] ?>
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <?= $estado['cantidad'] ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                $<?= number_format($estado['total'], 0, ',', '.') ?>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                $<?= number_format($estado['total'] / $estado['cantidad'], 0, ',', '.') ?>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
         </div>
 
     </main>
 
     <script>
-    // Configuración global de Chart.js
-    Chart.defaults.font.family = "'Inter', 'Arial', sans-serif";
-    Chart.defaults.color = '#4B5563';
+    Chart.defaults.font.family = "'Inter', 'Segoe UI', 'Arial', sans-serif";
+    Chart.defaults.color = '#6B7280';
 
     // ============================================
-    // GRÁFICO DE VENTAS POR DÍA
+    // GRÁFICO: Últimos 14 días
     // ============================================
-    const ventasPorDiaData = {
-        labels: [<?php foreach($ventas_por_dia as $v) echo "'" . date('d/m', strtotime($v['fecha'])) . "',"; ?>],
-        datasets: [{
-            label: 'Ventas ($)',
-            data: [<?php foreach($ventas_por_dia as $v) echo $v['total_ventas'] . ','; ?>],
-            borderColor: 'rgb(59, 130, 246)',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            tension: 0.4,
-            fill: true
-        }]
-    };
-
-    new Chart(document.getElementById('chartVentasPorDia'), {
+    new Chart(document.getElementById('chartVentas14Dias'), {
         type: 'line',
-        data: ventasPorDiaData,
+        data: {
+            labels: [<?php foreach($ventas_14dias as $v) echo "'" . date('d/m', strtotime($v['fecha'])) . "',"; ?>],
+            datasets: [{
+                label: 'Ventas ($)',
+                data: [<?php foreach($ventas_14dias as $v) echo $v['total_ventas'] . ','; ?>],
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false }
             },
@@ -406,9 +396,7 @@ $dias_es = [
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        callback: function(value) {
-                            return '$' + value.toLocaleString();
-                        }
+                        callback: value => '$' + value.toLocaleString()
                     }
                 }
             }
@@ -416,109 +404,71 @@ $dias_es = [
     });
 
     // ============================================
-    // GRÁFICO DE PRODUCTOS MÁS VENDIDOS
+    // GRÁFICO: Top 5 Productos
     // ============================================
-    const productosData = {
-        labels: [<?php foreach($productos_mas_vendidos as $p) echo "'" . addslashes(substr($p['producto'], 0, 20)) . "',"; ?>],
-        datasets: [{
-            label: 'Cantidad',
-            data: [<?php foreach($productos_mas_vendidos as $p) echo $p['cantidad'] . ','; ?>],
-            backgroundColor: [
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(139, 92, 246, 0.8)',
-                'rgba(236, 72, 153, 0.8)',
-                'rgba(34, 197, 94, 0.8)',
-                'rgba(249, 115, 22, 0.8)',
-                'rgba(6, 182, 212, 0.8)',
-                'rgba(168, 85, 247, 0.8)'
-            ]
-        }]
-    };
-
-    new Chart(document.getElementById('chartProductos'), {
+    new Chart(document.getElementById('chartTopProductos'), {
         type: 'bar',
-        data: productosData,
+        data: {
+            labels: [<?php foreach($top_productos as $p) echo "'" . addslashes(substr($p['producto'], 0, 25)) . "',"; ?>],
+            datasets: [{
+                label: 'Cantidad Vendida',
+                data: [<?php foreach($top_productos as $p) echo $p['cantidad'] . ','; ?>],
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(139, 92, 246, 0.8)',
+                    'rgba(236, 72, 153, 0.8)'
+                ],
+                borderRadius: 6
+            }]
+        },
         options: {
             indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true
+                }
             }
         }
     });
 
     // ============================================
-    // GRÁFICO DE UBICACIÓN
+    // GRÁFICO: Forma de Pago
     // ============================================
-    const ubicacionData = {
-        labels: [<?php foreach($ventas_por_ubicacion as $u) echo "'" . $u['ubicacion'] . "',"; ?>],
-        datasets: [{
-            data: [<?php foreach($ventas_por_ubicacion as $u) echo $u['total_ventas'] . ','; ?>],
-            backgroundColor: [
-                'rgba(239, 68, 68, 0.8)',
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(16, 185, 129, 0.8)'
-            ]
-        }]
-    };
-
-    new Chart(document.getElementById('chartUbicacion'), {
+    new Chart(document.getElementById('chartFormaPago'), {
         type: 'doughnut',
-        data: ubicacionData,
+        data: {
+            labels: [<?php foreach($por_pago as $p) echo "'" . $p['forma_pago'] . "',"; ?>],
+            datasets: [{
+                data: [<?php foreach($por_pago as $p) echo $p['total_ventas'] . ','; ?>],
+                backgroundColor: [
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(245, 158, 11, 0.8)',
+                    'rgba(139, 92, 246, 0.8)'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
         options: {
             responsive: true,
-            maintainAspectRatio: true
-        }
-    });
-
-    // ============================================
-    // GRÁFICO DE FORMA DE PAGO
-    // ============================================
-    const pagoData = {
-        labels: [<?php foreach($ventas_por_pago as $p) echo "'" . $p['forma_pago'] . "',"; ?>],
-        datasets: [{
-            data: [<?php foreach($ventas_por_pago as $p) echo $p['total_ventas'] . ','; ?>],
-            backgroundColor: [
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(245, 158, 11, 0.8)'
-            ]
-        }]
-    };
-
-    new Chart(document.getElementById('chartPago'), {
-        type: 'pie',
-        data: pagoData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: true
-        }
-    });
-
-    // ============================================
-    // GRÁFICO DE MODALIDAD
-    // ============================================
-    const modalidadData = {
-        labels: [<?php foreach($ventas_por_modalidad as $m) echo "'" . $m['modalidad'] . "',"; ?>],
-        datasets: [{
-            data: [<?php foreach($ventas_por_modalidad as $m) echo $m['total_ventas'] . ','; ?>],
-            backgroundColor: [
-                'rgba(139, 92, 246, 0.8)',
-                'rgba(236, 72, 153, 0.8)'
-            ]
-        }]
-    };
-
-    new Chart(document.getElementById('chartModalidad'), {
-        type: 'doughnut',
-        data: modalidadData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: true
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        font: { size: 12 }
+                    }
+                }
+            }
         }
     });
     </script>

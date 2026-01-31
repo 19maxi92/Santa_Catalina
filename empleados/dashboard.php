@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     }
 }
 
-// Obtener pedidos
+// Obtener pedidos (hoy + próximos 7 días + pendientes de ayer)
 $pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado, modalidad,
            observaciones, direccion, telefono, forma_pago, cantidad,
@@ -113,17 +113,22 @@ $pedidos = $pdo->query("
     FROM pedidos
     WHERE ubicacion = 'Local 1'
     AND (
-        (fecha_entrega IS NULL AND DATE(created_at) = CURDATE())
-        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
+        (fecha_entrega IS NULL AND DATE(created_at) >= CURDATE() - INTERVAL 1 DAY)
+        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN CURDATE() - INTERVAL 1 DAY AND CURDATE() + INTERVAL 7 DAY)
     )
     AND estado != 'Entregado'
     ORDER BY
+        CASE
+            WHEN DATE(COALESCE(fecha_entrega, created_at)) = CURDATE() THEN 0
+            WHEN DATE(COALESCE(fecha_entrega, created_at)) < CURDATE() THEN 1
+            ELSE 2
+        END,
         CASE estado
             WHEN 'Pendiente' THEN 1
             WHEN 'Preparando' THEN 2
             WHEN 'Listo' THEN 3
         END,
-        created_at ASC
+        COALESCE(fecha_entrega, created_at) ASC
 ")->fetchAll();
 
 // Stats
