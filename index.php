@@ -166,13 +166,13 @@
                 </p>
 
                 <div class="flex flex-col md:flex-row items-center justify-center space-y-3 sm:space-y-4 md:space-y-0 md:space-x-6 px-3">
-                    <div class="flex items-center text-xs sm:text-sm md:text-base lg:text-lg">
-                        <i class="fas fa-map-marker-alt mr-2 sm:mr-3 text-yellow-300"></i>
-                        <span class="text-left sm:text-center">Camino Gral. Belgrano 7241, Gutierrez, BA</span>
+                    <div class="flex items-center text-xs sm:text-sm md:text-base lg:text-lg bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg">
+                        <i class="fas fa-map-marker-alt mr-2 sm:mr-3 text-yellow-300 text-lg"></i>
+                        <span class="text-left sm:text-center font-medium">Cno. Gral. Belgrano 7287, Juan María Gutiérrez, Buenos Aires</span>
                     </div>
-                    <div class="flex items-center text-sm sm:text-base md:text-lg">
-                        <i class="fas fa-phone mr-2 sm:mr-3 text-yellow-300"></i>
-                        <a href="tel:+541159813546" class="hover:underline">11 5981-3546</a>
+                    <div class="flex items-center text-sm sm:text-base md:text-lg bg-white/10 backdrop-blur-sm px-4 py-2 rounded-lg">
+                        <i class="fas fa-phone mr-2 sm:mr-3 text-yellow-300 text-lg"></i>
+                        <a href="tel:+541159813546" class="hover:underline font-medium">11 5981-3546</a>
                     </div>
                 </div>
 
@@ -725,7 +725,7 @@
                     <div class="text-5xl mb-4">🏪</div>
                     <h3 class="text-xl font-bold mb-4">Retiro en Local</h3>
                     <div class="text-gray-300 space-y-2">
-                        <p><strong>Dirección:</strong><br>Camino General Manuel Belgrano 7241, J.M. Gutierrez, Buenos Aires, Argentina</p>
+                        <p><strong>Dirección:</strong><br>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</p>
                         <p><strong>Horarios:</strong><br>Lunes a Domingo<br>9:00 a 21:00hs</p>
                         <p class="text-sm bg-gray-700 p-2 rounded">
                             💡 Coordiná tu horario de retiro por WhatsApp
@@ -825,7 +825,7 @@
                 <div>
                     <h4 class="text-lg font-semibold mb-4">Contacto</h4>
                     <ul class="space-y-2 text-gray-300">
-                        <li><i class="fas fa-map-marker-alt mr-2"></i>Camino General Manuel Belgrano 7241, J.M. Gutierrez, Buenos Aires, Argentina</li>
+                        <li><i class="fas fa-map-marker-alt mr-2"></i>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</li>
                         <li><i class="fab fa-whatsapp mr-2"></i>11 5981-3546</li>
                         <li><i class="fas fa-envelope mr-2"></i>info@santacatalina.com.ar</li>
                         <li><i class="fas fa-clock mr-2"></i>Lun-Dom: 9:00-21:00hs</li>
@@ -835,7 +835,7 @@
             
             <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
                 <p>&copy; 2024 Sandwichería Santa Catalina. Todos los derechos reservados.</p>
-                <p class="text-sm mt-2">Hecho con ❤️ en Gutiérrez Buenos Aires</p>
+                <p class="text-sm mt-2">Hecho con ❤️ en Juan María Gutiérrez, Buenos Aires</p>
             </div>
         </div>
     </footer>
@@ -995,7 +995,7 @@
         "description": "Los mejores sándwiches triples de Buenos Aires",
         "address": {
             "@type": "PostalAddress",
-            "streetAddress": "Camino General Manuel Belgrano 7241, J.M. Gutierrez, Buenos Aires, Argentina",
+            "streetAddress": "Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires",
             "addressLocality": "Gutierrez",
             "addressRegion": "Buenos Aires",
             "addressCountry": "AR"
