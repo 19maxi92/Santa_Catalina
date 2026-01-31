@@ -71,6 +71,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $result = $stmt->execute([$nuevo_estado, $pedido_id]);
             echo json_encode(['success' => $result]);
             exit;
+
+        case 'obtener_pedido':
+            $pedido_id = (int)$_POST['pedido_id'];
+            $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ?");
+            $stmt->execute([$pedido_id]);
+            $pedido = $stmt->fetch();
+            echo json_encode(['success' => true, 'pedido' => $pedido]);
+            exit;
+
+        case 'editar_pedido':
+            $pedido_id = (int)$_POST['pedido_id'];
+            $producto = htmlspecialchars(strip_tags(trim($_POST['producto'])));
+            $cantidad = (int)$_POST['cantidad'];
+            $precio = (float)$_POST['precio'];
+            $observaciones = htmlspecialchars(strip_tags(trim($_POST['observaciones'])));
+
+            // Si hay sabores personalizados, actualizar también
+            $sabores_json = isset($_POST['sabores_personalizados_json']) ? $_POST['sabores_personalizados_json'] : null;
+
+            if ($sabores_json) {
+                $stmt = $pdo->prepare("UPDATE pedidos SET producto = ?, cantidad = ?, precio = ?, observaciones = ?, sabores_personalizados_json = ? WHERE id = ?");
+                $result = $stmt->execute([$producto, $cantidad, $precio, $observaciones, $sabores_json, $pedido_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE pedidos SET producto = ?, cantidad = ?, precio = ?, observaciones = ? WHERE id = ?");
+                $result = $stmt->execute([$producto, $cantidad, $precio, $observaciones, $pedido_id]);
+            }
+
+            echo json_encode(['success' => $result]);
+            exit;
     }
 }
 
@@ -372,23 +401,28 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         <!-- Acciones Compactas -->
                         <div class="flex gap-1 flex-wrap">
                             <?php if ($pedido['estado'] === 'Pendiente'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')"
                                         class="btn-compact" style="background: #3b82f6; color: white;">
                                     <i class="fas fa-fire"></i> Preparar
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Preparando'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')"
                                         class="btn-compact" style="background: #10b981; color: white;">
                                     <i class="fas fa-check"></i> Listo
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Listo'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')"
                                         class="btn-compact" style="background: #6b7280; color: white;">
                                     <i class="fas fa-handshake"></i> Entregar
                                 </button>
                             <?php endif; ?>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)" 
+                            <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
+                                    class="btn-compact" style="background: #8b5cf6; color: white;" title="Editar pedido">
+                                <i class="fas fa-edit"></i>
+                            </button>
+
+                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
                                     class="btn-compact" style="background: #f59e0b; color: white;">
                                 <i class="fas fa-print"></i>
                             </button>
@@ -436,23 +470,28 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         
                         <div class="flex gap-1 justify-center flex-wrap">
                             <?php if ($pedido['estado'] === 'Pendiente'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')"
                                         class="btn-compact" style="background: #3b82f6; color: white;">
                                     <i class="fas fa-fire"></i>
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Preparando'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')"
                                         class="btn-compact" style="background: #10b981; color: white;">
                                     <i class="fas fa-check"></i>
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Listo'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')"
                                         class="btn-compact" style="background: #6b7280; color: white;">
                                     <i class="fas fa-handshake"></i>
                                 </button>
                             <?php endif; ?>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)" 
+                            <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
+                                    class="btn-compact" style="background: #8b5cf6; color: white;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+
+                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
                                     class="btn-compact" style="background: #f59e0b; color: white;">
                                 <i class="fas fa-print"></i>
                             </button>
@@ -991,6 +1030,81 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
     transform: scale(0.95);
 }
 </style>
+
+<!-- ============================================ -->
+<!-- MODAL EDITAR PEDIDO -->
+<!-- ============================================ -->
+<div id="modalEditarPedido" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-lg">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">
+                    <i class="fas fa-edit mr-2"></i>Editar Pedido #<span id="editPedidoId">-</span>
+                </h2>
+                <button onclick="cerrarEditarPedido()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <form id="formEditarPedido" class="p-6">
+            <!-- Producto -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+                <input type="text" id="editProducto" required
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="Ej: Jamón y Queso x24">
+            </div>
+
+            <!-- Cantidad -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad *</label>
+                <input type="number" id="editCantidad" required min="1"
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="24">
+            </div>
+
+            <!-- Precio -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Precio *</label>
+                <input type="number" id="editPrecio" required min="0" step="100"
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="18000">
+            </div>
+
+            <!-- Sabores personalizados (solo si aplica) -->
+            <div id="editSaboresContainer" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Sabores Personalizados</label>
+                <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-3">Edita las planchas por sabor:</p>
+                    <div id="editSaboresList" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
+                <textarea id="editObservaciones" rows="4"
+                          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                          placeholder="Observaciones adicionales..."></textarea>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex gap-3">
+                <button type="button" onclick="guardarEdicionPedido()"
+                        class="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-lg">
+                    <i class="fas fa-save mr-2"></i>GUARDAR CAMBIOS
+                </button>
+                <button type="button" onclick="cerrarEditarPedido()"
+                        class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                    <i class="fas fa-times mr-2"></i>CANCELAR
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
     <script>
 // ============================================
@@ -1616,6 +1730,155 @@ document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
 });
 
 console.log('🚀 Dashboard con Sistema de Pasos cargado');
+
+// ============================================
+// EDITAR PEDIDO
+// ============================================
+
+let pedidoEditando = null;
+
+async function abrirEditarPedido(pedidoId) {
+    try {
+        // Obtener datos del pedido
+        const formData = new FormData();
+        formData.append('accion', 'obtener_pedido');
+        formData.append('pedido_id', pedidoId);
+
+        const response = await fetch('dashboard.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            pedidoEditando = data.pedido;
+
+            // Llenar el formulario
+            document.getElementById('editPedidoId').textContent = pedidoEditando.id;
+            document.getElementById('editProducto').value = pedidoEditando.producto || '';
+            document.getElementById('editCantidad').value = pedidoEditando.cantidad || '';
+            document.getElementById('editPrecio').value = pedidoEditando.precio || '';
+            document.getElementById('editObservaciones').value = pedidoEditando.observaciones || '';
+
+            // Si tiene sabores personalizados, mostrar la sección de edición
+            if (pedidoEditando.sabores_personalizados_json) {
+                const sabores = JSON.parse(pedidoEditando.sabores_personalizados_json);
+                document.getElementById('editSaboresContainer').classList.remove('hidden');
+
+                const saboresList = document.getElementById('editSaboresList');
+                saboresList.innerHTML = '';
+
+                for (let sabor in sabores) {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center gap-3';
+                    div.innerHTML = `
+                        <label class="flex-1 text-sm font-medium text-gray-700">${sabor}</label>
+                        <input type="number" min="0" value="${sabores[sabor]}"
+                               data-sabor="${sabor}"
+                               class="edit-sabor-input w-20 px-3 py-2 border-2 border-purple-300 rounded focus:border-purple-500"
+                               placeholder="0">
+                        <span class="text-xs text-gray-500">planchas</span>
+                    `;
+                    saboresList.appendChild(div);
+                }
+            } else {
+                document.getElementById('editSaboresContainer').classList.add('hidden');
+            }
+
+            // Mostrar modal
+            document.getElementById('modalEditarPedido').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        } else {
+            alert('❌ Error al cargar el pedido');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
+function cerrarEditarPedido() {
+    document.getElementById('modalEditarPedido').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+    pedidoEditando = null;
+}
+
+async function guardarEdicionPedido() {
+    if (!pedidoEditando) return;
+
+    const producto = document.getElementById('editProducto').value.trim();
+    const cantidad = parseInt(document.getElementById('editCantidad').value);
+    const precio = parseFloat(document.getElementById('editPrecio').value);
+    const observaciones = document.getElementById('editObservaciones').value.trim();
+
+    if (!producto || !cantidad || !precio) {
+        alert('⚠️ Completá todos los campos requeridos');
+        return;
+    }
+
+    // Si hay sabores personalizados, recopilarlos
+    let saboresPersonalizados = null;
+    if (!document.getElementById('editSaboresContainer').classList.contains('hidden')) {
+        const saboresInputs = document.querySelectorAll('.edit-sabor-input');
+        saboresPersonalizados = {};
+
+        saboresInputs.forEach(input => {
+            const sabor = input.dataset.sabor;
+            const planchas = parseInt(input.value) || 0;
+            if (planchas > 0) {
+                saboresPersonalizados[sabor] = planchas;
+            }
+        });
+
+        // Actualizar el producto con el nuevo total
+        const totalPlanchas = Object.values(saboresPersonalizados).reduce((a, b) => a + b, 0);
+        const totalSandwiches = totalPlanchas * 8;
+
+        // Si el producto es personalizado, actualizarlo con los nuevos totales
+        if (pedidoEditando.producto.includes('Personalizado')) {
+            document.getElementById('editProducto').value = `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas !== 1 ? 's' : ''})`;
+            document.getElementById('editCantidad').value = totalSandwiches;
+        }
+    }
+
+    if (!confirm('¿Guardar los cambios en este pedido?')) {
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('accion', 'editar_pedido');
+        formData.append('pedido_id', pedidoEditando.id);
+        formData.append('producto', document.getElementById('editProducto').value.trim());
+        formData.append('cantidad', document.getElementById('editCantidad').value);
+        formData.append('precio', document.getElementById('editPrecio').value);
+        formData.append('observaciones', observaciones);
+
+        if (saboresPersonalizados && Object.keys(saboresPersonalizados).length > 0) {
+            formData.append('sabores_personalizados_json', JSON.stringify(saboresPersonalizados));
+        }
+
+        const response = await fetch('dashboard.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('✅ Pedido actualizado correctamente');
+            cerrarEditarPedido();
+            location.reload();
+        } else {
+            alert('❌ Error al actualizar el pedido');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
     </script>
 
 </body>
