@@ -159,10 +159,16 @@ $ultimos_pedidos = $pdo->query("
                 </div>
             </a>
 
-            <a href="modules/pedidos/ver_pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center col-span-2 md:col-span-1">
+            <a href="modules/pedidos/ver_pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center">
                 <i class="fas fa-list text-2xl sm:text-3xl text-orange-500 mb-2 sm:mb-3"></i>
                 <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Ver Pedidos</h3>
                 <p class="text-xs sm:text-sm text-gray-600 hidden sm:block">Listado completo</p>
+            </a>
+
+            <a href="modules/pedidos_online/ver_pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center group col-span-2 md:col-span-1">
+                <i class="fas fa-globe text-2xl sm:text-3xl text-green-500 mb-2 sm:mb-3 group-hover:scale-110 transition-transform"></i>
+                <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Pedidos Online</h3>
+                <p class="text-xs sm:text-sm text-gray-600 hidden sm:block">Gestión web</p>
             </a>
         </div>
 
