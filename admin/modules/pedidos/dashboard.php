@@ -604,19 +604,19 @@ $ubicaciones = $pdo->query("
                                 <input type="radio" name="turno" value="Mañana" class="hidden">
                                 <div class="text-4xl mb-2">🌅</div>
                                 <div class="font-bold">MAÑANA</div>
-                                <div class="text-sm text-gray-600">06:00 - 14:00</div>
+                                <div class="text-sm text-gray-600">09:00 - 13:00</div>
                             </div>
                             <div class="turno-card" onclick="seleccionarTurno('Siesta', this)">
                                 <input type="radio" name="turno" value="Siesta" class="hidden">
                                 <div class="text-4xl mb-2">☀️</div>
                                 <div class="font-bold">SIESTA</div>
-                                <div class="text-sm text-gray-600">14:00 - 18:00</div>
+                                <div class="text-sm text-gray-600">13:00 - 16:00</div>
                             </div>
                             <div class="turno-card" onclick="seleccionarTurno('Tarde', this)">
                                 <input type="radio" name="turno" value="Tarde" class="hidden">
                                 <div class="text-4xl mb-2">🌙</div>
                                 <div class="font-bold">TARDE</div>
-                                <div class="text-sm text-gray-600">18:00 - 23:00</div>
+                                <div class="text-sm text-gray-600">16:00 - 21:00</div>
                             </div>
                         </div>
                     </div>
