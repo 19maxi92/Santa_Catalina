@@ -57,13 +57,13 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comanda #<?= $pedido_id ?></title>
     <style>
-        @page { size: 80mm auto; margin: 0; }
-        
+        @page { size: 90mm auto; margin: 0; }
+
         body {
             font-family: 'Courier New', monospace;
             font-size: 10px;
             line-height: 1.3;
-            width: 302px;
+            width: 340px;
             margin: 0;
             padding: 0;
             background: white;
@@ -95,7 +95,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             margin: 10px auto;
             padding: 5px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            width: 302px;
+            width: 340px;
         }
         
         .comanda-ticket {
@@ -115,12 +115,9 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .turno-badge {
-            background: #000;
-            color: #fff;
-            padding: 3px 10px;
-            border-radius: 3px;
-            font-size: 14px;
-            font-weight: bold;
+            font-size: 18px;
+            font-weight: 900;
+            color: #000;
         }
         
         .cliente-nombre {
@@ -178,19 +175,21 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .observaciones-titulo {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             text-align: center;
+            text-transform: uppercase;
         }
-        
+
         .observaciones-texto {
-            font-size: 13px;
-            line-height: 1.5;
-            font-weight: 600;
-            padding: 6px;
-            background: #fffacd;
-            border: 1px solid #000;
+            font-size: 20px;
+            line-height: 1.6;
+            font-weight: 900;
+            padding: 10px;
+            background: #fff3cd;
+            border: 3px solid #000;
+            text-transform: uppercase;
         }
         
         .info-admin {
@@ -223,7 +222,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             }
             
             @page {
-                size: 80mm auto;
+                size: 90mm auto;
                 margin: 0;
             }
         }
