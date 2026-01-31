@@ -1550,6 +1550,41 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         }
     }
 
+    // ============================================
+    // SISTEMA DE NOTIFICACIÓN DE SONIDO
+    // ============================================
+    const audioNotificacion = new Audio('../../sound/noti.mp3');
+
+    function checkearNuevosPedidos() {
+        fetch('check_nuevos_pedidos_sound.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.hay_nuevos) {
+                    // Reproducir sonido
+                    audioNotificacion.play().catch(err => {
+                        console.log('No se pudo reproducir el sonido (requiere interacción del usuario):', err);
+                    });
+
+                    // Mostrar notificación visual
+                    console.log(`🔔 ${data.cantidad} nuevo(s) pedido(s) para Local 1`);
+
+                    // Recargar la página para mostrar los nuevos pedidos
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                console.error('Error checkeando nuevos pedidos:', err);
+            });
+    }
+
+    // Chequear cada 30 segundos
+    setInterval(checkearNuevosPedidos, 30000);
+
+    // Primera verificación después de 10 segundos
+    setTimeout(checkearNuevosPedidos, 10000);
+
     </script>
 
 </body>

@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $apellido = trim($_POST['apellido'] ?? '');
         $telefono = trim($_POST['telefono'] ?? '');
         $turno = trim($_POST['turno'] ?? '');
-        $producto_id = (int)($_POST['producto'] ?? 0);
-        $cantidad = (int)($_POST['cantidad'] ?? 1);
+        $producto_id = (int)($_POST['producto'] ?? $_POST['producto_radio'] ?? 0);
+        $cantidad = 1; // Siempre 1 en pedidos online (simplificado para clientes)
         $forma_pago = trim($_POST['forma_pago'] ?? '');
         $modalidad = trim($_POST['modalidad'] ?? 'Retiro');
         $direccion = trim($_POST['direccion'] ?? '');
@@ -132,6 +132,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Pedido Online - <?= APP_NAME ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .producto-card input:checked ~ div {
+            position: relative;
+        }
+        .producto-card input:checked ~ div::after {
+            content: '✓';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #16a34a;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
 </head>
 <body class="bg-gradient-to-br from-orange-50 to-yellow-50 min-h-screen">
 
@@ -226,32 +247,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            <!-- Producto -->
+            <!-- Explicación del sistema -->
+            <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+                <h3 class="font-bold text-blue-900 mb-2 flex items-center">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    ¿Cómo funciona?
+                </h3>
+                <ul class="text-sm text-blue-800 space-y-1">
+                    <li>🍞 <strong>1 plancha = 8 sándwiches de miga</strong></li>
+                    <li>📦 Cada combo incluye la cantidad de planchas indicada</li>
+                    <li>⏰ Retirás en el turno que selecciones</li>
+                </ul>
+            </div>
+
+            <!-- Producto (Cards) -->
             <div class="bg-green-50 rounded-xl p-4">
                 <h2 class="text-lg font-bold text-gray-800 mb-4">
                     <i class="fas fa-hamburger mr-2 text-green-600"></i>
                     ¿Qué querés pedir? *
                 </h2>
-                <select name="producto" required
-                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:ring-2 focus:ring-green-200 font-semibold text-lg">
-                    <option value="">-- Seleccioná un producto --</option>
-                    <?php foreach ($productos as $prod): ?>
-                        <option value="<?= $prod['id'] ?>"
-                                data-precio-efectivo="<?= $prod['precio_efectivo'] ?>"
-                                data-precio-transferencia="<?= $prod['precio_transferencia'] ?>">
-                            <?= htmlspecialchars($prod['nombre']) ?>
-                            - Efectivo: $<?= number_format($prod['precio_efectivo'], 0, ',', '.') ?>
-                            | Transferencia: $<?= number_format($prod['precio_transferencia'], 0, ',', '.') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
 
-            <!-- Cantidad -->
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-2">Cantidad</label>
-                <input type="number" name="cantidad" value="1" min="1" max="10"
-                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                <input type="hidden" name="producto" id="productoSeleccionado" required>
+                <input type="hidden" name="cantidad" id="cantidadSeleccionada" value="1">
+
+                <div class="space-y-3">
+                    <?php foreach ($productos as $prod): ?>
+                        <?php
+                        // Extraer cantidad de sándwiches del nombre (ej: "x24" = 24 sándwiches)
+                        preg_match('/x(\d+)/', $prod['nombre'], $matches);
+                        $sandwiches = $matches[1] ?? '?';
+                        $planchas = is_numeric($sandwiches) ? ($sandwiches / 8) : '?';
+                        ?>
+                        <label class="producto-card cursor-pointer block">
+                            <input type="radio" name="producto_radio" value="<?= $prod['id'] ?>"
+                                   data-precio-efectivo="<?= $prod['precio_efectivo'] ?>"
+                                   data-precio-transferencia="<?= $prod['precio_transferencia'] ?>"
+                                   data-nombre="<?= htmlspecialchars($prod['nombre']) ?>"
+                                   class="peer hidden"
+                                   onchange="seleccionarProducto(this)">
+                            <div class="border-2 border-gray-300 peer-checked:border-green-600 peer-checked:bg-green-50 rounded-xl p-4 hover:border-green-400 transition-all">
+                                <div class="flex justify-between items-start mb-2">
+                                    <div class="flex-1">
+                                        <h4 class="font-bold text-lg text-gray-900"><?= htmlspecialchars($prod['nombre']) ?></h4>
+                                        <p class="text-sm text-gray-600 mt-1">
+                                            📦 <?= $planchas ?> <?= $planchas == 1 ? 'plancha' : 'planchas' ?>
+                                            (<?= $sandwiches ?> sándwiches)
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs text-gray-500">Efectivo</div>
+                                        <div class="font-bold text-green-600 text-lg">
+                                            $<?= number_format($prod['precio_efectivo'], 0, ',', '.') ?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                                    💳 Transferencia: $<?= number_format($prod['precio_transferencia'], 0, ',', '.') ?>
+                                </div>
+                            </div>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
 
             <!-- Forma de pago -->
@@ -340,6 +396,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             container.classList.add('hidden');
             input.required = false;
         }
+    }
+
+    function seleccionarProducto(radio) {
+        // Actualizar campo hidden
+        document.getElementById('productoSeleccionado').value = radio.value;
+        document.getElementById('cantidadSeleccionada').value = 1;
     }
     </script>
 

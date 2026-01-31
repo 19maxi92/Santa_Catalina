@@ -121,21 +121,23 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .cliente-nombre {
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 900;
             text-align: center;
             margin: 8px 0;
             text-transform: uppercase;
+            line-height: 1.3;
         }
-        
+
         .producto-info {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 900;
             text-align: center;
             margin: 10px 0;
-            padding: 8px;
+            padding: 10px;
             background: #f5f5f5;
-            border: 2px solid #000;
+            border: 3px solid #000;
+            line-height: 1.4;
         }
         
         /* SABORES GRANDES PARA PERSONALIZADO */
@@ -263,34 +265,37 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 $obs = $pedido['observaciones'];
                 $sabores_encontrados = false;
 
-                // Intentar formato con planchas (con o sin saltos de línea)
-                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===[\s\n]*(.*?)(?:---|$)/s', $obs, $matches)) {
-                    $sabores_texto = trim($matches[1]);
+                // Buscar la sección de SABORES PERSONALIZADOS de forma muy flexible
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===(.*?)(?:---|$)/s', $obs, $matches)) {
+                    $sabores_texto = $matches[1];
+                    $sabores_texto = trim($sabores_texto);
 
-                    // Buscar formato: • Sabor: X plancha(s) (Y sándwiches)
-                    if (preg_match_all('/•\s*([^:]+):\s*(\d+)\s*plancha/i', $sabores_texto, $planchas_matches, PREG_SET_ORDER)) {
-                        foreach ($planchas_matches as $match) {
+                    // Buscar TODOS los patrones de sabor: "• Sabor: número" (con o sin "plancha")
+                    if (preg_match_all('/•\s*([^:]+):\s*(\d+)/i', $sabores_texto, $matches_all, PREG_SET_ORDER)) {
+                        foreach ($matches_all as $match) {
                             $sabor = trim($match[1]);
-                            $planchas = (int)$match[2];
-                            $sandwiches = $planchas * 8;
+                            $cantidad = (int)trim($match[2]);
+
+                            // Determinar si es cantidad de planchas o sándwiches
+                            // Si el número es divisible por 8, probablemente sean sándwiches
+                            if ($cantidad % 8 == 0 && $cantidad >= 8) {
+                                $planchas = $cantidad / 8;
+                                $sandwiches = $cantidad;
+                            } else {
+                                // Asumir que son planchas
+                                $planchas = $cantidad;
+                                $sandwiches = $cantidad * 8;
+                            }
+
                             echo "<strong>{$planchas}pl</strong> {$sabor} ({$sandwiches})<br>";
                             $sabores_encontrados = true;
                         }
                     }
+                }
 
-                    // Si no hay formato planchas, buscar formato directo: • Sabor: X (número de sándwiches)
-                    if (!$sabores_encontrados) {
-                        if (preg_match_all('/•\s*([^:•]+):\s*(\d+)(?!\s*plancha)/i', $sabores_texto, $direct_matches, PREG_SET_ORDER)) {
-                            foreach ($direct_matches as $match) {
-                                $sabor = trim($match[1]);
-                                $sandwiches = (int)$match[2];
-                                // Calcular planchas (8 sándwiches = 1 plancha)
-                                $planchas = ceil($sandwiches / 8);
-                                echo "<strong>{$sandwiches}</strong> {$sabor}<br>";
-                                $sabores_encontrados = true;
-                            }
-                        }
-                    }
+                // Fallback si no se encontraron sabores
+                if (!$sabores_encontrados) {
+                    echo htmlspecialchars($pedido['producto']);
                 }
                 ?>
                 </div>
@@ -320,14 +325,20 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <?php if (!empty($pedido['observaciones'])): ?>
                 <?php
                 $obs_limpia = $pedido['observaciones'];
-                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_limpia);
-                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_limpia);
+
+                // Limpiar sección de sabores personalizados de forma más robusta
+                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*/s', '', $obs_limpia);
+
+                // Limpiar otras secciones del sistema
+                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*/s', '', $obs_limpia);
                 $obs_limpia = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/^Turno:.*$/m', '', $obs_limpia);
+
+                // Limpiar líneas vacías múltiples
                 $obs_limpia = trim(preg_replace('/\n\s*\n+/', "\n", $obs_limpia));
-                
+
                 if (!empty($obs_limpia)):
                 ?>
                     <div class="observaciones-container">
