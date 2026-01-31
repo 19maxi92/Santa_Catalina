@@ -430,10 +430,23 @@ $ubicaciones = $pdo->query("
                                 <i class="fas fa-edit"></i>
                             </button>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
-                                    class="btn-compact" style="background: #f59e0b; color: white;">
-                                <i class="fas fa-print"></i>
-                            </button>
+                            <?php if ($pedido['impreso']): ?>
+                                <!-- Botón imprimir bloqueado -->
+                                <button class="btn-compact" style="background: #9ca3af; color: white; cursor: not-allowed;" disabled title="Ya impreso">
+                                    <i class="fas fa-print"></i> <i class="fas fa-check text-xs"></i>
+                                </button>
+                                <!-- Botón emergencia re-imprimir -->
+                                <button onclick="reimprimirEmergencia(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #dc2626; color: white;" title="Re-imprimir (Emergencia)">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            <?php else: ?>
+                                <!-- Botón imprimir normal -->
+                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #f59e0b; color: white;">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                            <?php endif; ?>
 
                             <!-- BOTÓN ELIMINAR (SOLO ADMIN) -->
                             <button onclick="eliminarPedido(<?= $pedido['id'] ?>)"
@@ -512,10 +525,23 @@ $ubicaciones = $pdo->query("
                                 <i class="fas fa-edit"></i>
                             </button>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
-                                    class="btn-compact" style="background: #f59e0b; color: white;">
-                                <i class="fas fa-print"></i>
-                            </button>
+                            <?php if ($pedido['impreso']): ?>
+                                <!-- Botón imprimir bloqueado -->
+                                <button class="btn-compact" style="background: #9ca3af; color: white; cursor: not-allowed;" disabled title="Ya impreso">
+                                    <i class="fas fa-print"></i> <i class="fas fa-check text-xs"></i>
+                                </button>
+                                <!-- Botón emergencia re-imprimir -->
+                                <button onclick="reimprimirEmergencia(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #dc2626; color: white;" title="Re-imprimir (Emergencia)">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            <?php else: ?>
+                                <!-- Botón imprimir normal -->
+                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #f59e0b; color: white;">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                            <?php endif; ?>
 
                             <button onclick="eliminarPedido(<?= $pedido['id'] ?>)"
                                     class="btn-compact" style="background: #ef4444; color: white;">
@@ -1778,6 +1804,23 @@ function imprimir(pedidoId) {
 
     ventana.focus();
     setTimeout(() => marcarImpreso(pedidoId), 2000);
+    return true;
+}
+
+function reimprimirEmergencia(pedidoId) {
+    if (!confirm('⚠️ RE-IMPRIMIR PEDIDO\n\nEsta función es solo para emergencias.\n¿Confirmar re-impresión?')) {
+        return;
+    }
+
+    const url = `../../../empleados/comanda_simple.php?pedido=${pedidoId}`;
+    const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
+
+    if (!ventana) {
+        alert('❌ Permitir ventanas emergentes');
+        return false;
+    }
+
+    ventana.focus();
     return true;
 }
 
