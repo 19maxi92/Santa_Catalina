@@ -265,25 +265,28 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 $obs = $pedido['observaciones'];
                 $sabores_encontrados = false;
 
-                // Buscar la sección de SABORES PERSONALIZADOS de forma más robusta
-                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===(.*)/s', $obs, $matches)) {
+                // Buscar la sección de SABORES PERSONALIZADOS de forma muy flexible
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===(.*?)(?:---|$)/s', $obs, $matches)) {
                     $sabores_texto = $matches[1];
-
-                    // Limpiar posibles secciones de sistema
-                    $sabores_texto = preg_replace('/---\s*Info del Sistema\s*---.*/s', '', $sabores_texto);
                     $sabores_texto = trim($sabores_texto);
 
-                    $lineas = explode("\n", $sabores_texto);
-
-                    foreach ($lineas as $linea) {
-                        $linea = trim($linea);
-                        if (empty($linea)) continue;
-
-                        // Buscar patrón de sabor con plancha(s)
-                        if (preg_match('/•\s*(.+?):\s*(\d+)\s*plancha/i', $linea, $match)) {
+                    // Buscar TODOS los patrones de sabor: "• Sabor: número" (con o sin "plancha")
+                    if (preg_match_all('/•\s*([^:]+):\s*(\d+)/i', $sabores_texto, $matches_all, PREG_SET_ORDER)) {
+                        foreach ($matches_all as $match) {
                             $sabor = trim($match[1]);
-                            $planchas = $match[2];
-                            $sandwiches = $planchas * 8;
+                            $cantidad = (int)trim($match[2]);
+
+                            // Determinar si es cantidad de planchas o sándwiches
+                            // Si el número es divisible por 8, probablemente sean sándwiches
+                            if ($cantidad % 8 == 0 && $cantidad >= 8) {
+                                $planchas = $cantidad / 8;
+                                $sandwiches = $cantidad;
+                            } else {
+                                // Asumir que son planchas
+                                $planchas = $cantidad;
+                                $sandwiches = $cantidad * 8;
+                            }
+
                             echo "<strong>{$planchas}pl</strong> {$sabor} ({$sandwiches})<br>";
                             $sabores_encontrados = true;
                         }
