@@ -268,19 +268,36 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 <div class="sabores-detalle-grande">
                 <?php
                 $obs = $pedido['observaciones'];
-                
-                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===\n(.*?)(?:\n---|$)/s', $obs, $matches)) {
-                    $sabores_texto = trim($matches[1]);
+                $sabores_encontrados = false;
+
+                // Buscar la sección de SABORES PERSONALIZADOS de forma más robusta
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===(.*)/s', $obs, $matches)) {
+                    $sabores_texto = $matches[1];
+
+                    // Limpiar posibles secciones de sistema
+                    $sabores_texto = preg_replace('/---\s*Info del Sistema\s*---.*/s', '', $sabores_texto);
+                    $sabores_texto = trim($sabores_texto);
+
                     $lineas = explode("\n", $sabores_texto);
-                    
+
                     foreach ($lineas as $linea) {
+                        $linea = trim($linea);
+                        if (empty($linea)) continue;
+
+                        // Buscar patrón de sabor con plancha(s)
                         if (preg_match('/•\s*(.+?):\s*(\d+)\s*plancha/i', $linea, $match)) {
                             $sabor = trim($match[1]);
                             $planchas = $match[2];
                             $sandwiches = $planchas * 8;
                             echo "<strong>{$planchas}pl</strong> {$sabor} ({$sandwiches})<br>";
+                            $sabores_encontrados = true;
                         }
                     }
+                }
+
+                // Fallback si no se encontraron sabores
+                if (!$sabores_encontrados) {
+                    echo htmlspecialchars($pedido['producto']);
                 }
                 ?>
                 </div>
@@ -310,14 +327,20 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <?php if (!empty($pedido['observaciones'])): ?>
                 <?php
                 $obs_limpia = $pedido['observaciones'];
-                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_limpia);
-                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_limpia);
+
+                // Limpiar sección de sabores personalizados de forma más robusta
+                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*/s', '', $obs_limpia);
+
+                // Limpiar otras secciones del sistema
+                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*/s', '', $obs_limpia);
                 $obs_limpia = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/^Turno:.*$/m', '', $obs_limpia);
+
+                // Limpiar líneas vacías múltiples
                 $obs_limpia = trim(preg_replace('/\n\s*\n+/', "\n", $obs_limpia));
-                
+
                 if (!empty($obs_limpia)):
                 ?>
                     <div class="observaciones-container">
