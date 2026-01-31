@@ -281,7 +281,14 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             cursor: pointer;
             accent-color: #3b82f6;
         }
-        
+
+        /* FILTROS MÚLTIPLES */
+        .filter-checkbox-label input[type="checkbox"]:checked + span {
+            border-color: currentColor;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+            font-weight: 700;
+        }
+
         /* SCROLL SUAVE */
         .tabla-container {
             max-height: calc(100vh - 280px);
@@ -472,36 +479,47 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     <div class="bg-white shadow-md sticky top-[73px] z-40">
         <div class="max-w-7xl mx-auto px-4 py-3">
             
-            <!-- TABS DE FILTRO RÁPIDO -->
+            <!-- FILTRO MÚLTIPLE DE ESTADOS (CLIENT-SIDE) -->
+            <div class="mb-4">
+                <div class="text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-filter mr-1"></i>Filtrar por estado (seleccionar uno o varios):
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-estado-checkbox mr-2" value="Pendiente" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-yellow-100 text-yellow-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-yellow-500 transition-all">
+                            <i class="fas fa-clock"></i> Pendientes (<?= $pendientes ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-estado-checkbox mr-2" value="Preparando" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-blue-100 text-blue-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-blue-500 transition-all">
+                            <i class="fas fa-fire"></i> Preparando (<?= $preparando ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-estado-checkbox mr-2" value="Listo" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-green-100 text-green-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-green-500 transition-all">
+                            <i class="fas fa-check-circle"></i> Listos (<?= $listos ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-estado-checkbox mr-2" value="Entregado" onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-gray-100 text-gray-700 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-gray-500 transition-all">
+                            <i class="fas fa-check-double"></i> Entregados (<?= $entregados ?>)
+                        </span>
+                    </label>
+                    <button onclick="toggleTodosEstados()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-2 rounded-lg font-semibold border-2 border-gray-400 transition-all">
+                        <i class="fas fa-check-double mr-1"></i>Todos/Ninguno
+                    </button>
+                </div>
+            </div>
+
+            <!-- SEPARADOR -->
+            <div class="border-t border-gray-300 mb-4"></div>
+
+            <!-- TABS DE UBICACIÓN -->
             <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
-                <a href="?fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
-                   class="filter-tab <?= empty($filtro_estado) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
-                    <i class="fas fa-th-large"></i>
-                    Todos (<?= $total ?>)
-                </a>
-                <a href="?estado=Pendiente&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
-                   class="filter-tab <?= $filtro_estado === 'Pendiente' ? 'active' : 'bg-yellow-100 text-yellow-800' ?>">
-                    <i class="fas fa-clock"></i>
-                    Pendientes (<?= $pendientes ?>)
-                </a>
-                <a href="?estado=Preparando&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
-                   class="filter-tab <?= $filtro_estado === 'Preparando' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
-                    <i class="fas fa-fire"></i>
-                    Preparando (<?= $preparando ?>)
-                </a>
-                <a href="?estado=Listo&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
-                   class="filter-tab <?= $filtro_estado === 'Listo' ? 'active' : 'bg-green-100 text-green-800' ?>">
-                    <i class="fas fa-check-circle"></i>
-                    Listos (<?= $listos ?>)
-                </a>
-                <a href="?estado=Entregado&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>&ubicacion=<?= $filtro_ubicacion ?>" 
-                   class="filter-tab <?= $filtro_estado === 'Entregado' ? 'active' : 'bg-gray-100 text-gray-700' ?>">
-                    <i class="fas fa-check-double"></i>
-                    Entregados (<?= $entregados ?>)
-                </a>
-                
-                <!-- SEPARADOR -->
-                <span class="text-gray-300 mx-2">|</span>
                 
                 <!-- FILTRO POR UBICACIÓN -->
                 <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
@@ -681,7 +699,8 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         };
                         ?>
                         
-                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>">
+                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
+                             data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>">
                             <div class="flex items-center gap-3">
 
                                 <!-- CHECKBOX -->
@@ -771,23 +790,43 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                     
                                     <!-- ACCIONES COMPACTAS -->
                                     <div class="flex items-center gap-1">
-                                        <!-- IMPRIMIR -->
-                                        <button onclick="imprimir(<?= $pedido['id'] ?>)" 
-                                                class="btn bg-orange-500 hover:bg-orange-600 text-white p-2 rounded text-xs"
-                                                title="Imprimir">
-                                            <i class="fas fa-print"></i>
+                                        <!-- EDITAR -->
+                                        <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
+                                                class="btn bg-purple-500 hover:bg-purple-600 text-white p-2 rounded text-xs"
+                                                title="Editar pedido">
+                                            <i class="fas fa-edit"></i>
                                         </button>
-                                        
+
+                                        <!-- IMPRIMIR -->
+                                        <?php if ($pedido['impreso']): ?>
+                                            <!-- Botón bloqueado -->
+                                            <button class="btn bg-gray-400 text-white p-2 rounded text-xs cursor-not-allowed" disabled title="Ya impreso">
+                                                <i class="fas fa-print"></i> <i class="fas fa-check text-xs"></i>
+                                            </button>
+                                            <!-- Botón emergencia -->
+                                            <button onclick="reimprimirEmergencia(<?= $pedido['id'] ?>)"
+                                                    class="btn bg-red-600 hover:bg-red-700 text-white p-2 rounded text-xs"
+                                                    title="Re-imprimir (Emergencia)">
+                                                <i class="fas fa-redo"></i>
+                                            </button>
+                                        <?php else: ?>
+                                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                                    class="btn bg-orange-500 hover:bg-orange-600 text-white p-2 rounded text-xs"
+                                                    title="Imprimir">
+                                                <i class="fas fa-print"></i>
+                                            </button>
+                                        <?php endif; ?>
+
                                         <!-- WHATSAPP -->
                                         <?php if ($pedido['telefono']): ?>
-                                            <a href="https://wa.me/54<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($nombre_completo) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>" 
+                                            <a href="https://wa.me/54<?= preg_replace('/[^0-9]/', '', $pedido['telefono']) ?>?text=Hola%20<?= urlencode($nombre_completo) ?>,%20tu%20pedido%20#<?= $pedido['id'] ?>%20está%20<?= urlencode(strtolower($pedido['estado'])) ?>"
                                                target="_blank"
                                                class="btn bg-green-500 hover:bg-green-600 text-white p-2 rounded text-xs"
                                                title="WhatsApp">
                                                 <i class="fab fa-whatsapp"></i>
                                             </a>
                                         <?php endif; ?>
-                                        
+
                                         <!-- ELIMINAR -->
                                         <form method="POST" class="inline" onsubmit="return confirm('⚠️ ¿ELIMINAR #<?= $pedido['id'] ?>?')">
                                             <input type="hidden" name="accion" value="eliminar">
@@ -1266,6 +1305,217 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     });
     
     console.log('⌨️ Atajos: Ctrl+A (Seleccionar todos) | Ctrl+P (Imprimir)');
+
+    // ============================================
+    // RE-IMPRIMIR EMERGENCIA
+    // ============================================
+
+    function reimprimirEmergencia(pedidoId) {
+        if (!confirm('⚠️ RE-IMPRIMIR PEDIDO\n\nEsta función es solo para emergencias.\n¿Confirmar re-impresión?')) {
+            return;
+        }
+
+        const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
+        const ventana = window.open(url, '_blank', 'width=320,height=500,scrollbars=yes');
+
+        if (!ventana) {
+            alert('❌ Permitir ventanas emergentes');
+            return false;
+        }
+
+        ventana.focus();
+        return true;
+    }
+
+    // ============================================
+    // FILTROS MÚLTIPLES
+    // ============================================
+
+    function aplicarFiltrosMultiples() {
+        const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
+        const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+
+        const pedidos = document.querySelectorAll('[data-pedido-id]');
+
+        if (estadosSeleccionados.length === 0) {
+            pedidos.forEach(pedido => pedido.style.display = 'none');
+            return;
+        }
+
+        pedidos.forEach(pedido => {
+            const estado = pedido.dataset.estado;
+            const mostrar = estadosSeleccionados.includes(estado);
+            pedido.style.display = mostrar ? '' : 'none';
+        });
+
+        localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
+    }
+
+    function toggleTodosEstados() {
+        const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+        const algunoMarcado = Array.from(checkboxes).some(cb => cb.checked);
+
+        checkboxes.forEach(cb => {
+            cb.checked = !algunoMarcado;
+        });
+
+        aplicarFiltrosMultiples();
+    }
+
+    // Restaurar filtros guardados
+    window.addEventListener('DOMContentLoaded', () => {
+        const filtrosGuardados = localStorage.getItem('filtrosEstadosVerPedidos');
+
+        if (filtrosGuardados) {
+            try {
+                const estados = JSON.parse(filtrosGuardados);
+                const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+
+                checkboxes.forEach(cb => {
+                    cb.checked = estados.includes(cb.value);
+                });
+            } catch (e) {
+                console.error('Error al cargar filtros guardados:', e);
+            }
+        }
+
+        aplicarFiltrosMultiples();
+    });
+
+    // ============================================
+    // EDITAR PEDIDO
+    // ============================================
+
+    let pedidoEditando = null;
+
+    async function abrirEditarPedido(pedidoId) {
+        try {
+            const response = await fetch(`editar_pedido.php?id=${pedidoId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                pedidoEditando = data.pedido;
+
+                // Crear modal de edición
+                const modal = document.createElement('div');
+                modal.id = 'modalEditar';
+                modal.className = 'modal-overlay';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto mx-4">
+                        <div class="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-lg">
+                            <div class="flex justify-between items-center">
+                                <h2 class="text-2xl font-bold">
+                                    <i class="fas fa-edit mr-2"></i>Editar Pedido #${pedidoEditando.id}
+                                </h2>
+                                <button onclick="cerrarEditarPedido()" class="text-white hover:text-gray-200">
+                                    <i class="fas fa-times text-2xl"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <form id="formEditarPedido" class="p-6">
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+                                <input type="text" id="editProducto" value="${pedidoEditando.producto || ''}" required
+                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad *</label>
+                                <input type="number" id="editCantidad" value="${pedidoEditando.cantidad || ''}" required min="1"
+                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Precio *</label>
+                                <input type="number" id="editPrecio" value="${pedidoEditando.precio || ''}" required min="0" step="100"
+                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                            </div>
+
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
+                                <textarea id="editObservaciones" rows="4"
+                                          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">${pedidoEditando.observaciones || ''}</textarea>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button type="button" onclick="guardarEdicionPedido()"
+                                        class="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-lg">
+                                    <i class="fas fa-save mr-2"></i>GUARDAR CAMBIOS
+                                </button>
+                                <button type="button" onclick="cerrarEditarPedido()"
+                                        class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                                    <i class="fas fa-times mr-2"></i>CANCELAR
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+                modal.style.display = 'flex';
+            } else {
+                alert('❌ Error al cargar el pedido');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('❌ Error de conexión');
+        }
+    }
+
+    function cerrarEditarPedido() {
+        const modal = document.getElementById('modalEditar');
+        if (modal) {
+            modal.remove();
+        }
+        pedidoEditando = null;
+    }
+
+    async function guardarEdicionPedido() {
+        if (!pedidoEditando) return;
+
+        const producto = document.getElementById('editProducto').value.trim();
+        const cantidad = parseInt(document.getElementById('editCantidad').value);
+        const precio = parseFloat(document.getElementById('editPrecio').value);
+        const observaciones = document.getElementById('editObservaciones').value.trim();
+
+        if (!producto || !cantidad || !precio) {
+            alert('⚠️ Completá todos los campos requeridos');
+            return;
+        }
+
+        if (!confirm('¿Guardar los cambios en este pedido?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch('editar_pedido.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: pedidoEditando.id,
+                    producto: producto,
+                    cantidad: cantidad,
+                    precio: precio,
+                    observaciones: observaciones
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert('✅ Pedido actualizado correctamente');
+                cerrarEditarPedido();
+                location.reload();
+            } else {
+                alert('❌ Error al actualizar el pedido');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('❌ Error de conexión');
+        }
+    }
+
     </script>
 
 </body>
