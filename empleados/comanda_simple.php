@@ -121,21 +121,23 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .cliente-nombre {
-            font-size: 16px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 900;
             text-align: center;
             margin: 8px 0;
             text-transform: uppercase;
+            line-height: 1.3;
         }
-        
+
         .producto-info {
-            font-size: 18px;
-            font-weight: bold;
+            font-size: 20px;
+            font-weight: 900;
             text-align: center;
             margin: 10px 0;
-            padding: 8px;
+            padding: 10px;
             background: #f5f5f5;
-            border: 2px solid #000;
+            border: 3px solid #000;
+            line-height: 1.4;
         }
         
         /* SABORES GRANDES PARA PERSONALIZADO */
