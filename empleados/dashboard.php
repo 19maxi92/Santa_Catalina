@@ -71,6 +71,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             $result = $stmt->execute([$nuevo_estado, $pedido_id]);
             echo json_encode(['success' => $result]);
             exit;
+
+        case 'obtener_pedido':
+            $pedido_id = (int)$_POST['pedido_id'];
+            $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE id = ?");
+            $stmt->execute([$pedido_id]);
+            $pedido = $stmt->fetch();
+            echo json_encode(['success' => true, 'pedido' => $pedido]);
+            exit;
+
+        case 'editar_pedido':
+            $pedido_id = (int)$_POST['pedido_id'];
+            $producto = htmlspecialchars(strip_tags(trim($_POST['producto'])));
+            $cantidad = (int)$_POST['cantidad'];
+            $precio = (float)$_POST['precio'];
+            $observaciones = htmlspecialchars(strip_tags(trim($_POST['observaciones'])));
+
+            // Si hay sabores personalizados, actualizar también
+            $sabores_json = isset($_POST['sabores_personalizados_json']) ? $_POST['sabores_personalizados_json'] : null;
+
+            if ($sabores_json) {
+                $stmt = $pdo->prepare("UPDATE pedidos SET producto = ?, cantidad = ?, precio = ?, observaciones = ?, sabores_personalizados_json = ? WHERE id = ?");
+                $result = $stmt->execute([$producto, $cantidad, $precio, $observaciones, $sabores_json, $pedido_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE pedidos SET producto = ?, cantidad = ?, precio = ?, observaciones = ? WHERE id = ?");
+                $result = $stmt->execute([$producto, $cantidad, $precio, $observaciones, $pedido_id]);
+            }
+
+            echo json_encode(['success' => $result]);
+            exit;
     }
 }
 
@@ -231,6 +260,22 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
             background: #888;
             border-radius: 4px;
         }
+
+        /* FILTROS MÚLTIPLES */
+        .filter-checkbox-label {
+            position: relative;
+            display: inline-block;
+        }
+        .filter-checkbox-label input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .filter-checkbox-label input[type="checkbox"]:checked + span {
+            border-color: currentColor;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -284,19 +329,33 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
     <!-- BARRA DE FILTROS Y VISTA RESPONSIVE -->
     <div class="bg-white border-b p-2 sm:p-3 sticky top-16 sm:top-20 z-40 shadow-sm">
         <div class="max-w-7xl mx-auto">
-            <!-- FILTROS POR ESTADO RESPONSIVE -->
-            <div class="flex flex-wrap gap-1 sm:gap-2 mb-2">
-                <div class="filter-tab active text-xs sm:text-sm" onclick="filtrarEstado('todos')" data-estado="todos">
-                    Todos (<?= $total ?>)
+            <!-- FILTROS POR ESTADO RESPONSIVE (MÚLTIPLE SELECCIÓN) -->
+            <div class="mb-2">
+                <div class="text-xs sm:text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-filter mr-1"></i>Filtrar por estado (seleccionar uno o varios):
                 </div>
-                <div class="filter-tab bg-yellow-100 text-yellow-800 text-xs sm:text-sm" onclick="filtrarEstado('Pendiente')" data-estado="Pendiente">
-                    <span class="hidden sm:inline">Pendientes</span><span class="sm:hidden">Pend.</span> (<?= $pendientes ?>)
-                </div>
-                <div class="filter-tab bg-blue-100 text-blue-800 text-xs sm:text-sm" onclick="filtrarEstado('Preparando')" data-estado="Preparando">
-                    <span class="hidden sm:inline">Preparando</span><span class="sm:hidden">Prep.</span> (<?= $preparando ?>)
-                </div>
-                <div class="filter-tab bg-green-100 text-green-800 text-xs sm:text-sm" onclick="filtrarEstado('Listo')" data-estado="Listo">
-                    Listos (<?= $listos ?>)
+                <div class="flex flex-wrap gap-2">
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Pendiente" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-yellow-100 text-yellow-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-yellow-500 transition-all">
+                            <span class="hidden sm:inline">Pendientes</span><span class="sm:hidden">Pend.</span> (<?= $pendientes ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Preparando" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-blue-100 text-blue-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-blue-500 transition-all">
+                            <span class="hidden sm:inline">Preparando</span><span class="sm:hidden">Prep.</span> (<?= $preparando ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Listo" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-green-100 text-green-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-green-500 transition-all">
+                            Listos (<?= $listos ?>)
+                        </span>
+                    </label>
+                    <button onclick="toggleTodosEstados()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs sm:text-sm px-3 py-2 rounded-lg font-semibold border-2 border-gray-400 transition-all">
+                        <i class="fas fa-check-double mr-1"></i>Todos/Ninguno
+                    </button>
                 </div>
             </div>
             
@@ -372,26 +431,44 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         <!-- Acciones Compactas -->
                         <div class="flex gap-1 flex-wrap">
                             <?php if ($pedido['estado'] === 'Pendiente'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')"
                                         class="btn-compact" style="background: #3b82f6; color: white;">
                                     <i class="fas fa-fire"></i> Preparar
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Preparando'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')"
                                         class="btn-compact" style="background: #10b981; color: white;">
                                     <i class="fas fa-check"></i> Listo
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Listo'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')"
                                         class="btn-compact" style="background: #6b7280; color: white;">
                                     <i class="fas fa-handshake"></i> Entregar
                                 </button>
                             <?php endif; ?>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)" 
-                                    class="btn-compact" style="background: #f59e0b; color: white;">
-                                <i class="fas fa-print"></i>
+                            <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
+                                    class="btn-compact" style="background: #8b5cf6; color: white;" title="Editar pedido">
+                                <i class="fas fa-edit"></i>
                             </button>
+
+                            <?php if ($pedido['impreso']): ?>
+                                <!-- Botón imprimir bloqueado -->
+                                <button class="btn-compact" style="background: #9ca3af; color: white; cursor: not-allowed;" disabled title="Ya impreso">
+                                    <i class="fas fa-print"></i> <i class="fas fa-check text-xs"></i>
+                                </button>
+                                <!-- Botón emergencia re-imprimir -->
+                                <button onclick="reimprimirEmergencia(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #dc2626; color: white;" title="Re-imprimir (Emergencia)">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            <?php else: ?>
+                                <!-- Botón imprimir normal -->
+                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #f59e0b; color: white;">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -436,26 +513,44 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         
                         <div class="flex gap-1 justify-center flex-wrap">
                             <?php if ($pedido['estado'] === 'Pendiente'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Preparando')"
                                         class="btn-compact" style="background: #3b82f6; color: white;">
                                     <i class="fas fa-fire"></i>
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Preparando'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Listo')"
                                         class="btn-compact" style="background: #10b981; color: white;">
                                     <i class="fas fa-check"></i>
                                 </button>
                             <?php elseif ($pedido['estado'] === 'Listo'): ?>
-                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')" 
+                                <button onclick="cambiarEstado(<?= $pedido['id'] ?>, 'Entregado')"
                                         class="btn-compact" style="background: #6b7280; color: white;">
                                     <i class="fas fa-handshake"></i>
                                 </button>
                             <?php endif; ?>
 
-                            <button onclick="imprimir(<?= $pedido['id'] ?>)" 
-                                    class="btn-compact" style="background: #f59e0b; color: white;">
-                                <i class="fas fa-print"></i>
+                            <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
+                                    class="btn-compact" style="background: #8b5cf6; color: white;">
+                                <i class="fas fa-edit"></i>
                             </button>
+
+                            <?php if ($pedido['impreso']): ?>
+                                <!-- Botón imprimir bloqueado -->
+                                <button class="btn-compact" style="background: #9ca3af; color: white; cursor: not-allowed;" disabled title="Ya impreso">
+                                    <i class="fas fa-print"></i> <i class="fas fa-check text-xs"></i>
+                                </button>
+                                <!-- Botón emergencia re-imprimir -->
+                                <button onclick="reimprimirEmergencia(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #dc2626; color: white;" title="Re-imprimir (Emergencia)">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            <?php else: ?>
+                                <!-- Botón imprimir normal -->
+                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                        class="btn-compact" style="background: #f59e0b; color: white;">
+                                    <i class="fas fa-print"></i>
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -594,6 +689,17 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 <div class="font-bold">Transferencia</div>
                             </label>
                         </div>
+                    </div>
+
+                    <!-- Estado de pago (para clientes por WhatsApp) -->
+                    <div class="mb-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="yaPagado" name="ya_pagado" value="1" class="w-5 h-5 text-green-600 mr-3">
+                            <div>
+                                <span class="font-bold text-gray-800">✅ Ya está pagado</span>
+                                <p class="text-xs text-gray-600 mt-1">(Para clientes que pagaron por WhatsApp/anticipado)</p>
+                            </div>
+                        </label>
                     </div>
 
                     <!-- Botón siguiente -->
@@ -981,6 +1087,81 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
 }
 </style>
 
+<!-- ============================================ -->
+<!-- MODAL EDITAR PEDIDO -->
+<!-- ============================================ -->
+<div id="modalEditarPedido" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-t-lg">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold">
+                    <i class="fas fa-edit mr-2"></i>Editar Pedido #<span id="editPedidoId">-</span>
+                </h2>
+                <button onclick="cerrarEditarPedido()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <form id="formEditarPedido" class="p-6">
+            <!-- Producto -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
+                <input type="text" id="editProducto" required
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="Ej: Jamón y Queso x24">
+            </div>
+
+            <!-- Cantidad -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Cantidad *</label>
+                <input type="number" id="editCantidad" required min="1"
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="24">
+            </div>
+
+            <!-- Precio -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Precio *</label>
+                <input type="number" id="editPrecio" required min="0" step="100"
+                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-lg"
+                       placeholder="18000">
+            </div>
+
+            <!-- Sabores personalizados (solo si aplica) -->
+            <div id="editSaboresContainer" class="mb-4 hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Sabores Personalizados</label>
+                <div class="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
+                    <p class="text-sm text-gray-600 mb-3">Edita las planchas por sabor:</p>
+                    <div id="editSaboresList" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Observaciones</label>
+                <textarea id="editObservaciones" rows="4"
+                          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                          placeholder="Observaciones adicionales..."></textarea>
+            </div>
+
+            <!-- Botones -->
+            <div class="flex gap-3">
+                <button type="button" onclick="guardarEdicionPedido()"
+                        class="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-lg">
+                    <i class="fas fa-save mr-2"></i>GUARDAR CAMBIOS
+                </button>
+                <button type="button" onclick="cerrarEditarPedido()"
+                        class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
+                    <i class="fas fa-times mr-2"></i>CANCELAR
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
     <script>
 // ============================================
 // 🎯 SISTEMA DE PASOS - PEDIDO EXPRESS
@@ -1108,9 +1289,10 @@ function validarPaso1() {
         apellido: apellido,
         telefono: document.getElementById('telefono').value.trim(),
         turno: turno.value,
-        formaPago: formaPago.value
+        formaPago: formaPago.value,
+        yaPagado: document.getElementById('yaPagado').checked
     };
-    
+
     return true;
 }
 
@@ -1181,10 +1363,14 @@ function agregarPedidosComunes() {
         if (checkbox.checked) {
             const tipo = item.dataset.tipo;
             const cantidad = parseInt(item.querySelector('.cantidad-display').textContent);
-            const info = precios[tipo];
+
+            // Leer precios desde los data-attributes del HTML (valores actualizados de la BD)
+            const precioEfectivo = parseFloat(item.dataset.precioEfectivo);
+            const precioTransferencia = parseFloat(item.dataset.precioTransferencia);
+            const info = precios[tipo]; // Solo para obtener nombre y cantidad
 
             // Seleccionar precio según forma de pago
-            const precioFinal = formaPago === 'Efectivo' ? info.precio_efectivo : info.precio_transferencia;
+            const precioFinal = formaPago === 'Efectivo' ? precioEfectivo : precioTransferencia;
 
             // Crear un pedido por cada cantidad
             for (let i = 0; i < cantidad; i++) {
@@ -1198,26 +1384,24 @@ function agregarPedidosComunes() {
             }
         }
     });
-    
+
     if (combosSeleccionados.length === 0) {
         alert('⚠️ Seleccioná al menos un combo');
         return;
     }
-    
+
     // Agregar a la lista de pedidos
     pedidosAcumulados.push(...combosSeleccionados);
-    
+
     // Resetear selección de combos
     items.forEach(item => {
         item.querySelector('.combo-checkbox').checked = false;
         item.querySelector('.cantidad-display').textContent = '1';
     });
     document.getElementById('observaciones_comun').value = '';
-    
-    // Ir al resumen
+
+    // Ir al resumen (sin alert, el mensaje final será cuando se creen todos)
     irAPaso(4);
-    
-    alert(`✅ ${combosSeleccionados.length} pedido(s) agregado(s)`);
 }
 
 // ============================================
@@ -1319,11 +1503,9 @@ function agregarPedidoPersonalizado() {
     actualizarContadores();
     document.getElementById('precioPersonalizado').value = '';
     document.getElementById('observaciones_personalizado').value = '';
-    
-    // Ir al resumen
+
+    // Ir al resumen (sin alert, el mensaje final será cuando se creen todos)
     irAPaso(4);
-    
-    alert('✅ Pedido personalizado agregado');
 }
 
 // ============================================
@@ -1419,9 +1601,9 @@ function finalizarYCrearPedidos() {
             cantidad: item.cantidad,
             ubicacion: 'Local 1',
             estado: 'Pendiente',
-            observaciones: `Turno: ${datosCliente.turno}\n${item.observaciones || ''}`
+            observaciones: `Turno: ${datosCliente.turno}${datosCliente.yaPagado ? '\n✅ PAGADO (WhatsApp)' : ''}\n${item.observaciones || ''}`
         };
-        
+
         if (pedidosAcumulados.length > 1) {
             pedidoCompleto.observaciones += `\n🔗 PEDIDO COMBINADO (${index + 1}/${pedidosAcumulados.length})`;
         }
@@ -1495,21 +1677,67 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function filtrarEstado(estado) {
-    document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
-    document.querySelector(`.filter-tab[data-estado="${estado}"]`)?.classList.add('active');
-    
+function aplicarFiltrosMultiples() {
+    // Obtener estados seleccionados
+    const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
+    const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+
     const cards = document.querySelectorAll('#vistaCards > [data-estado]');
     const items = document.querySelectorAll('#vistaLista > [data-estado]');
-    
+
+    // Si no hay ningún estado seleccionado, ocultar todos
+    if (estadosSeleccionados.length === 0) {
+        cards.forEach(pedido => pedido.style.display = 'none');
+        items.forEach(pedido => pedido.style.display = 'none');
+        return;
+    }
+
+    // Mostrar solo los pedidos que coincidan con alguno de los estados seleccionados
     cards.forEach(pedido => {
-        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
+        const mostrar = estadosSeleccionados.includes(pedido.dataset.estado);
+        pedido.style.display = mostrar ? '' : 'none';
     });
-    
+
     items.forEach(pedido => {
-        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
+        const mostrar = estadosSeleccionados.includes(pedido.dataset.estado);
+        pedido.style.display = mostrar ? '' : 'none';
     });
+
+    // Guardar selección en localStorage
+    localStorage.setItem('filtrosEstados', JSON.stringify(estadosSeleccionados));
 }
+
+function toggleTodosEstados() {
+    const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+    const algunoMarcado = Array.from(checkboxes).some(cb => cb.checked);
+
+    // Si al menos uno está marcado, desmarcar todos; si ninguno está marcado, marcar todos
+    checkboxes.forEach(cb => {
+        cb.checked = !algunoMarcado;
+    });
+
+    aplicarFiltrosMultiples();
+}
+
+// Restaurar filtros guardados al cargar la página
+window.addEventListener('DOMContentLoaded', () => {
+    const filtrosGuardados = localStorage.getItem('filtrosEstados');
+
+    if (filtrosGuardados) {
+        try {
+            const estados = JSON.parse(filtrosGuardados);
+            const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+
+            checkboxes.forEach(cb => {
+                cb.checked = estados.includes(cb.value);
+            });
+        } catch (e) {
+            console.error('Error al cargar filtros guardados:', e);
+        }
+    }
+
+    aplicarFiltrosMultiples();
+});
 
 function cambiarEstado(pedidoId, nuevoEstado) {
     if (confirm(`¿Cambiar a "${nuevoEstado}"?`)) {
@@ -1533,14 +1761,31 @@ function cambiarEstado(pedidoId, nuevoEstado) {
 function imprimir(pedidoId) {
     const url = `comanda_simple.php?pedido=${pedidoId}`;
     const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
-    
+
     if (!ventana) {
         alert('❌ Permitir ventanas emergentes');
         return false;
     }
-    
+
     ventana.focus();
     setTimeout(() => marcarImpreso(pedidoId), 2000);
+    return true;
+}
+
+function reimprimirEmergencia(pedidoId) {
+    if (!confirm('⚠️ RE-IMPRIMIR PEDIDO\n\nEsta función es solo para emergencias.\n¿Confirmar re-impresión?')) {
+        return;
+    }
+
+    const url = `comanda_simple.php?pedido=${pedidoId}`;
+    const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
+
+    if (!ventana) {
+        alert('❌ Permitir ventanas emergentes');
+        return false;
+    }
+
+    ventana.focus();
     return true;
 }
 
@@ -1548,7 +1793,7 @@ function marcarImpreso(pedidoId) {
     const formData = new FormData();
     formData.append('accion', 'marcar_impreso');
     formData.append('pedido_id', pedidoId);
-    
+
     fetch('dashboard.php', {
         method: 'POST',
         body: formData
@@ -1556,8 +1801,15 @@ function marcarImpreso(pedidoId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            setTimeout(() => location.reload(), 1000);
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
+            // Esperar 2 segundos para asegurar que se procese el update
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            console.error('Error al marcar como impreso:', data);
         }
+    })
+    .catch(error => {
+        console.error('Error de red al marcar impreso:', error);
     });
 }
 
@@ -1571,6 +1823,29 @@ function updateClock() {
 }
 setInterval(updateClock, 1000);
 updateClock();
+
+// Sincronización automática de fechas cada 3 minutos
+function sincronizarFechasAutomatico() {
+    fetch('../migrations/api_reparar_fechas.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Sincronización automática de fechas completada');
+            } else {
+                console.error('⚠️ Error en sincronización automática:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de red en sincronización automática:', error);
+        });
+}
+
+// Ejecutar cada 3 minutos (180,000 ms)
+setInterval(sincronizarFechasAutomatico, 180000);
+// Primera ejecución después de 5 segundos
+setTimeout(sincronizarFechasAutomatico, 5000);
+
+console.log('🔄 Sincronización automática de fechas activada (cada 3 minutos)');
 
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && !document.getElementById('modalPedidoExpress').classList.contains('hidden')) {
@@ -1604,6 +1879,155 @@ document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
 });
 
 console.log('🚀 Dashboard con Sistema de Pasos cargado');
+
+// ============================================
+// EDITAR PEDIDO
+// ============================================
+
+let pedidoEditando = null;
+
+async function abrirEditarPedido(pedidoId) {
+    try {
+        // Obtener datos del pedido
+        const formData = new FormData();
+        formData.append('accion', 'obtener_pedido');
+        formData.append('pedido_id', pedidoId);
+
+        const response = await fetch('dashboard.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            pedidoEditando = data.pedido;
+
+            // Llenar el formulario
+            document.getElementById('editPedidoId').textContent = pedidoEditando.id;
+            document.getElementById('editProducto').value = pedidoEditando.producto || '';
+            document.getElementById('editCantidad').value = pedidoEditando.cantidad || '';
+            document.getElementById('editPrecio').value = pedidoEditando.precio || '';
+            document.getElementById('editObservaciones').value = pedidoEditando.observaciones || '';
+
+            // Si tiene sabores personalizados, mostrar la sección de edición
+            if (pedidoEditando.sabores_personalizados_json) {
+                const sabores = JSON.parse(pedidoEditando.sabores_personalizados_json);
+                document.getElementById('editSaboresContainer').classList.remove('hidden');
+
+                const saboresList = document.getElementById('editSaboresList');
+                saboresList.innerHTML = '';
+
+                for (let sabor in sabores) {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center gap-3';
+                    div.innerHTML = `
+                        <label class="flex-1 text-sm font-medium text-gray-700">${sabor}</label>
+                        <input type="number" min="0" value="${sabores[sabor]}"
+                               data-sabor="${sabor}"
+                               class="edit-sabor-input w-20 px-3 py-2 border-2 border-purple-300 rounded focus:border-purple-500"
+                               placeholder="0">
+                        <span class="text-xs text-gray-500">planchas</span>
+                    `;
+                    saboresList.appendChild(div);
+                }
+            } else {
+                document.getElementById('editSaboresContainer').classList.add('hidden');
+            }
+
+            // Mostrar modal
+            document.getElementById('modalEditarPedido').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        } else {
+            alert('❌ Error al cargar el pedido');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
+function cerrarEditarPedido() {
+    document.getElementById('modalEditarPedido').classList.add('hidden');
+    document.body.style.overflow = 'auto';
+    pedidoEditando = null;
+}
+
+async function guardarEdicionPedido() {
+    if (!pedidoEditando) return;
+
+    const producto = document.getElementById('editProducto').value.trim();
+    const cantidad = parseInt(document.getElementById('editCantidad').value);
+    const precio = parseFloat(document.getElementById('editPrecio').value);
+    const observaciones = document.getElementById('editObservaciones').value.trim();
+
+    if (!producto || !cantidad || !precio) {
+        alert('⚠️ Completá todos los campos requeridos');
+        return;
+    }
+
+    // Si hay sabores personalizados, recopilarlos
+    let saboresPersonalizados = null;
+    if (!document.getElementById('editSaboresContainer').classList.contains('hidden')) {
+        const saboresInputs = document.querySelectorAll('.edit-sabor-input');
+        saboresPersonalizados = {};
+
+        saboresInputs.forEach(input => {
+            const sabor = input.dataset.sabor;
+            const planchas = parseInt(input.value) || 0;
+            if (planchas > 0) {
+                saboresPersonalizados[sabor] = planchas;
+            }
+        });
+
+        // Actualizar el producto con el nuevo total
+        const totalPlanchas = Object.values(saboresPersonalizados).reduce((a, b) => a + b, 0);
+        const totalSandwiches = totalPlanchas * 8;
+
+        // Si el producto es personalizado, actualizarlo con los nuevos totales
+        if (pedidoEditando.producto.includes('Personalizado')) {
+            document.getElementById('editProducto').value = `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas !== 1 ? 's' : ''})`;
+            document.getElementById('editCantidad').value = totalSandwiches;
+        }
+    }
+
+    if (!confirm('¿Guardar los cambios en este pedido?')) {
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('accion', 'editar_pedido');
+        formData.append('pedido_id', pedidoEditando.id);
+        formData.append('producto', document.getElementById('editProducto').value.trim());
+        formData.append('cantidad', document.getElementById('editCantidad').value);
+        formData.append('precio', document.getElementById('editPrecio').value);
+        formData.append('observaciones', observaciones);
+
+        if (saboresPersonalizados && Object.keys(saboresPersonalizados).length > 0) {
+            formData.append('sabores_personalizados_json', JSON.stringify(saboresPersonalizados));
+        }
+
+        const response = await fetch('dashboard.php', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('✅ Pedido actualizado correctamente');
+            cerrarEditarPedido();
+            location.reload();
+        } else {
+            alert('❌ Error al actualizar el pedido');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ Error de conexión');
+    }
+}
+
     </script>
 
 </body>
