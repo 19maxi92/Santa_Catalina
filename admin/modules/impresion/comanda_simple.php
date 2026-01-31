@@ -130,12 +130,9 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .turno-badge {
-            background: #000;
-            color: #fff;
-            padding: 3px 10px;
-            border-radius: 3px;
-            font-size: 14px;
-            font-weight: bold;
+            font-size: 18px;
+            font-weight: 900;
+            color: #000;
         }
         
         .cliente-nombre {
