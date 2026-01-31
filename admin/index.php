@@ -332,6 +332,49 @@ $ultimos_pedidos = $pdo->query("
     setTimeout(sincronizarFechasAutomatico, 5000); // Esperar 5 segundos después de cargar
 
     console.log('🔄 Sincronización automática de fechas activada (cada 3 minutos)');
+
+    // ============================================
+    // SISTEMA DE NOTIFICACIÓN DE SONIDO
+    // ============================================
+    const audioNotificacion = new Audio('sound/noti.mp3');
+
+    function checkearNuevosPedidos() {
+        fetch('modules/pedidos/check_nuevos_pedidos_sound.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.hay_nuevos) {
+                    // Reproducir sonido
+                    audioNotificacion.play().catch(err => {
+                        console.log('No se pudo reproducir el sonido (requiere interacción del usuario):', err);
+                    });
+
+                    // Mostrar notificación visual
+                    console.log(`🔔 ${data.cantidad} nuevo(s) pedido(s) para Local 1`);
+
+                    // Opcional: Mostrar una notificación visual temporal
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed;top:80px;right:20px;background:#10b981;color:white;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:9999;font-weight:bold;';
+                    notif.innerHTML = `🔔 ${data.cantidad} nuevo(s) pedido(s) para Local 1`;
+                    document.body.appendChild(notif);
+
+                    setTimeout(() => {
+                        notif.style.transition = 'opacity 0.5s';
+                        notif.style.opacity = '0';
+                        setTimeout(() => notif.remove(), 500);
+                    }, 5000);
+                }
+            })
+            .catch(err => {
+                console.error('Error checkeando nuevos pedidos:', err);
+            });
+    }
+
+    // Chequear cada 30 segundos
+    setInterval(checkearNuevosPedidos, 30000);
+
+    // Primera verificación después de 10 segundos
+    setTimeout(checkearNuevosPedidos, 10000);
+
     </script>
 </body>
 </html>
