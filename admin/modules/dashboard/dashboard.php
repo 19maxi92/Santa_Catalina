@@ -443,7 +443,7 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     <i class="fas fa-chart-area text-blue-500 mr-3 text-xl"></i>
                     TENDENCIA SEMANAL
                 </h3>
-                <canvas id="chartSemanal" height="300"></canvas>
+                <canvas id="chartSemanal" height="180"></canvas>
             </div>
 
             <!-- Top 10 Productos -->
@@ -452,7 +452,7 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     <i class="fas fa-crown text-yellow-500 mr-3 text-xl"></i>
                     TOP 10 PRODUCTOS
                 </h3>
-                <canvas id="chartProductos" height="300"></canvas>
+                <canvas id="chartProductos" height="180"></canvas>
             </div>
 
         </div>
@@ -496,7 +496,7 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     <i class="fas fa-wallet text-green-500 mr-3 text-xl"></i>
                     FORMAS DE PAGO
                 </h3>
-                <canvas id="chartPago" height="300"></canvas>
+                <canvas id="chartPago" height="200"></canvas>
                 <div class="mt-5 space-y-2">
                     <?php foreach ($por_pago as $pago):
                         $porcentaje = $periodo['total_ventas'] > 0 ? ($pago['total'] / $periodo['total_ventas']) * 100 : 0;
@@ -561,7 +561,8 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false,
+            maintainAspectRatio: true,
+            aspectRatio: 2.5,
             interaction: {
                 mode: 'index',
                 intersect: false,
@@ -571,9 +572,10 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     display: true,
                     position: 'top',
                     labels: {
-                        font: { weight: 'bold', size: 11 },
-                        padding: 15,
-                        usePointStyle: true
+                        font: { weight: 'bold', size: 10 },
+                        padding: 10,
+                        usePointStyle: true,
+                        boxHeight: 6
                     }
                 }
             },
@@ -585,7 +587,7 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     beginAtZero: true,
                     ticks: {
                         callback: value => '$' + (value / 1000).toFixed(0) + 'k',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 10 }
                     },
                     grid: { color: 'rgba(0,0,0,0.05)' }
                 },
@@ -595,11 +597,11 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     position: 'right',
                     beginAtZero: true,
                     grid: { drawOnChartArea: false },
-                    ticks: { font: { weight: 'bold' } }
+                    ticks: { font: { weight: 'bold', size: 10 } }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { font: { weight: 'bold', size: 10 } }
+                    ticks: { font: { weight: 'bold', size: 9 } }
                 }
             }
         }
@@ -626,7 +628,8 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
         options: {
             indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: false,
+            maintainAspectRatio: true,
+            aspectRatio: 2,
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -641,11 +644,11 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 x: {
                     beginAtZero: true,
                     grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { font: { weight: 'bold' } }
+                    ticks: { font: { weight: 'bold', size: 10 } }
                 },
                 y: {
                     grid: { display: false },
-                    ticks: { font: { weight: 'bold', size: 10 } }
+                    ticks: { font: { weight: 'bold', size: 9 } }
                 }
             }
         }
@@ -670,16 +673,18 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false,
+            maintainAspectRatio: true,
+            aspectRatio: 1.5,
             plugins: {
                 legend: {
                     display: true,
                     position: 'top',
                     labels: {
-                        font: { weight: 'bold', size: 12 },
-                        padding: 15,
+                        font: { weight: 'bold', size: 10 },
+                        padding: 10,
                         usePointStyle: true,
-                        pointStyle: 'circle'
+                        pointStyle: 'circle',
+                        boxHeight: 6
                     }
                 },
                 tooltip: {
