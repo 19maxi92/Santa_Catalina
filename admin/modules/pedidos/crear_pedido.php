@@ -942,10 +942,8 @@ function agregarPedidosComunes() {
     });
     document.getElementById('observaciones_comun').value = '';
 
-    // Ir al resumen
+    // Ir al resumen (sin alert, el mensaje final aparecerá al crear todos)
     irAPaso(4);
-
-    alert(`✅ ${combosSeleccionados.length} pedido(s) agregado(s)`);
 }
 
 // ============================================
@@ -1048,10 +1046,8 @@ function agregarPedidoPersonalizado() {
     document.getElementById('precioPersonalizado').value = '';
     document.getElementById('observaciones_personalizado').value = '';
 
-    // Ir al resumen
+    // Ir al resumen (sin alert, el mensaje final aparecerá al crear todos)
     irAPaso(4);
-
-    alert('✅ Pedido personalizado agregado');
 }
 
 // ============================================

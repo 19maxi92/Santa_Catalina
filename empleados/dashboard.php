@@ -464,7 +464,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 </button>
                             <?php else: ?>
                                 <!-- Botón imprimir normal -->
-                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                <button onclick="imprimir(<?= $pedido['id'] ?>, this)"
                                         class="btn-compact" style="background: #f59e0b; color: white;">
                                     <i class="fas fa-print"></i>
                                 </button>
@@ -546,7 +546,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 </button>
                             <?php else: ?>
                                 <!-- Botón imprimir normal -->
-                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                <button onclick="imprimir(<?= $pedido['id'] ?>, this)"
                                         class="btn-compact" style="background: #f59e0b; color: white;">
                                     <i class="fas fa-print"></i>
                                 </button>
@@ -1758,7 +1758,7 @@ function cambiarEstado(pedidoId, nuevoEstado) {
     }
 }
 
-function imprimir(pedidoId) {
+function imprimir(pedidoId, buttonElement) {
     const url = `comanda_simple.php?pedido=${pedidoId}`;
     const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
 
@@ -1768,6 +1768,13 @@ function imprimir(pedidoId) {
     }
 
     ventana.focus();
+
+    // Ocultar el botón inmediatamente para que no puedan volver a hacer click
+    if (buttonElement) {
+        buttonElement.style.display = 'none';
+    }
+
+    // Marcar como impreso en la base de datos (sin recargar)
     setTimeout(() => marcarImpreso(pedidoId), 2000);
     return true;
 }
@@ -1801,9 +1808,8 @@ function marcarImpreso(pedidoId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
-            // Esperar 2 segundos para asegurar que se procese el update
-            setTimeout(() => location.reload(), 2000);
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso en BD`);
+            // NO recargar - solo marcar en BD
         } else {
             console.error('Error al marcar como impreso:', data);
         }

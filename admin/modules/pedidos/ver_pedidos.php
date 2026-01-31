@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             case 'marcar_impreso':
                 if ($id) {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, fecha_impresion = NOW() WHERE id = ?");
+                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
                     $stmt->execute([$id]);
                     $_SESSION['mensaje'] = "✅ Marcado como impreso";
                 }
@@ -64,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             break;
                             
                         case 'marcar_impreso':
-                            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1, fecha_impresion = NOW() WHERE id IN ($placeholders)");
+                            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id IN ($placeholders)");
                             $stmt->execute($pedidos);
                             $_SESSION['mensaje'] = "✅ " . count($pedidos) . " marcado(s) como impreso";
                             break;
@@ -810,7 +810,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                                 <i class="fas fa-redo"></i>
                                             </button>
                                         <?php else: ?>
-                                            <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                            <button onclick="imprimir(<?= $pedido['id'] ?>, this)"
                                                     class="btn bg-orange-500 hover:bg-orange-600 text-white p-2 rounded text-xs"
                                                     title="Imprimir">
                                                 <i class="fas fa-print"></i>
@@ -1062,11 +1062,11 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             
             <!-- Acciones del Modal -->
             <div class="mt-6 pt-4 border-t flex gap-2">
-                <button onclick="imprimir(${pedido.id}); cerrarModal();" 
+                <button onclick="imprimir(${pedido.id}, this); cerrarModal();"
                         class="btn flex-1 bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-lg font-semibold">
                     <i class="fas fa-print mr-2"></i>Imprimir
                 </button>
-                <button onclick="cerrarModal()" 
+                <button onclick="cerrarModal()"
                         class="btn flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold">
                     <i class="fas fa-times mr-2"></i>Cerrar
                 </button>
@@ -1221,7 +1221,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     // IMPRESIÓN
     // ============================================
     
-    function imprimir(pedidoId) {
+    function imprimir(pedidoId, buttonElement) {
         console.log('🖨️ Imprimiendo comanda - Pedido #' + pedidoId);
 
         const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
@@ -1235,7 +1235,12 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         ventana.focus();
         console.log('✅ Comanda abierta (80mm)');
 
-        // Marcar como impreso después de 2 segundos
+        // Ocultar el botón inmediatamente para que no puedan volver a hacer click
+        if (buttonElement) {
+            buttonElement.style.display = 'none';
+        }
+
+        // Marcar como impreso en la base de datos (sin recargar)
         setTimeout(() => marcarImpreso(pedidoId), 2000);
 
         return true;
@@ -1258,9 +1263,8 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             return response.text();
         })
         .then(text => {
-            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
-            // Recargar después de marcar
-            setTimeout(() => location.reload(), 1500);
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso en BD`);
+            // NO recargar - solo marcar en BD
         })
         .catch(error => {
             console.error('Error al marcar como impreso:', error);
