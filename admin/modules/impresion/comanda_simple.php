@@ -57,12 +57,12 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     <meta charset="UTF-8">
     <title>Comanda ADMIN #<?= $pedido_id ?></title>
     <style>
-        @page { size: 80mm auto; margin: 0; }
-        
+        @page { size: 90mm auto; margin: 0; }
+
         body {
             font-family: 'Courier New', monospace;
             font-size: 10px;
-            width: 302px;
+            width: 340px;
             margin: 0;
             padding: 0;
             background: white;
@@ -101,7 +101,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             background: white;
             margin: 10px auto;
             padding: 5px;
-            width: 302px;
+            width: 340px;
         }
         
         .comanda-ticket {
@@ -192,19 +192,21 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         }
         
         .observaciones-titulo {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: bold;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
             text-align: center;
+            text-transform: uppercase;
         }
-        
+
         .observaciones-texto {
-            font-size: 13px;
-            line-height: 1.5;
-            font-weight: 600;
-            padding: 6px;
-            background: #fffacd;
-            border: 1px solid #000;
+            font-size: 20px;
+            line-height: 1.6;
+            font-weight: 900;
+            padding: 10px;
+            background: #fff3cd;
+            border: 3px solid #000;
+            text-transform: uppercase;
         }
         
         .info-admin {
@@ -224,7 +226,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 margin: 0;
                 padding: 0;
             }
-            @page { size: 80mm auto; margin: 0; }
+            @page { size: 90mm auto; margin: 0; }
         }
     </style>
 </head>
