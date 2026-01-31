@@ -1363,10 +1363,14 @@ function agregarPedidosComunes() {
         if (checkbox.checked) {
             const tipo = item.dataset.tipo;
             const cantidad = parseInt(item.querySelector('.cantidad-display').textContent);
-            const info = precios[tipo];
+
+            // Leer precios desde los data-attributes del HTML (valores actualizados de la BD)
+            const precioEfectivo = parseFloat(item.dataset.precioEfectivo);
+            const precioTransferencia = parseFloat(item.dataset.precioTransferencia);
+            const info = precios[tipo]; // Solo para obtener nombre y cantidad
 
             // Seleccionar precio según forma de pago
-            const precioFinal = formaPago === 'Efectivo' ? info.precio_efectivo : info.precio_transferencia;
+            const precioFinal = formaPago === 'Efectivo' ? precioEfectivo : precioTransferencia;
 
             // Crear un pedido por cada cantidad
             for (let i = 0; i < cantidad; i++) {
@@ -1380,26 +1384,24 @@ function agregarPedidosComunes() {
             }
         }
     });
-    
+
     if (combosSeleccionados.length === 0) {
         alert('⚠️ Seleccioná al menos un combo');
         return;
     }
-    
+
     // Agregar a la lista de pedidos
     pedidosAcumulados.push(...combosSeleccionados);
-    
+
     // Resetear selección de combos
     items.forEach(item => {
         item.querySelector('.combo-checkbox').checked = false;
         item.querySelector('.cantidad-display').textContent = '1';
     });
     document.getElementById('observaciones_comun').value = '';
-    
-    // Ir al resumen
+
+    // Ir al resumen (sin alert, el mensaje final será cuando se creen todos)
     irAPaso(4);
-    
-    alert(`✅ ${combosSeleccionados.length} pedido(s) agregado(s)`);
 }
 
 // ============================================
@@ -1501,11 +1503,9 @@ function agregarPedidoPersonalizado() {
     actualizarContadores();
     document.getElementById('precioPersonalizado').value = '';
     document.getElementById('observaciones_personalizado').value = '';
-    
-    // Ir al resumen
+
+    // Ir al resumen (sin alert, el mensaje final será cuando se creen todos)
     irAPaso(4);
-    
-    alert('✅ Pedido personalizado agregado');
 }
 
 // ============================================
@@ -1801,8 +1801,15 @@ function marcarImpreso(pedidoId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            setTimeout(() => location.reload(), 1000);
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
+            // Esperar 2 segundos para asegurar que se procese el update
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            console.error('Error al marcar como impreso:', data);
         }
+    })
+    .catch(error => {
+        console.error('Error de red al marcar impreso:', error);
     });
 }
 

@@ -278,7 +278,7 @@ $ultimos_pedidos = $pdo->query("
     </main>
 
     <script>
-    // Función para sincronizar fechas (silenciosa)
+    // Función para sincronizar fechas (manual - con feedback visual)
     function sincronizarFechas() {
         const btn = document.getElementById('btnSincronizar');
         const originalHTML = btn.innerHTML;
@@ -308,6 +308,30 @@ $ultimos_pedidos = $pdo->query("
                 alert('Error de conexión');
             });
     }
+
+    // Función para sincronizar fechas automáticamente (silenciosa, sin recargar página)
+    function sincronizarFechasAutomatico() {
+        fetch('../migrations/api_reparar_fechas.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('✅ Sincronización automática de fechas completada');
+                } else {
+                    console.error('⚠️ Error en sincronización automática:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error de red en sincronización automática:', error);
+            });
+    }
+
+    // Ejecutar sincronización automática cada 3 minutos (180,000 ms)
+    setInterval(sincronizarFechasAutomatico, 180000);
+
+    // Ejecutar una vez al cargar la página
+    setTimeout(sincronizarFechasAutomatico, 5000); // Esperar 5 segundos después de cargar
+
+    console.log('🔄 Sincronización automática de fechas activada (cada 3 minutos)');
     </script>
 </body>
 </html>
