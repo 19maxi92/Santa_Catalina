@@ -313,19 +313,19 @@ try {
                                     <input type="radio" name="turno" value="Mañana" class="hidden">
                                     <div class="text-4xl mb-2">🌅</div>
                                     <div class="font-bold">MAÑANA</div>
-                                    <div class="text-sm text-gray-600">06:00 - 14:00</div>
+                                    <div class="text-sm text-gray-600">09:00 - 13:00</div>
                                 </div>
                                 <div class="turno-card" onclick="seleccionarTurno('Siesta', this)">
                                     <input type="radio" name="turno" value="Siesta" class="hidden">
                                     <div class="text-4xl mb-2">☀️</div>
                                     <div class="font-bold">SIESTA</div>
-                                    <div class="text-sm text-gray-600">14:00 - 18:00</div>
+                                    <div class="text-sm text-gray-600">13:00 - 16:00</div>
                                 </div>
                                 <div class="turno-card" onclick="seleccionarTurno('Tarde', this)">
                                     <input type="radio" name="turno" value="Tarde" class="hidden">
                                     <div class="text-4xl mb-2">🌙</div>
                                     <div class="font-bold">TARDE</div>
-                                    <div class="text-sm text-gray-600">18:00 - 23:00</div>
+                                    <div class="text-sm text-gray-600">16:00 - 21:00</div>
                                 </div>
                             </div>
                         </div>
@@ -346,6 +346,17 @@ try {
                                     <div class="font-bold">Transferencia</div>
                                 </label>
                             </div>
+                        </div>
+
+                        <!-- Estado de pago (para clientes por WhatsApp) -->
+                        <div class="mb-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="yaPagado" name="ya_pagado" value="1" class="w-5 h-5 text-green-600 mr-3">
+                                <div>
+                                    <span class="font-bold text-gray-800">✅ Ya está pagado</span>
+                                    <p class="text-xs text-gray-600 mt-1">(Para clientes que pagaron por WhatsApp/anticipado)</p>
+                                </div>
+                            </label>
                         </div>
 
                         <!-- Observaciones generales -->
@@ -806,6 +817,7 @@ function validarPaso1() {
         fecha_entrega: document.getElementById('fecha_entrega').value,
         turno: turno.value,
         formaPago: formaPago.value,
+        yaPagado: document.getElementById('yaPagado').checked,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
     };
 
@@ -1136,7 +1148,7 @@ function finalizarYCrearPedidos() {
 
     // Crear promesas para todos los pedidos
     const promesas = pedidosAcumulados.map((item, index) => {
-        let observacionesCompletas = `Turno: ${datosCliente.turno}\n${item.observaciones || ''}`;
+        let observacionesCompletas = `Turno: ${datosCliente.turno}${datosCliente.yaPagado ? '\n✅ PAGADO (WhatsApp)' : ''}\n${item.observaciones || ''}`;
 
         if (datosCliente.observacionesGenerales) {
             observacionesCompletas += `\n\nObservaciones generales:\n${datosCliente.observacionesGenerales}`;
