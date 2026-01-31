@@ -261,17 +261,34 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 <div class="sabores-detalle-grande">
                 <?php
                 $obs = $pedido['observaciones'];
-                
-                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===\n(.*?)(?:\n---|$)/s', $obs, $matches)) {
+                $sabores_encontrados = false;
+
+                // Intentar formato con planchas (con o sin saltos de línea)
+                if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===[\s\n]*(.*?)(?:---|$)/s', $obs, $matches)) {
                     $sabores_texto = trim($matches[1]);
-                    $lineas = explode("\n", $sabores_texto);
-                    
-                    foreach ($lineas as $linea) {
-                        if (preg_match('/•\s*(.+?):\s*(\d+)\s*plancha/i', $linea, $match)) {
+
+                    // Buscar formato: • Sabor: X plancha(s) (Y sándwiches)
+                    if (preg_match_all('/•\s*([^:]+):\s*(\d+)\s*plancha/i', $sabores_texto, $planchas_matches, PREG_SET_ORDER)) {
+                        foreach ($planchas_matches as $match) {
                             $sabor = trim($match[1]);
-                            $planchas = $match[2];
+                            $planchas = (int)$match[2];
                             $sandwiches = $planchas * 8;
                             echo "<strong>{$planchas}pl</strong> {$sabor} ({$sandwiches})<br>";
+                            $sabores_encontrados = true;
+                        }
+                    }
+
+                    // Si no hay formato planchas, buscar formato directo: • Sabor: X (número de sándwiches)
+                    if (!$sabores_encontrados) {
+                        if (preg_match_all('/•\s*([^:•]+):\s*(\d+)(?!\s*plancha)/i', $sabores_texto, $direct_matches, PREG_SET_ORDER)) {
+                            foreach ($direct_matches as $match) {
+                                $sabor = trim($match[1]);
+                                $sandwiches = (int)$match[2];
+                                // Calcular planchas (8 sándwiches = 1 plancha)
+                                $planchas = ceil($sandwiches / 8);
+                                echo "<strong>{$sandwiches}</strong> {$sabor}<br>";
+                                $sabores_encontrados = true;
+                            }
                         }
                     }
                 }
