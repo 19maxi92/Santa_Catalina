@@ -240,6 +240,22 @@ $ubicaciones = $pdo->query("
             background: #888;
             border-radius: 4px;
         }
+
+        /* FILTROS MÚLTIPLES */
+        .filter-checkbox-label {
+            position: relative;
+            display: inline-block;
+        }
+        .filter-checkbox-label input[type="checkbox"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .filter-checkbox-label input[type="checkbox"]:checked + span {
+            border-color: currentColor;
+            box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -320,19 +336,33 @@ $ubicaciones = $pdo->query("
                     <?php } endforeach; ?>
             </div>
 
-            <!-- FILTROS POR ESTADO RESPONSIVE -->
-            <div class="flex flex-wrap gap-1 sm:gap-2 mb-2">
-                <div class="filter-tab active text-xs sm:text-sm" onclick="filtrarEstado('todos')" data-estado="todos">
-                    Todos (<?= $total ?>)
+            <!-- FILTROS POR ESTADO RESPONSIVE (MÚLTIPLE SELECCIÓN) -->
+            <div class="mb-2">
+                <div class="text-xs sm:text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-filter mr-1"></i>Filtrar por estado (seleccionar uno o varios):
                 </div>
-                <div class="filter-tab bg-yellow-100 text-yellow-800 text-xs sm:text-sm" onclick="filtrarEstado('Pendiente')" data-estado="Pendiente">
-                    <span class="hidden sm:inline">Pendientes</span><span class="sm:hidden">Pend.</span> (<?= $pendientes ?>)
-                </div>
-                <div class="filter-tab bg-blue-100 text-blue-800 text-xs sm:text-sm" onclick="filtrarEstado('Preparando')" data-estado="Preparando">
-                    <span class="hidden sm:inline">Preparando</span><span class="sm:hidden">Prep.</span> (<?= $preparando ?>)
-                </div>
-                <div class="filter-tab bg-green-100 text-green-800 text-xs sm:text-sm" onclick="filtrarEstado('Listo')" data-estado="Listo">
-                    Listos (<?= $listos ?>)
+                <div class="flex flex-wrap gap-2">
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Pendiente" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-yellow-100 text-yellow-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-yellow-500 transition-all">
+                            <span class="hidden sm:inline">Pendientes</span><span class="sm:hidden">Pend.</span> (<?= $pendientes ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Preparando" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-blue-100 text-blue-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-blue-500 transition-all">
+                            <span class="hidden sm:inline">Preparando</span><span class="sm:hidden">Prep.</span> (<?= $preparando ?>)
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label">
+                        <input type="checkbox" class="filter-estado-checkbox" value="Listo" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-green-100 text-green-800 text-xs sm:text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-green-500 transition-all">
+                            Listos (<?= $listos ?>)
+                        </span>
+                    </label>
+                    <button onclick="toggleTodosEstados()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs sm:text-sm px-3 py-2 rounded-lg font-semibold border-2 border-gray-400 transition-all">
+                        <i class="fas fa-check-double mr-1"></i>Todos/Ninguno
+                    </button>
                 </div>
             </div>
 
@@ -1732,21 +1762,67 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function filtrarEstado(estado) {
-    document.querySelectorAll('.filter-tab[data-estado]').forEach(tab => tab.classList.remove('active'));
-    document.querySelector(`.filter-tab[data-estado="${estado}"]`)?.classList.add('active');
+function aplicarFiltrosMultiples() {
+    // Obtener estados seleccionados
+    const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
+    const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
 
     const cards = document.querySelectorAll('#vistaCards > [data-estado]');
     const items = document.querySelectorAll('#vistaLista > [data-estado]');
 
+    // Si no hay ningún estado seleccionado, ocultar todos
+    if (estadosSeleccionados.length === 0) {
+        cards.forEach(pedido => pedido.style.display = 'none');
+        items.forEach(pedido => pedido.style.display = 'none');
+        return;
+    }
+
+    // Mostrar solo los pedidos que coincidan con alguno de los estados seleccionados
     cards.forEach(pedido => {
-        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
+        const mostrar = estadosSeleccionados.includes(pedido.dataset.estado);
+        pedido.style.display = mostrar ? '' : 'none';
     });
 
     items.forEach(pedido => {
-        pedido.style.display = (estado === 'todos' || pedido.dataset.estado === estado) ? '' : 'none';
+        const mostrar = estadosSeleccionados.includes(pedido.dataset.estado);
+        pedido.style.display = mostrar ? '' : 'none';
     });
+
+    // Guardar selección en localStorage
+    localStorage.setItem('filtrosEstadosAdmin', JSON.stringify(estadosSeleccionados));
 }
+
+function toggleTodosEstados() {
+    const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+    const algunoMarcado = Array.from(checkboxes).some(cb => cb.checked);
+
+    // Si al menos uno está marcado, desmarcar todos; si ninguno está marcado, marcar todos
+    checkboxes.forEach(cb => {
+        cb.checked = !algunoMarcado;
+    });
+
+    aplicarFiltrosMultiples();
+}
+
+// Restaurar filtros guardados al cargar la página
+window.addEventListener('DOMContentLoaded', () => {
+    const filtrosGuardados = localStorage.getItem('filtrosEstadosAdmin');
+
+    if (filtrosGuardados) {
+        try {
+            const estados = JSON.parse(filtrosGuardados);
+            const checkboxes = document.querySelectorAll('.filter-estado-checkbox');
+
+            checkboxes.forEach(cb => {
+                cb.checked = estados.includes(cb.value);
+            });
+        } catch (e) {
+            console.error('Error al cargar filtros guardados:', e);
+        }
+    }
+
+    aplicarFiltrosMultiples();
+});
 
 function cambiarEstado(pedidoId, nuevoEstado) {
     if (confirm(`¿Cambiar a "${nuevoEstado}"?`)) {
