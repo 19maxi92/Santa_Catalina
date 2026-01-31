@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     }
 }
 
-// Obtener pedidos
+// Obtener pedidos (hoy + próximos 7 días + pendientes de ayer)
 $pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado, modalidad,
            observaciones, direccion, telefono, forma_pago, cantidad,
@@ -113,17 +113,22 @@ $pedidos = $pdo->query("
     FROM pedidos
     WHERE ubicacion = 'Local 1'
     AND (
-        (fecha_entrega IS NULL AND DATE(created_at) = CURDATE())
-        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
+        (fecha_entrega IS NULL AND DATE(created_at) >= CURDATE() - INTERVAL 1 DAY)
+        OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN CURDATE() - INTERVAL 1 DAY AND CURDATE() + INTERVAL 7 DAY)
     )
     AND estado != 'Entregado'
     ORDER BY
+        CASE
+            WHEN DATE(COALESCE(fecha_entrega, created_at)) = CURDATE() THEN 0
+            WHEN DATE(COALESCE(fecha_entrega, created_at)) < CURDATE() THEN 1
+            ELSE 2
+        END,
         CASE estado
             WHEN 'Pendiente' THEN 1
             WHEN 'Preparando' THEN 2
             WHEN 'Listo' THEN 3
         END,
-        created_at ASC
+        COALESCE(fecha_entrega, created_at) ASC
 ")->fetchAll();
 
 // Stats
@@ -464,7 +469,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 </button>
                             <?php else: ?>
                                 <!-- Botón imprimir normal -->
-                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                <button onclick="imprimir(<?= $pedido['id'] ?>, this)"
                                         class="btn-compact" style="background: #f59e0b; color: white;">
                                     <i class="fas fa-print"></i>
                                 </button>
@@ -546,7 +551,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 </button>
                             <?php else: ?>
                                 <!-- Botón imprimir normal -->
-                                <button onclick="imprimir(<?= $pedido['id'] ?>)"
+                                <button onclick="imprimir(<?= $pedido['id'] ?>, this)"
                                         class="btn-compact" style="background: #f59e0b; color: white;">
                                     <i class="fas fa-print"></i>
                                 </button>
@@ -1269,17 +1274,14 @@ function validarPaso1() {
     const formaPago = document.querySelector('input[name="forma_pago"]:checked');
     
     if (!nombre || !apellido) {
-        alert('🏃‍♂️ Ingresá nombre y apellido');
         return false;
     }
-    
+
     if (!turno) {
-        alert('⏰ Seleccioná el turno');
         return false;
     }
-    
+
     if (!formaPago) {
-        alert('💳 Seleccioná la forma de pago');
         return false;
     }
     
@@ -1386,7 +1388,6 @@ function agregarPedidosComunes() {
     });
 
     if (combosSeleccionados.length === 0) {
-        alert('⚠️ Seleccioná al menos un combo');
         return;
     }
 
@@ -1464,14 +1465,12 @@ function agregarPedidoPersonalizado() {
     const totalPlanchas = Object.values(planchasPorSabor).reduce((sum, val) => sum + val, 0);
     
     if (totalPlanchas === 0) {
-        alert('⚠️ Agregá al menos una plancha');
         return;
     }
-    
+
     const precio = parseFloat(document.getElementById('precioPersonalizado').value);
-    
+
     if (!precio || precio <= 0) {
-        alert('💰 Ingresá el precio del pedido personalizado');
         return;
     }
     
@@ -1574,7 +1573,6 @@ function eliminarPedido(index) {
 
 function finalizarYCrearPedidos() {
     if (pedidosAcumulados.length === 0) {
-        alert('⚠️ No hay pedidos para crear');
         return;
     }
     
@@ -1758,7 +1756,7 @@ function cambiarEstado(pedidoId, nuevoEstado) {
     }
 }
 
-function imprimir(pedidoId) {
+function imprimir(pedidoId, buttonElement) {
     const url = `comanda_simple.php?pedido=${pedidoId}`;
     const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
 
@@ -1768,6 +1766,13 @@ function imprimir(pedidoId) {
     }
 
     ventana.focus();
+
+    // Ocultar el botón inmediatamente para que no puedan volver a hacer click
+    if (buttonElement) {
+        buttonElement.style.display = 'none';
+    }
+
+    // Marcar como impreso en la base de datos (sin recargar)
     setTimeout(() => marcarImpreso(pedidoId), 2000);
     return true;
 }
@@ -1801,9 +1806,8 @@ function marcarImpreso(pedidoId) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
-            // Esperar 2 segundos para asegurar que se procese el update
-            setTimeout(() => location.reload(), 2000);
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso en BD`);
+            // NO recargar - solo marcar en BD
         } else {
             console.error('Error al marcar como impreso:', data);
         }
@@ -1962,7 +1966,6 @@ async function guardarEdicionPedido() {
     const observaciones = document.getElementById('editObservaciones').value.trim();
 
     if (!producto || !cantidad || !precio) {
-        alert('⚠️ Completá todos los campos requeridos');
         return;
     }
 

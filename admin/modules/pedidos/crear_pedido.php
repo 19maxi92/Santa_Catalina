@@ -773,12 +773,10 @@ function validarPaso1() {
     const formaPago = document.querySelector('input[name="forma_pago"]:checked');
 
     if (!nombre || !apellido) {
-        alert('🏃‍♂️ Ingresá nombre y apellido');
         return false;
     }
 
     if (!modalidad) {
-        alert('📦 Seleccioná la modalidad (Retiro o Delivery)');
         return false;
     }
 
@@ -786,23 +784,19 @@ function validarPaso1() {
     if (modalidad.value === 'Delivery') {
         const direccion = document.getElementById('direccion').value.trim();
         if (!direccion) {
-            alert('📍 La dirección es obligatoria para delivery');
             return false;
         }
     }
 
     if (!ubicacion) {
-        alert('📍 Seleccioná la ubicación');
         return false;
     }
 
     if (!turno) {
-        alert('⏰ Seleccioná el turno');
         return false;
     }
 
     if (!formaPago) {
-        alert('💳 Seleccioná la forma de pago');
         return false;
     }
 
@@ -928,7 +922,6 @@ function agregarPedidosComunes() {
     });
 
     if (combosSeleccionados.length === 0) {
-        alert('⚠️ Seleccioná al menos un combo');
         return;
     }
 
@@ -942,10 +935,8 @@ function agregarPedidosComunes() {
     });
     document.getElementById('observaciones_comun').value = '';
 
-    // Ir al resumen
+    // Ir al resumen (sin alert, el mensaje final aparecerá al crear todos)
     irAPaso(4);
-
-    alert(`✅ ${combosSeleccionados.length} pedido(s) agregado(s)`);
 }
 
 // ============================================
@@ -1008,14 +999,12 @@ function agregarPedidoPersonalizado() {
     const totalPlanchas = Object.values(planchasPorSabor).reduce((sum, val) => sum + val, 0);
 
     if (totalPlanchas === 0) {
-        alert('⚠️ Agregá al menos una plancha');
         return;
     }
 
     const precio = parseFloat(document.getElementById('precioPersonalizado').value);
 
     if (!precio || precio <= 0) {
-        alert('💰 Ingresá el precio del pedido personalizado');
         return;
     }
 
@@ -1048,10 +1037,8 @@ function agregarPedidoPersonalizado() {
     document.getElementById('precioPersonalizado').value = '';
     document.getElementById('observaciones_personalizado').value = '';
 
-    // Ir al resumen
+    // Ir al resumen (sin alert, el mensaje final aparecerá al crear todos)
     irAPaso(4);
-
-    alert('✅ Pedido personalizado agregado');
 }
 
 // ============================================
@@ -1133,7 +1120,6 @@ function eliminarPedidoResumen(index) {
 
 function finalizarYCrearPedidos() {
     if (pedidosAcumulados.length === 0) {
-        alert('⚠️ No hay pedidos para crear');
         return;
     }
 
