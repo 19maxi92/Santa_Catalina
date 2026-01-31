@@ -1223,18 +1223,48 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     
     function imprimir(pedidoId) {
         console.log('🖨️ Imprimiendo comanda - Pedido #' + pedidoId);
-        
+
         const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
         const ventana = window.open(url, '_blank', 'width=320,height=500,scrollbars=yes');
-        
+
         if (!ventana) {
             alert('❌ Error: No se pudo abrir la ventana.\n\n💡 Habilita las ventanas emergentes en tu navegador.');
             return false;
         }
-        
+
         ventana.focus();
         console.log('✅ Comanda abierta (80mm)');
+
+        // Marcar como impreso después de 2 segundos
+        setTimeout(() => marcarImpreso(pedidoId), 2000);
+
         return true;
+    }
+
+    function marcarImpreso(pedidoId) {
+        const formData = new FormData();
+        formData.append('accion', 'marcar_impreso');
+        formData.append('id', pedidoId);
+
+        fetch('ver_pedidos.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                console.error('Error HTTP:', response.status);
+                return;
+            }
+            return response.text();
+        })
+        .then(text => {
+            console.log(`✅ Pedido #${pedidoId} marcado como impreso`);
+            // Recargar después de marcar
+            setTimeout(() => location.reload(), 1500);
+        })
+        .catch(error => {
+            console.error('Error al marcar como impreso:', error);
+        });
     }
     
     function imprimirSeleccionados() {

@@ -1824,6 +1824,29 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// Sincronización automática de fechas cada 3 minutos
+function sincronizarFechasAutomatico() {
+    fetch('../migrations/api_reparar_fechas.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Sincronización automática de fechas completada');
+            } else {
+                console.error('⚠️ Error en sincronización automática:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de red en sincronización automática:', error);
+        });
+}
+
+// Ejecutar cada 3 minutos (180,000 ms)
+setInterval(sincronizarFechasAutomatico, 180000);
+// Primera ejecución después de 5 segundos
+setTimeout(sincronizarFechasAutomatico, 5000);
+
+console.log('🔄 Sincronización automática de fechas activada (cada 3 minutos)');
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && !document.getElementById('modalPedidoExpress').classList.contains('hidden')) {
         cerrarPedidoExpress();
