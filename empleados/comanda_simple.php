@@ -37,7 +37,9 @@ if (preg_match('/Turno:\s*([MST]|Mañana|Siesta|Tarde)/i', $pedido['observacione
     elseif ($turno_text === 'Tarde' || $turno_text === 'T') $turno = 'T';
 }
 
-$fecha_formatted = date('d-M', strtotime($pedido['created_at']));
+// Usar fecha_entrega si existe, sino created_at
+$fecha_para_mostrar = !empty($pedido['fecha_entrega']) ? $pedido['fecha_entrega'] : $pedido['created_at'];
+$fecha_formatted = date('d-M', strtotime($fecha_para_mostrar));
 $meses = [
     'Jan' => 'ene', 'Feb' => 'feb', 'Mar' => 'mar', 'Apr' => 'abr',
     'May' => 'may', 'Jun' => 'jun', 'Jul' => 'jul', 'Aug' => 'ago',
