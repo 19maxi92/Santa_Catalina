@@ -331,7 +331,116 @@ $ultimos_pedidos = $pdo->query("
     // Ejecutar una vez al cargar la página
     setTimeout(sincronizarFechasAutomatico, 5000); // Esperar 5 segundos después de cargar
 
-    console.log('🔄 Sincronización automática de fechas activada (cada 3 minutos)');
+    console.log('Sincronizacion automatica de fechas activada (cada 3 minutos)');
+
+    // ============================================
+    // SISTEMA DE NOTIFICACION DE SONIDO (ADMIN)
+    // ============================================
+
+    // Ruta al archivo de sonido
+    const SONIDO_NOTIFICACION_URL = '../sound/noti.mp3';
+
+    let audioNotificacionAdmin = null;
+    let sonidoHabilitadoAdmin = false;
+
+    // Crear el audio cuando se habilita
+    function crearAudioAdmin() {
+        if (!audioNotificacionAdmin) {
+            audioNotificacionAdmin = new Audio(SONIDO_NOTIFICACION_URL);
+            audioNotificacionAdmin.volume = 0.8;
+        }
+        return audioNotificacionAdmin;
+    }
+
+    // Habilitar sonido (requiere click del usuario)
+    function habilitarSonidoAdmin() {
+        const audio = crearAudioAdmin();
+        audio.play().then(() => {
+            sonidoHabilitadoAdmin = true;
+            const btn = document.getElementById('btnSonidoAdmin');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-volume-up sm:mr-1"></i><span class="hidden lg:inline">Sonido ON</span>';
+                btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                btn.classList.add('bg-green-500', 'hover:bg-green-600');
+            }
+            console.log('Sonido de notificaciones habilitado');
+        }).catch(err => {
+            console.error('Error habilitando sonido:', err);
+            alert('No se pudo habilitar el sonido. Intenta de nuevo.');
+        });
+    }
+
+    // Reproducir sonido de notificacion
+    function reproducirSonidoAdmin() {
+        if (sonidoHabilitadoAdmin && audioNotificacionAdmin) {
+            audioNotificacionAdmin.currentTime = 0;
+            audioNotificacionAdmin.play().catch(err => {
+                console.log('No se pudo reproducir:', err);
+            });
+        }
+    }
+
+    // Mostrar notificacion visual
+    function mostrarNotificacionVisualAdmin(cantidad) {
+        const notif = document.createElement('div');
+        notif.className = 'fixed top-20 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse';
+        notif.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-bell text-2xl mr-3"></i>
+                <div>
+                    <div class="font-bold text-lg">${cantidad} nuevo(s) pedido(s)</div>
+                    <div class="text-sm">Actualizando...</div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(notif);
+
+        setTimeout(() => notif.remove(), 3000);
+    }
+
+    function checkearNuevosPedidosAdmin() {
+        fetch('check_nuevos_pedidos_sound.php')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.hay_nuevos) {
+                    console.log(`${data.cantidad} nuevo(s) pedido(s)`);
+
+                    // Reproducir sonido si esta habilitado
+                    reproducirSonidoAdmin();
+
+                    // Mostrar notificacion visual
+                    mostrarNotificacionVisualAdmin(data.cantidad);
+
+                    // Recargar la pagina para mostrar los nuevos pedidos
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2500);
+                }
+            })
+            .catch(err => {
+                console.error('Error checkeando nuevos pedidos:', err);
+            });
+    }
+
+    // Chequear cada 30 segundos
+    setInterval(checkearNuevosPedidosAdmin, 30000);
+
+    // Primera verificacion despues de 10 segundos
+    setTimeout(checkearNuevosPedidosAdmin, 10000);
+
+    // Agregar boton de sonido al header
+    document.addEventListener('DOMContentLoaded', function() {
+        const headerButtons = document.querySelector('header .container .flex.items-center');
+        if (headerButtons) {
+            const btnSonido = document.createElement('button');
+            btnSonido.id = 'btnSonidoAdmin';
+            btnSonido.onclick = habilitarSonidoAdmin;
+            btnSonido.className = 'bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm';
+            btnSonido.title = 'Activar notificaciones de sonido';
+            btnSonido.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden lg:inline">Sonido</span>';
+            headerButtons.insertBefore(btnSonido, headerButtons.firstChild);
+        }
+    });
     </script>
 </body>
 </html>
