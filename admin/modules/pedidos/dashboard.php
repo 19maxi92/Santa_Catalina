@@ -1689,7 +1689,125 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-console.log('🚀 Dashboard Admin con Sistema de Pasos cargado');
+console.log('Dashboard Admin con Sistema de Pasos cargado');
+
+// ============================================
+// SISTEMA DE NOTIFICACION DE SONIDO (DASHBOARD PEDIDOS)
+// Con persistencia en localStorage
+// ============================================
+
+const SONIDO_URL = '../../../sound/noti.mp3';
+const STORAGE_KEY = 'santacatalina_sonido_dashboard';
+
+let audioNotif = null;
+let sonidoActivo = localStorage.getItem(STORAGE_KEY) === 'true';
+
+function crearAudioDash() {
+    if (!audioNotif) {
+        audioNotif = new Audio(SONIDO_URL);
+        audioNotif.volume = 0.8;
+    }
+    return audioNotif;
+}
+
+function actualizarBotonSonidoDash(activo) {
+    const btn = document.getElementById('btnSonidoDash');
+    if (btn) {
+        if (activo) {
+            btn.innerHTML = '<i class="fas fa-volume-up sm:mr-1"></i><span class="hidden sm:inline">ON</span>';
+            btn.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            btn.classList.add('bg-green-500', 'hover:bg-green-600');
+        } else {
+            btn.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden sm:inline">Sonido</span>';
+            btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+            btn.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+        }
+    }
+}
+
+function toggleSonidoDash() {
+    const audio = crearAudioDash();
+    if (sonidoActivo) {
+        sonidoActivo = false;
+        localStorage.setItem(STORAGE_KEY, 'false');
+        actualizarBotonSonidoDash(false);
+    } else {
+        audio.play().then(() => {
+            sonidoActivo = true;
+            localStorage.setItem(STORAGE_KEY, 'true');
+            actualizarBotonSonidoDash(true);
+        }).catch(err => {
+            sonidoActivo = true;
+            localStorage.setItem(STORAGE_KEY, 'true');
+            actualizarBotonSonidoDash(true);
+        });
+    }
+}
+
+function reproducirSonidoDash() {
+    if (sonidoActivo) {
+        const audio = crearAudioDash();
+        audio.currentTime = 0;
+        audio.play().catch(err => console.log('No se pudo reproducir:', err));
+    }
+}
+
+function mostrarNotifVisual(cantidad) {
+    const notif = document.createElement('div');
+    notif.className = 'fixed top-16 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse';
+    notif.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas fa-bell text-2xl mr-3"></i>
+            <div>
+                <div class="font-bold text-lg">${cantidad} nuevo(s) pedido(s)</div>
+                <div class="text-sm">Actualizando...</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 3000);
+}
+
+function checkearNuevosPedidosDash() {
+    // Obtener filtro actual de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const ubicacion = urlParams.get('ubicacion') || 'todas';
+
+    fetch(`check_nuevos_pedidos_sound.php?ubicacion=${encodeURIComponent(ubicacion)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.hay_nuevos) {
+                console.log(`${data.cantidad} nuevo(s) pedido(s)`);
+                reproducirSonidoDash();
+                mostrarNotifVisual(data.cantidad);
+                setTimeout(() => location.reload(), 2500);
+            }
+        })
+        .catch(err => console.error('Error checkeando pedidos:', err));
+}
+
+// Chequear cada 30 segundos
+setInterval(checkearNuevosPedidosDash, 30000);
+setTimeout(checkearNuevosPedidosDash, 10000);
+
+// Agregar boton de sonido al header
+(function() {
+    const headerButtons = document.querySelector('header .flex.items-center.space-x-1');
+    if (headerButtons) {
+        const btnSonido = document.createElement('button');
+        btnSonido.id = 'btnSonidoDash';
+        btnSonido.onclick = toggleSonidoDash;
+        btnSonido.className = 'bg-yellow-500 hover:bg-yellow-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs';
+        btnSonido.title = 'Activar/desactivar sonido';
+        btnSonido.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden sm:inline">Sonido</span>';
+        headerButtons.insertBefore(btnSonido, headerButtons.firstChild);
+
+        if (sonidoActivo) {
+            actualizarBotonSonidoDash(true);
+            crearAudioDash();
+        }
+    }
+})();
     </script>
 
 </body>
