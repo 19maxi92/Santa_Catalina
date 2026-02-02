@@ -337,8 +337,8 @@ $ultimos_pedidos = $pdo->query("
     // SISTEMA DE NOTIFICACION DE SONIDO (ADMIN)
     // ============================================
 
-    // Sonido de notificacion embebido (beep corto)
-    const SONIDO_NOTIFICACION_BASE64 = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkpONgXVpYWRue4mTmZSJeWpeW2FtfIuYnpmNfm5iXWNufoqYnZqPgHFkXV9qeoaVnJySg3RnYWRueoaUm5qSg3VoYmVvfIaUm5qRgnRnYWVvfIWTmpqRgnVoYmZwfYaUm5qRgnVoYmZwfYWTmpqRg3ZpY2dxfoaUm5qQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpqRg3ZpY2dxfoaUm5mQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgHNmX2NseIORl5ePgHNmX2NseIORl5ePgHNmX2NseIORl5ePgHNmX2NseIORl5ePf3JlXmJrd4KQlpaNf3JlXmJrd4KQlpaNf3JlXmJrd4KQlpaNfnFkXWFqdoGPlZWMfnFkXWFqdoGPlZWMfXBjXGBpdX+OlJSLfXBjXGBpdX+OlJSLfG9iW19odH6Nk5OKfG9iW19odH6Nk5OKe25hWl5nc32MkpKJe25hWl5nc32MkpKJemxgWV1mcnyLkZGIemxgWV1mcnyLkZGIeWtfWFxlcXuKkJCHeWtfWFxlcXuKkJCHd2leV1tjcHqJj4+Gd2leV1tjcHqJj4+GdshdVltib3mIjo2FdmhdVltib3mIjo2FdWdcVVphbneFjYyEdWdcVVphbneFjYyEc2ZbVFlfbXaEjIuDc2ZbVFlfbXaEjIuDcmVaU1hebHWDi4qCcmVaU1hebHWDi4qCcWRZUlddanSDioqBcWRZUlddanSDioqBcGNYUVZcanKCiYmAcGNYUVZcanKCiYmAb2JXUFVbaXGBiIh/b2JXUFVbaXGBiIh/bmFWUFVaaHB/h4d+bmFWUFVaaHB/h4d+bWBVT1RZZm9+hYV8bWBVT1RZZm9+hYV8bF9UT1NYZm59hIR7bF9UT1NYZm59hIR7a15TTlNXZWx8g4N6a15TTlNXZWx8g4N6al1STVJWZGt7goJ5al1STVJWZGt7goJ5aVxRTFFVY2p6gYF4aVxRTFFVY2p6gYF4aFtQS1BUYml5f4B3aFtQS1BUYml5f4B3Z1pPS09TYWh4fn92Z1pPS09TYWh4fn92ZllOSk5SYGd3fX51ZllOSk5SYGd3fX51ZVhNSU1RX2Z2fHx0ZVhNSU1RX2Z2fHx0ZFdMSExQXmV1e3tzZFdMSExQXmV1e3tzY1ZLSEFPXWR0enpyY1ZLSEFPXWR0enpyYlVKRkBOW2NzenlyYlVKRkBOW2NzenlyYVRJRT9NWmJyeXhxYVRJRT9NWmJyeXhxYFNIRD5MWWFxeHdwYFNIRD5MWWFxeHdwX1JHQz1LWGBweHZvX1JHQz1LWGBweHZvXlFGQjxKV19vd3VuXlFGQjxKV19vd3VuXVBFQTtJVl5udnRtXVBFQTtJVl5udnRtXE9EQDpIVV1tdXNsXE9EQDpIVV1tdXNsW05DPzlHVFxsdHJrW05DPzlHVFxsdHJrWk1CPjhGU1trc3FqWk1CPjhGU1trc3FqWUxBPTdFUlpqcnBpWUxBPTdFUlpqcnBpWEtAPDZEUVlpcW9oWEtAPDZEUVlpcW9oV0o/OzVDUFhocG5nV0o/OzVDUFhocG5nVkk+OjRCT1dnb21mVkk+OjRCT1dnb21mVUg9OTNBTlZmbmxlVUg9OTNBTlZmbmxl';
+    // Ruta al archivo de sonido
+    const SONIDO_NOTIFICACION_URL = '../sound/noti.mp3';
 
     let audioNotificacionAdmin = null;
     let sonidoHabilitadoAdmin = false;
@@ -346,8 +346,8 @@ $ultimos_pedidos = $pdo->query("
     // Crear el audio cuando se habilita
     function crearAudioAdmin() {
         if (!audioNotificacionAdmin) {
-            audioNotificacionAdmin = new Audio(SONIDO_NOTIFICACION_BASE64);
-            audioNotificacionAdmin.volume = 0.7;
+            audioNotificacionAdmin = new Audio(SONIDO_NOTIFICACION_URL);
+            audioNotificacionAdmin.volume = 0.8;
         }
         return audioNotificacionAdmin;
     }
