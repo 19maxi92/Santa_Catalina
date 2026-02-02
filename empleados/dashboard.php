@@ -2128,16 +2128,16 @@ setTimeout(checkearNuevosPedidos, 10000);
 
 // Agregar boton de sonido al cargar
 document.addEventListener('DOMContentLoaded', function() {
-    const header = document.querySelector('header .container');
-    if (header) {
-        const btnContainer = document.createElement('div');
-        btnContainer.innerHTML = `
-            <button id="btnSonido" onclick="habilitarSonido()"
-                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
-                <i class="fas fa-volume-mute mr-2"></i>Activar Sonido
-            </button>
-        `;
-        header.appendChild(btnContainer);
+    // Buscar el contenedor de botones en el header de empleados
+    const headerButtons = document.querySelector('header .flex.items-center.space-x-1');
+    if (headerButtons) {
+        const btnSonido = document.createElement('button');
+        btnSonido.id = 'btnSonido';
+        btnSonido.onclick = habilitarSonido;
+        btnSonido.className = 'bg-orange-500 hover:bg-orange-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs';
+        btnSonido.title = 'Activar notificaciones de sonido';
+        btnSonido.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden sm:inline">Sonido</span>';
+        headerButtons.insertBefore(btnSonido, headerButtons.firstChild);
     }
 });
 
