@@ -335,15 +335,16 @@ $ultimos_pedidos = $pdo->query("
 
     // ============================================
     // SISTEMA DE NOTIFICACION DE SONIDO (ADMIN)
+    // Con persistencia en localStorage
     // ============================================
 
-    // Ruta al archivo de sonido
     const SONIDO_NOTIFICACION_URL = '../sound/noti.mp3';
+    const STORAGE_KEY_ADMIN = 'santacatalina_sonido_admin';
 
     let audioNotificacionAdmin = null;
-    let sonidoHabilitadoAdmin = false;
+    let sonidoHabilitadoAdmin = localStorage.getItem(STORAGE_KEY_ADMIN) === 'true';
 
-    // Crear el audio cuando se habilita
+    // Crear el audio
     function crearAudioAdmin() {
         if (!audioNotificacionAdmin) {
             audioNotificacionAdmin = new Audio(SONIDO_NOTIFICACION_URL);
@@ -352,29 +353,55 @@ $ultimos_pedidos = $pdo->query("
         return audioNotificacionAdmin;
     }
 
-    // Habilitar sonido (requiere click del usuario)
-    function habilitarSonidoAdmin() {
-        const audio = crearAudioAdmin();
-        audio.play().then(() => {
-            sonidoHabilitadoAdmin = true;
-            const btn = document.getElementById('btnSonidoAdmin');
-            if (btn) {
+    // Actualizar visual del boton
+    function actualizarBotonSonidoAdmin(activo) {
+        const btn = document.getElementById('btnSonidoAdmin');
+        if (btn) {
+            if (activo) {
                 btn.innerHTML = '<i class="fas fa-volume-up sm:mr-1"></i><span class="hidden lg:inline">Sonido ON</span>';
                 btn.classList.remove('bg-red-500', 'hover:bg-red-600');
                 btn.classList.add('bg-green-500', 'hover:bg-green-600');
+            } else {
+                btn.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden lg:inline">Sonido</span>';
+                btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                btn.classList.add('bg-red-500', 'hover:bg-red-600');
             }
-            console.log('Sonido de notificaciones habilitado');
-        }).catch(err => {
-            console.error('Error habilitando sonido:', err);
-            alert('No se pudo habilitar el sonido. Intenta de nuevo.');
-        });
+        }
+    }
+
+    // Toggle sonido
+    function toggleSonidoAdmin() {
+        const audio = crearAudioAdmin();
+
+        if (sonidoHabilitadoAdmin) {
+            // Desactivar
+            sonidoHabilitadoAdmin = false;
+            localStorage.setItem(STORAGE_KEY_ADMIN, 'false');
+            actualizarBotonSonidoAdmin(false);
+            console.log('Sonido desactivado');
+        } else {
+            // Activar - reproducir sonido de prueba
+            audio.play().then(() => {
+                sonidoHabilitadoAdmin = true;
+                localStorage.setItem(STORAGE_KEY_ADMIN, 'true');
+                actualizarBotonSonidoAdmin(true);
+                console.log('Sonido activado');
+            }).catch(err => {
+                console.error('Error activando sonido:', err);
+                // Igual lo marcamos como activo, sonara cuando haya interaccion
+                sonidoHabilitadoAdmin = true;
+                localStorage.setItem(STORAGE_KEY_ADMIN, 'true');
+                actualizarBotonSonidoAdmin(true);
+            });
+        }
     }
 
     // Reproducir sonido de notificacion
     function reproducirSonidoAdmin() {
-        if (sonidoHabilitadoAdmin && audioNotificacionAdmin) {
-            audioNotificacionAdmin.currentTime = 0;
-            audioNotificacionAdmin.play().catch(err => {
+        if (sonidoHabilitadoAdmin) {
+            const audio = crearAudioAdmin();
+            audio.currentTime = 0;
+            audio.play().catch(err => {
                 console.log('No se pudo reproducir:', err);
             });
         }
@@ -394,7 +421,6 @@ $ultimos_pedidos = $pdo->query("
             </div>
         `;
         document.body.appendChild(notif);
-
         setTimeout(() => notif.remove(), 3000);
     }
 
@@ -404,41 +430,36 @@ $ultimos_pedidos = $pdo->query("
             .then(data => {
                 if (data.success && data.hay_nuevos) {
                     console.log(`${data.cantidad} nuevo(s) pedido(s)`);
-
-                    // Reproducir sonido si esta habilitado
                     reproducirSonidoAdmin();
-
-                    // Mostrar notificacion visual
                     mostrarNotificacionVisualAdmin(data.cantidad);
-
-                    // Recargar la pagina para mostrar los nuevos pedidos
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2500);
+                    setTimeout(() => location.reload(), 2500);
                 }
             })
-            .catch(err => {
-                console.error('Error checkeando nuevos pedidos:', err);
-            });
+            .catch(err => console.error('Error checkeando pedidos:', err));
     }
 
     // Chequear cada 30 segundos
     setInterval(checkearNuevosPedidosAdmin, 30000);
-
-    // Primera verificacion despues de 10 segundos
     setTimeout(checkearNuevosPedidosAdmin, 10000);
 
-    // Agregar boton de sonido al header
+    // Agregar boton y restaurar estado al cargar
     document.addEventListener('DOMContentLoaded', function() {
         const headerButtons = document.querySelector('header .container .flex.items-center');
         if (headerButtons) {
             const btnSonido = document.createElement('button');
             btnSonido.id = 'btnSonidoAdmin';
-            btnSonido.onclick = habilitarSonidoAdmin;
+            btnSonido.onclick = toggleSonidoAdmin;
             btnSonido.className = 'bg-red-500 hover:bg-red-600 text-white px-2 sm:px-3 py-2 rounded text-xs sm:text-sm';
-            btnSonido.title = 'Activar notificaciones de sonido';
+            btnSonido.title = 'Activar/desactivar notificaciones de sonido';
             btnSonido.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden lg:inline">Sonido</span>';
             headerButtons.insertBefore(btnSonido, headerButtons.firstChild);
+
+            // Restaurar estado visual si estaba activo
+            if (sonidoHabilitadoAdmin) {
+                actualizarBotonSonidoAdmin(true);
+                // Pre-cargar el audio
+                crearAudioAdmin();
+            }
         }
     });
     </script>

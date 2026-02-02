@@ -2032,16 +2032,17 @@ async function guardarEdicionPedido() {
 }
 
 // ============================================
-// SISTEMA DE NOTIFICACIÓN DE SONIDO MEJORADO
+// SISTEMA DE NOTIFICACION DE SONIDO (EMPLEADOS)
+// Con persistencia en localStorage
 // ============================================
 
-// Ruta al archivo de sonido
 const SONIDO_NOTIFICACION_URL = '../sound/noti.mp3';
+const STORAGE_KEY_EMP = 'santacatalina_sonido_empleados';
 
 let audioNotificacion = null;
-let sonidoHabilitado = false;
+let sonidoHabilitado = localStorage.getItem(STORAGE_KEY_EMP) === 'true';
 
-// Crear el audio cuando se habilita
+// Crear el audio
 function crearAudio() {
     if (!audioNotificacion) {
         audioNotificacion = new Audio(SONIDO_NOTIFICACION_URL);
@@ -2050,38 +2051,64 @@ function crearAudio() {
     return audioNotificacion;
 }
 
-// Habilitar sonido (requiere click del usuario)
-function habilitarSonido() {
-    const audio = crearAudio();
-    audio.play().then(() => {
-        sonidoHabilitado = true;
-        const btn = document.getElementById('btnSonido');
-        if (btn) {
-            btn.innerHTML = '<i class="fas fa-volume-up mr-2"></i>Sonido ON';
-            btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+// Actualizar visual del boton
+function actualizarBotonSonido(activo) {
+    const btn = document.getElementById('btnSonido');
+    if (btn) {
+        if (activo) {
+            btn.innerHTML = '<i class="fas fa-volume-up sm:mr-1"></i><span class="hidden sm:inline">ON</span>';
+            btn.classList.remove('bg-orange-500', 'hover:bg-orange-600');
             btn.classList.add('bg-green-500', 'hover:bg-green-600');
+        } else {
+            btn.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden sm:inline">Sonido</span>';
+            btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+            btn.classList.add('bg-orange-500', 'hover:bg-orange-600');
         }
-        console.log('Sonido de notificaciones habilitado');
-    }).catch(err => {
-        console.error('Error habilitando sonido:', err);
-        alert('No se pudo habilitar el sonido. Intenta de nuevo.');
-    });
+    }
 }
 
-// Reproducir sonido de notificación
+// Toggle sonido
+function toggleSonido() {
+    const audio = crearAudio();
+
+    if (sonidoHabilitado) {
+        // Desactivar
+        sonidoHabilitado = false;
+        localStorage.setItem(STORAGE_KEY_EMP, 'false');
+        actualizarBotonSonido(false);
+        console.log('Sonido desactivado');
+    } else {
+        // Activar - reproducir sonido de prueba
+        audio.play().then(() => {
+            sonidoHabilitado = true;
+            localStorage.setItem(STORAGE_KEY_EMP, 'true');
+            actualizarBotonSonido(true);
+            console.log('Sonido activado');
+        }).catch(err => {
+            console.error('Error activando sonido:', err);
+            // Igual lo marcamos como activo
+            sonidoHabilitado = true;
+            localStorage.setItem(STORAGE_KEY_EMP, 'true');
+            actualizarBotonSonido(true);
+        });
+    }
+}
+
+// Reproducir sonido de notificacion
 function reproducirSonido() {
-    if (sonidoHabilitado && audioNotificacion) {
-        audioNotificacion.currentTime = 0;
-        audioNotificacion.play().catch(err => {
+    if (sonidoHabilitado) {
+        const audio = crearAudio();
+        audio.currentTime = 0;
+        audio.play().catch(err => {
             console.log('No se pudo reproducir:', err);
         });
     }
 }
 
-// Mostrar notificación visual
+// Mostrar notificacion visual
 function mostrarNotificacionVisual(cantidad) {
     const notif = document.createElement('div');
-    notif.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse';
+    notif.className = 'fixed top-16 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse';
     notif.innerHTML = `
         <div class="flex items-center">
             <i class="fas fa-bell text-2xl mr-3"></i>
@@ -2092,7 +2119,6 @@ function mostrarNotificacionVisual(cantidad) {
         </div>
     `;
     document.body.appendChild(notif);
-
     setTimeout(() => notif.remove(), 3000);
 }
 
@@ -2102,42 +2128,35 @@ function checkearNuevosPedidos() {
         .then(data => {
             if (data.success && data.hay_nuevos) {
                 console.log(`${data.cantidad} nuevo(s) pedido(s) para Local 1`);
-
-                // Reproducir sonido si esta habilitado
                 reproducirSonido();
-
-                // Mostrar notificacion visual
                 mostrarNotificacionVisual(data.cantidad);
-
-                // Recargar la pagina para mostrar los nuevos pedidos
-                setTimeout(() => {
-                    location.reload();
-                }, 2500);
+                setTimeout(() => location.reload(), 2500);
             }
         })
-        .catch(err => {
-            console.error('Error checkeando nuevos pedidos:', err);
-        });
+        .catch(err => console.error('Error checkeando pedidos:', err));
 }
 
 // Chequear cada 30 segundos
 setInterval(checkearNuevosPedidos, 30000);
-
-// Primera verificacion despues de 10 segundos
 setTimeout(checkearNuevosPedidos, 10000);
 
-// Agregar boton de sonido al cargar
+// Agregar boton y restaurar estado al cargar
 document.addEventListener('DOMContentLoaded', function() {
-    // Buscar el contenedor de botones en el header de empleados
     const headerButtons = document.querySelector('header .flex.items-center.space-x-1');
     if (headerButtons) {
         const btnSonido = document.createElement('button');
         btnSonido.id = 'btnSonido';
-        btnSonido.onclick = habilitarSonido;
+        btnSonido.onclick = toggleSonido;
         btnSonido.className = 'bg-orange-500 hover:bg-orange-600 px-2 sm:px-3 py-1 sm:py-1.5 rounded text-xs';
-        btnSonido.title = 'Activar notificaciones de sonido';
+        btnSonido.title = 'Activar/desactivar notificaciones de sonido';
         btnSonido.innerHTML = '<i class="fas fa-volume-mute sm:mr-1"></i><span class="hidden sm:inline">Sonido</span>';
         headerButtons.insertBefore(btnSonido, headerButtons.firstChild);
+
+        // Restaurar estado visual si estaba activo
+        if (sonidoHabilitado) {
+            actualizarBotonSonido(true);
+            crearAudio(); // Pre-cargar
+        }
     }
 });
 
