@@ -2032,27 +2032,87 @@ async function guardarEdicionPedido() {
 }
 
 // ============================================
-// SISTEMA DE NOTIFICACIÓN DE SONIDO
+// SISTEMA DE NOTIFICACIÓN DE SONIDO MEJORADO
 // ============================================
-const audioNotificacion = new Audio('../sound/noti.mp3');
+
+// Sonido de notificación embebido (beep corto)
+const SONIDO_NOTIFICACION_BASE64 = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkpONgXVpYWRue4mTmZSJeWpeW2FtfIuYnpmNfm5iXWNufoqYnZqPgHFkXV9qeoaVnJySg3RnYWRueoaUm5qSg3VoYmVvfIaUm5qRgnRnYWVvfIWTmpqRgnVoYmZwfYaUm5qRgnVoYmZwfYWTmpqRg3ZpY2dxfoaUm5qQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpqRg3ZpY2dxfoaUm5mQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYmZwfYWTmpmQgXRnYWVvfIWTmpqRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgnVoYWVue4WSmpmRgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgXRnYGRteoSRmJiQgHNmX2NseIORl5ePgHNmX2NseIORl5ePgHNmX2NseIORl5ePgHNmX2NseIORl5ePf3JlXmJrd4KQlpaNf3JlXmJrd4KQlpaNf3JlXmJrd4KQlpaNfnFkXWFqdoGPlZWMfnFkXWFqdoGPlZWMfXBjXGBpdX+OlJSLfXBjXGBpdX+OlJSLfG9iW19odH6Nk5OKfG9iW19odH6Nk5OKe25hWl5nc32MkpKJe25hWl5nc32MkpKJemxgWV1mcnyLkZGIemxgWV1mcnyLkZGIeWtfWFxlcXuKkJCHeWtfWFxlcXuKkJCHd2leV1tjcHqJj4+Gd2leV1tjcHqJj4+GdshdVltib3mIjo2FdmhdVltib3mIjo2FdWdcVVphbneFjYyEdWdcVVphbneFjYyEc2ZbVFlfbXaEjIuDc2ZbVFlfbXaEjIuDcmVaU1hebHWDi4qCcmVaU1hebHWDi4qCcWRZUlddanSDioqBcWRZUlddanSDioqBcGNYUVZcanKCiYmAcGNYUVZcanKCiYmAb2JXUFVbaXGBiIh/b2JXUFVbaXGBiIh/bmFWUFVaaHB/h4d+bmFWUFVaaHB/h4d+bWBVT1RZZm9+hYV8bWBVT1RZZm9+hYV8bF9UT1NYZm59hIR7bF9UT1NYZm59hIR7a15TTlNXZWx8g4N6a15TTlNXZWx8g4N6al1STVJWZGt7goJ5al1STVJWZGt7goJ5aVxRTFFVY2p6gYF4aVxRTFFVY2p6gYF4aFtQS1BUYml5f4B3aFtQS1BUYml5f4B3Z1pPS09TYWh4fn92Z1pPS09TYWh4fn92ZllOSk5SYGd3fX51ZllOSk5SYGd3fX51ZVhNSU1RX2Z2fHx0ZVhNSU1RX2Z2fHx0ZFdMSExQXmV1e3tzZFdMSExQXmV1e3tzY1ZLSEFPXWR0enpyY1ZLSEFPXWR0enpyYlVKRkBOW2NzenlyYlVKRkBOW2NzenlyYVRJRT9NWmJyeXhxYVRJRT9NWmJyeXhxYFNIRD5MWWFxeHdwYFNIRD5MWWFxeHdwX1JHQz1LWGBweHZvX1JHQz1LWGBweHZvXlFGQjxKV19vd3VuXlFGQjxKV19vd3VuXVBFQTtJVl5udnRtXVBFQTtJVl5udnRtXE9EQDpIVV1tdXNsXE9EQDpIVV1tdXNsW05DPzlHVFxsdHJrW05DPzlHVFxsdHJrWk1CPjhGU1trc3FqWk1CPjhGU1trc3FqWUxBPTdFUlpqcnBpWUxBPTdFUlpqcnBpWEtAPDZEUVlpcW9oWEtAPDZEUVlpcW9oV0o/OzVDUFhocG5nV0o/OzVDUFhocG5nVkk+OjRCT1dnb21mVkk+OjRCT1dnb21mVUg9OTNBTlZmbmxlVUg9OTNBTlZmbmxl';
+
+let audioNotificacion = null;
+let sonidoHabilitado = false;
+
+// Crear el audio cuando se habilita
+function crearAudio() {
+    if (!audioNotificacion) {
+        audioNotificacion = new Audio(SONIDO_NOTIFICACION_BASE64);
+        audioNotificacion.volume = 0.7;
+    }
+    return audioNotificacion;
+}
+
+// Habilitar sonido (requiere click del usuario)
+function habilitarSonido() {
+    const audio = crearAudio();
+    audio.play().then(() => {
+        sonidoHabilitado = true;
+        const btn = document.getElementById('btnSonido');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-volume-up mr-2"></i>Sonido ON';
+            btn.classList.remove('bg-red-500', 'hover:bg-red-600');
+            btn.classList.add('bg-green-500', 'hover:bg-green-600');
+        }
+        console.log('Sonido de notificaciones habilitado');
+    }).catch(err => {
+        console.error('Error habilitando sonido:', err);
+        alert('No se pudo habilitar el sonido. Intenta de nuevo.');
+    });
+}
+
+// Reproducir sonido de notificación
+function reproducirSonido() {
+    if (sonidoHabilitado && audioNotificacion) {
+        audioNotificacion.currentTime = 0;
+        audioNotificacion.play().catch(err => {
+            console.log('No se pudo reproducir:', err);
+        });
+    }
+}
+
+// Mostrar notificación visual
+function mostrarNotificacionVisual(cantidad) {
+    const notif = document.createElement('div');
+    notif.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-2xl z-50 animate-pulse';
+    notif.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas fa-bell text-2xl mr-3"></i>
+            <div>
+                <div class="font-bold text-lg">${cantidad} nuevo(s) pedido(s)</div>
+                <div class="text-sm">Actualizando...</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(notif);
+
+    setTimeout(() => notif.remove(), 3000);
+}
 
 function checkearNuevosPedidos() {
     fetch('check_nuevos_pedidos_sound.php')
         .then(response => response.json())
         .then(data => {
             if (data.success && data.hay_nuevos) {
-                // Reproducir sonido
-                audioNotificacion.play().catch(err => {
-                    console.log('No se pudo reproducir el sonido (requiere interacción del usuario):', err);
-                });
+                console.log(`${data.cantidad} nuevo(s) pedido(s) para Local 1`);
 
-                // Mostrar notificación visual
-                console.log(`🔔 ${data.cantidad} nuevo(s) pedido(s) para Local 1`);
+                // Reproducir sonido si esta habilitado
+                reproducirSonido();
 
-                // Recargar la página para mostrar los nuevos pedidos
+                // Mostrar notificacion visual
+                mostrarNotificacionVisual(data.cantidad);
+
+                // Recargar la pagina para mostrar los nuevos pedidos
                 setTimeout(() => {
                     location.reload();
-                }, 2000);
+                }, 2500);
             }
         })
         .catch(err => {
@@ -2063,8 +2123,23 @@ function checkearNuevosPedidos() {
 // Chequear cada 30 segundos
 setInterval(checkearNuevosPedidos, 30000);
 
-// Primera verificación después de 10 segundos
+// Primera verificacion despues de 10 segundos
 setTimeout(checkearNuevosPedidos, 10000);
+
+// Agregar boton de sonido al cargar
+document.addEventListener('DOMContentLoaded', function() {
+    const header = document.querySelector('header .container');
+    if (header) {
+        const btnContainer = document.createElement('div');
+        btnContainer.innerHTML = `
+            <button id="btnSonido" onclick="habilitarSonido()"
+                    class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold text-sm transition-all">
+                <i class="fas fa-volume-mute mr-2"></i>Activar Sonido
+            </button>
+        `;
+        header.appendChild(btnContainer);
+    }
+});
 
     </script>
 
