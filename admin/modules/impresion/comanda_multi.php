@@ -680,7 +680,7 @@ function generarComandaFabricaClassica($pedido, $nombre_completo, $es_cliente_fi
 
         <div class="footer">
             <div class="separador">================================</div>
-            <p>Pedido tomado: <?= date('d/m/Y H:i', strtotime($pedido['created_at'])) ?></p>
+            <p>Pedido tomado: <?= formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?></p>
             <p>Por: <?= htmlspecialchars($_SESSION['admin_name'] ?? 'Sistema') ?></p>
             <p>Estado: <?= $pedido['estado'] ?></p>
             <?php if ($minutos_transcurridos > 0): ?>

@@ -182,7 +182,7 @@ $total_ventas = array_sum(array_column($pedidos, 'precio'));
                                     <?= $turno ?>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    <?= date('H:i', strtotime($pedido['created_at'])) ?>
+                                    <?= formatDateTime($pedido['created_at'], 'H:i') ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

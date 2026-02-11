@@ -1,7 +1,7 @@
 <?php
 /**
  * API para detectar nuevos pedidos en Local 1
- * Devuelve true si hay pedidos nuevos desde la última verificación
+ * Devuelve true si hay pedidos nuevos desde la ultima verificacion
  */
 session_start();
 require_once '../admin/config.php';
@@ -15,16 +15,28 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 
 $pdo = getConnection();
 
-// Obtener el ID del último pedido que vio este empleado
-$ultimo_id_visto = isset($_SESSION['ultimo_pedido_visto']) ? (int)$_SESSION['ultimo_pedido_visto'] : 0;
+// Obtener el ID del ultimo pedido visto
+$ultimo_id_visto = isset($_SESSION['ultimo_pedido_visto_local1']) ? (int)$_SESSION['ultimo_pedido_visto_local1'] : 0;
 
-// Buscar pedidos más recientes para Local 1
+// Si es la primera vez, inicializar con el maximo actual para no notificar pedidos viejos
+if ($ultimo_id_visto === 0) {
+    $max_actual = $pdo->query("SELECT MAX(id) FROM pedidos WHERE ubicacion = 'Local 1'")->fetchColumn();
+    $_SESSION['ultimo_pedido_visto_local1'] = $max_actual ?: 0;
+    echo json_encode([
+        'success' => true,
+        'hay_nuevos' => false,
+        'cantidad' => 0,
+        'ultimo_id' => $max_actual ?: 0
+    ]);
+    exit;
+}
+
+// Buscar pedidos mas recientes para Local 1
 $stmt = $pdo->prepare("
     SELECT MAX(id) as max_id, COUNT(*) as nuevos
     FROM pedidos
     WHERE ubicacion = 'Local 1'
     AND id > ?
-    AND DATE(created_at) = CURDATE()
 ");
 $stmt->execute([$ultimo_id_visto]);
 $resultado = $stmt->fetch();
@@ -32,9 +44,9 @@ $resultado = $stmt->fetch();
 $hay_nuevos = $resultado['nuevos'] > 0;
 $max_id = $resultado['max_id'] ?? $ultimo_id_visto;
 
-// Actualizar el último ID visto en la sesión
+// Actualizar el ultimo ID visto
 if ($hay_nuevos) {
-    $_SESSION['ultimo_pedido_visto'] = $max_id;
+    $_SESSION['ultimo_pedido_visto_local1'] = $max_id;
 }
 
 echo json_encode([
