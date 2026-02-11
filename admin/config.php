@@ -1,4 +1,7 @@
 <?php
+// IMPORTANTE: Configurar timezone de Argentina (GMT-3) para solucionar diferencia de horarios
+date_default_timezone_set('America/Argentina/Buenos_Aires');
+
 // Configuración de base de datos para Hostinger
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'u246760540_santa_catalina'); 
@@ -22,6 +25,10 @@ function getConnection() {
                 PDO::ATTR_EMULATE_PREPARES => false
             ]
         );
+
+        // IMPORTANTE: Configurar timezone de MySQL a Argentina (GMT-3)
+        $pdo->exec("SET time_zone = '-03:00'");
+
         return $pdo;
     } catch (PDOException $e) {
         die("Error de conexión: " . $e->getMessage());
@@ -35,6 +42,20 @@ function sanitize($data) {
 
 function formatPrice($price) {
     return '$' . number_format($price, 0, ',', '.');
+}
+
+// Formatear fecha con timezone correcto de Argentina
+function formatDateTime($datetime, $format = 'd/m H:i') {
+    if (empty($datetime)) return '';
+
+    // Crear DateTime en UTC (como viene de MySQL si no tiene timezone)
+    $dt = new DateTime($datetime, new DateTimeZone('UTC'));
+
+    // Convertir a timezone de Argentina
+    $dt->setTimezone(new DateTimeZone('America/Argentina/Buenos_Aires'));
+
+    // Retornar formateado
+    return $dt->format($format);
 }
 
 // Verificar login

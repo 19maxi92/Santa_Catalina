@@ -716,7 +716,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                         <span class="text-xl font-bold text-blue-600">#<?= $pedido['id'] ?></span>
                                         <div class="flex flex-col text-xs">
                                             <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
-                                            <span class="text-gray-600 font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : date('d/m H:i', strtotime($pedido['created_at'])) ?></span>
+                                            <span class="text-gray-600 font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : formatDateTime($pedido['created_at'], 'd/m H:i') ?></span>
                                         </div>
                                         <?php if ($pedido['prioridad'] === 'urgente'): ?>
                                             <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
