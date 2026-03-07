@@ -4,6 +4,14 @@ requireLogin();
 
 $pdo = getConnection();
 
+// CARGAR CLIENTE FRECUENTE SI VIENE cliente_id
+$clientePreCargado = null;
+if (isset($_GET['cliente_id']) && is_numeric($_GET['cliente_id'])) {
+    $stmt = $pdo->prepare("SELECT * FROM clientes_fijos WHERE id = ? AND activo = 1");
+    $stmt->execute([$_GET['cliente_id']]);
+    $clientePreCargado = $stmt->fetch();
+}
+
 // OBTENER PRECIOS ACTUALIZADOS DESDE LA BASE DE DATOS
 $preciosDB = [
     'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio_efectivo' => 18000, 'precio_transferencia' => 20000, 'cantidad' => 24],
@@ -666,6 +674,7 @@ let pedidosAcumulados = [];
 let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
+let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -844,6 +853,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // PRE-LLENAR DATOS DE CLIENTE FRECUENTE
+    <?php if ($clientePreCargado): ?>
+    document.getElementById('nombre').value = <?= json_encode($clientePreCargado['nombre']) ?>;
+    document.getElementById('apellido').value = <?= json_encode($clientePreCargado['apellido']) ?>;
+    document.getElementById('telefono').value = <?= json_encode($clientePreCargado['telefono']) ?>;
+    <?php if (!empty($clientePreCargado['direccion'])): ?>
+    document.getElementById('direccion').value = <?= json_encode($clientePreCargado['direccion']) ?>;
+    // Si tiene dirección, seleccionar Delivery por defecto
+    const deliveryInput = document.querySelector('input[name="modalidad"][value="Delivery"]');
+    if (deliveryInput) {
+        deliveryInput.checked = true;
+        direccionContainer.classList.remove('hidden');
+        document.getElementById('direccion').required = true;
+    }
+    <?php endif; ?>
+    console.log('✅ Cliente frecuente cargado: <?= htmlspecialchars($clientePreCargado['nombre'] . ' ' . $clientePreCargado['apellido']) ?>');
+    <?php endif; ?>
 });
 
 // ============================================
@@ -1158,7 +1185,8 @@ function finalizarYCrearPedidos() {
             ubicacion: datosCliente.ubicacion,
             fecha_entrega: datosCliente.fecha_entrega,
             estado: 'Pendiente',
-            observaciones: observacionesCompletas
+            observaciones: observacionesCompletas,
+            cliente_fijo_id: clienteFijoId
         };
 
         if (item.sabores_personalizados_json) {
