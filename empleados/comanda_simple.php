@@ -345,7 +345,11 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <div class="info-admin">
                 Modalidad: <?= $pedido['modalidad'] ?> | Pago: <?= $pedido['forma_pago'] ?>
                 <br>
-                <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?>
+                <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
+                    <strong>ENTREGA: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></strong>
+                <?php else: ?>
+                    <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?>
+                <?php endif; ?>
             </div>
             
         </div>
