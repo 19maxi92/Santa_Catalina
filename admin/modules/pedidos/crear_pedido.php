@@ -367,6 +367,17 @@ try {
                             </label>
                         </div>
 
+                        <!-- Impresión automática de comanda -->
+                        <div class="mb-6 bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="imprimirAuto" name="imprimir_auto" value="1" class="w-5 h-5 text-orange-600 mr-3">
+                                <div>
+                                    <span class="font-bold text-gray-800">🖨️ Imprimir comanda automáticamente</span>
+                                    <p class="text-xs text-gray-600 mt-1" id="imprimirAutoInfo">(Se imprimirá en la ubicación seleccionada al crear el pedido)</p>
+                                </div>
+                            </label>
+                        </div>
+
                         <!-- Observaciones generales -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -821,6 +832,7 @@ function validarPaso1() {
         turno: turno.value,
         formaPago: formaPago.value,
         yaPagado: document.getElementById('yaPagado').checked,
+        imprimirAuto: document.getElementById('imprimirAuto').checked,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
     };
 
@@ -1225,8 +1237,27 @@ function finalizarYCrearPedidos() {
                 });
                 msg += `\nTOTAL: $${total.toLocaleString()}`;
 
-                alert(msg);
-                window.location.href = '../../index.php';
+                // IMPRESIÓN AUTOMÁTICA si está marcado el checkbox
+                if (datosCliente.imprimirAuto) {
+                    msg += `\n\n🖨️ Abriendo ${resultados.length} comanda(s) para imprimir...`;
+                    alert(msg);
+
+                    // Abrir ventanas de impresión para cada pedido
+                    resultados.forEach((r, index) => {
+                        setTimeout(() => {
+                            const url = `../impresion/comanda_simple.php?pedido=${r.pedido_id}`;
+                            window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
+                        }, index * 500); // Delay de 500ms entre cada ventana
+                    });
+
+                    // Redirigir después de abrir las ventanas
+                    setTimeout(() => {
+                        window.location.href = '../../index.php';
+                    }, resultados.length * 500 + 1000);
+                } else {
+                    alert(msg);
+                    window.location.href = '../../index.php';
+                }
             } else {
                 // Mostrar errores específicos
                 let errorMsg = '❌ Error al crear pedidos:\n\n';
