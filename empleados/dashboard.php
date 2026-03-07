@@ -707,6 +707,17 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                         </label>
                     </div>
 
+                    <!-- Impresión automática de comanda -->
+                    <div class="mb-6 bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="imprimirAuto" name="imprimir_auto" value="1" class="w-5 h-5 text-orange-600 mr-3">
+                            <div>
+                                <span class="font-bold text-gray-800">🖨️ Imprimir comanda automáticamente</span>
+                                <p class="text-xs text-gray-600 mt-1">(Se abrirá la comanda para imprimir al crear el pedido)</p>
+                            </div>
+                        </label>
+                    </div>
+
                     <!-- Botón siguiente -->
                     <div class="flex justify-end">
                         <button type="button" onclick="irAPaso(2)" 
@@ -1292,7 +1303,8 @@ function validarPaso1() {
         telefono: document.getElementById('telefono').value.trim(),
         turno: turno.value,
         formaPago: formaPago.value,
-        yaPagado: document.getElementById('yaPagado').checked
+        yaPagado: document.getElementById('yaPagado').checked,
+        imprimirAuto: document.getElementById('imprimirAuto').checked
     };
 
     return true;
@@ -1622,7 +1634,7 @@ function finalizarYCrearPedidos() {
             if (resultados.every(r => r.success)) {
                 const ids = resultados.map(r => `#${r.pedido_id}`).join(', ');
                 const total = resultados.reduce((sum, r) => sum + r.data.precio, 0);
-                
+
                 let msg = `✅ ${resultados.length} pedido(s) creado(s)!\n\n`;
                 msg += `IDs: ${ids}\n`;
                 msg += `Cliente: ${resultados[0].data.cliente}\n\n`;
@@ -1630,10 +1642,30 @@ function finalizarYCrearPedidos() {
                     msg += `${i + 1}. ${r.data.producto} - ${r.data.precio.toLocaleString()}\n`;
                 });
                 msg += `\nTOTAL: ${total.toLocaleString()}`;
-                
-                alert(msg);
-                cerrarPedidoExpress();
-                location.reload();
+
+                // IMPRESIÓN AUTOMÁTICA si está marcado el checkbox
+                if (datosCliente.imprimirAuto) {
+                    msg += `\n\n🖨️ Abriendo ${resultados.length} comanda(s) para imprimir...`;
+                    alert(msg);
+
+                    // Abrir ventanas de impresión para cada pedido
+                    resultados.forEach((r, index) => {
+                        setTimeout(() => {
+                            const url = `comanda_simple.php?pedido=${r.pedido_id}`;
+                            window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
+                        }, index * 500);
+                    });
+
+                    // Cerrar y recargar después de abrir las ventanas
+                    setTimeout(() => {
+                        cerrarPedidoExpress();
+                        location.reload();
+                    }, resultados.length * 500 + 1000);
+                } else {
+                    alert(msg);
+                    cerrarPedidoExpress();
+                    location.reload();
+                }
             } else {
                 alert('❌ Algunos pedidos fallaron. Revisá la consola.');
                 console.error('Errores:', resultados.filter(r => !r.success));
