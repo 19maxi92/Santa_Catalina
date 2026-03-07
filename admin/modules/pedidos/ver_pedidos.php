@@ -721,23 +721,25 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                 <!-- INFO COMPACTA EN UNA SOLA LÍNEA -->
                                 <div class="flex-1 flex items-center justify-between gap-4">
                                     
-                                    <!-- ID + TIEMPO + BADGES -->
-                                    <div class="flex items-center gap-2 min-w-[120px]">
+                                    <!-- ID + TIEMPO + FECHAS + BADGES -->
+                                    <div class="flex items-center gap-2 min-w-[140px]">
                                         <span class="text-xl font-bold text-blue-600">#<?= $pedido['id'] ?></span>
-                                        <div class="flex flex-col text-xs">
-                                            <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
-                                            <span class="text-gray-600 font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : formatDateTime($pedido['created_at'], 'd/m H:i') ?></span>
+                                        <div class="flex flex-col text-xs leading-tight">
+                                            <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>' atrás</span>
+                                            <span class="text-gray-600" title="Fecha del pedido">
+                                                🕐 <?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : formatDateTime($pedido['created_at'], 'd/m H:i') ?>
+                                            </span>
+                                            <?php if (!empty($pedido['fecha_entrega'])): ?>
+                                                <span class="font-semibold <?= $pedido['fecha_entrega'] == date('Y-m-d') ? 'text-green-600' : 'text-purple-600' ?>" title="Fecha de entrega">
+                                                    📅 <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?><?= !empty($pedido['hora_entrega']) ? ' ' . substr($pedido['hora_entrega'], 0, 5) : '' ?>
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
                                         <?php if ($pedido['prioridad'] === 'urgente'): ?>
                                             <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
                                         <?php endif; ?>
                                         <?php if (!$pedido['impreso']): ?>
                                             <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>
-                                        <?php endif; ?>
-                                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                                            <span class="bg-purple-500 text-white text-xs px-2 py-0.5 rounded font-bold" title="Programado para: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">
-                                                📅 <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
-                                            </span>
                                         <?php endif; ?>
                                     </div>
                                     
