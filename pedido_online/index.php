@@ -65,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nombre       = trim($_POST['nombre'] ?? '');
         $apellido     = trim($_POST['apellido'] ?? '');
         $telefono     = trim($_POST['telefono'] ?? '');
+        $email        = trim($_POST['email'] ?? '');
         $turno        = trim($_POST['turno'] ?? '');
         $tipo_pedido  = trim($_POST['tipo_pedido'] ?? 'simple');
         $producto_id  = (int)($_POST['producto_id'] ?? 0);
@@ -107,6 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nombre_producto = '';
         $cantidad_sandwiches = 0;
         $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}";
+        if (!empty($email)) {
+            $obs_interna .= "\nEmail: {$email}";
+        }
 
         if ($tipo_pedido === 'personalizado') {
             // Pedido de elegidos con sabores
@@ -364,10 +368,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="text-gray-600 font-medium">Pago</span>
                         <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['forma_pago']) ?></span>
                     </div>
-                    <div class="border-t pt-3 flex justify-between items-center">
-                        <span class="text-gray-700 font-bold text-lg">Total</span>
-                        <span class="font-black text-2xl text-orange-600">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
-                    </div>
                 </div>
 
                 <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
@@ -467,6 +467,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    placeholder="Ej: 2604123456"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
                         </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                Email <span class="text-gray-400 font-normal">(para que te avisemos cuando tu pedido está listo)</span>
+                            </label>
+                            <input type="email" id="campo_email" name="email"
+                                   value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                                   placeholder="Ej: juan@gmail.com"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
+                        </div>
                         <button type="button" onclick="irAPaso(2)"
                                 class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-4 rounded-xl font-black text-lg shadow transition-all mt-2">
                             Continuar <i class="fas fa-arrow-right ml-2"></i>
@@ -504,17 +513,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="space-y-3" id="lista-productos-simples">
                             <?php foreach ($productos_simples as $prod): ?>
                                 <div class="producto-card p-4" onclick="seleccionarProducto(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>)">
-                                    <div class="flex justify-between items-start">
+                                    <div class="flex items-center justify-between">
                                         <div>
                                             <h3 class="font-bold text-gray-900"><?= htmlspecialchars($prod['nombre']) ?></h3>
                                             <?php if (!empty($prod['descripcion'])): ?>
                                                 <p class="text-sm text-gray-500"><?= htmlspecialchars($prod['descripcion']) ?></p>
                                             <?php endif; ?>
                                         </div>
-                                        <div class="text-right ml-3 flex-shrink-0">
-                                            <div class="text-xs text-gray-500">Efectivo</div>
-                                            <div class="font-black text-orange-600 text-lg">$<?= number_format($prod['precio_efectivo'], 0, ',', '.') ?></div>
-                                            <div class="text-xs text-gray-400">Transf: $<?= number_format($prod['precio_transferencia'], 0, ',', '.') ?></div>
+                                        <div class="ml-3 flex-shrink-0 w-8 h-8 border-2 border-gray-300 rounded-full flex items-center justify-center check-icon">
+                                            <i class="fas fa-check text-orange-500 hidden"></i>
                                         </div>
                                     </div>
                                 </div>
@@ -576,8 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             class="elegido-qty-btn border-2 border-gray-300 rounded-xl p-3 text-center hover:border-orange-500 hover:bg-orange-50 transition-all"
                                             onclick="seleccionarElegidos(<?= $cant ?>, <?= $prod_e['id'] ?>, <?= $prod_e['precio_efectivo'] ?>, <?= $prod_e['precio_transferencia'] ?>, '<?= htmlspecialchars(addslashes($prod_e['nombre'])) ?>')">
                                         <div class="text-2xl font-black text-gray-900"><?= $cant ?></div>
-                                        <div class="text-xs text-orange-600 font-bold">$<?= number_format($prod_e['precio_efectivo'], 0, ',', '.') ?></div>
-                                        <div class="text-xs text-gray-400">ef.</div>
+                                        <div class="text-xs text-gray-500">sándwiches</div>
                                     </button>
                                 <?php endif; endforeach; ?>
                             </div>
@@ -698,12 +704,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="pago-card p-4 text-center" onclick="seleccionarPago('Efectivo')">
                                     <i class="fas fa-money-bill-wave text-3xl text-green-500 mb-2"></i>
                                     <div class="font-bold text-gray-900">Efectivo</div>
-                                    <div id="precio-efectivo-display" class="text-xs text-gray-500 mt-1">—</div>
+                                    <div class="text-xs text-gray-500 mt-1">En el momento</div>
                                 </div>
                                 <div class="pago-card p-4 text-center" onclick="seleccionarPago('Transferencia')">
                                     <i class="fas fa-university text-3xl text-blue-500 mb-2"></i>
                                     <div class="font-bold text-gray-900">Transferencia</div>
-                                    <div id="precio-transferencia-display" class="text-xs text-gray-500 mt-1">—</div>
+                                    <div class="text-xs text-gray-500 mt-1">Te pasamos el CBU</div>
                                 </div>
                             </div>
                         </div>
@@ -721,12 +727,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <!-- Resumen del pedido -->
                         <div id="resumen-pedido" class="hidden bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
                             <h3 class="font-bold text-gray-800 mb-3 flex items-center">
-                                <i class="fas fa-receipt text-orange-500 mr-2"></i>Resumen
+                                <i class="fas fa-receipt text-orange-500 mr-2"></i>Resumen del pedido
                             </h3>
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Producto:</span>
-                                    <span class="font-semibold text-gray-900" id="resumen-producto">—</span>
+                                    <span class="font-semibold text-gray-900 text-right max-w-xs" id="resumen-producto">—</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Turno:</span>
@@ -736,11 +742,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <span class="text-gray-600">Pago:</span>
                                     <span class="font-semibold text-gray-900" id="resumen-pago">—</span>
                                 </div>
-                                <div class="border-t border-orange-200 pt-2 flex justify-between">
-                                    <span class="font-bold text-gray-800">Total:</span>
-                                    <span class="font-black text-xl text-orange-600" id="resumen-total">—</span>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Modalidad:</span>
+                                    <span class="font-semibold text-gray-900" id="resumen-modalidad">—</span>
                                 </div>
                             </div>
+                            <p class="text-xs text-orange-600 mt-3">
+                                <i class="fas fa-info-circle mr-1"></i>El precio lo coordinamos cuando tomamos tu pedido
+                            </p>
                         </div>
 
                         <div class="flex gap-3">
@@ -998,39 +1007,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ============================================================
-    // RESUMEN Y PRECIOS
+    // RESUMEN (sin precios visibles para el cliente)
     // ============================================================
-    function calcularPrecio() {
-        if (estado.tipoPedido === 'personalizado') {
-            return estado.formaPago === 'Efectivo'
-                ? estado.elegidosPrecioEfectivo
-                : estado.elegidosPrecioTransferencia;
-        } else {
-            const base = estado.formaPago === 'Efectivo'
-                ? estado.precioEfectivo
-                : estado.precioTransferencia;
-            return base * estado.cantidad;
-        }
-    }
-
     function actualizarDisplayResumen() {
-        const precioEf   = estado.tipoPedido === 'personalizado' ? estado.elegidosPrecioEfectivo   : estado.precioEfectivo * estado.cantidad;
-        const precioTrans = estado.tipoPedido === 'personalizado' ? estado.elegidosPrecioTransferencia : estado.precioTransferencia * estado.cantidad;
-        const nombre      = estado.tipoPedido === 'personalizado' ? estado.elegidosNombre : estado.productoNombre;
-
-        if (precioEf > 0) {
-            document.getElementById('precio-efectivo-display').textContent   = '$' + precioEf.toLocaleString('es-AR');
-            document.getElementById('precio-transferencia-display').textContent = '$' + precioTrans.toLocaleString('es-AR');
-        }
-
-        const precio = calcularPrecio();
+        const nombre = estado.tipoPedido === 'personalizado' ? estado.elegidosNombre : estado.productoNombre;
         const resumen = document.getElementById('resumen-pedido');
         if (nombre && estado.turno && estado.formaPago) {
             resumen.classList.remove('hidden');
-            document.getElementById('resumen-producto').textContent = nombre;
-            document.getElementById('resumen-turno').textContent    = estado.turno;
-            document.getElementById('resumen-pago').textContent     = estado.formaPago;
-            document.getElementById('resumen-total').textContent    = precio > 0 ? '$' + precio.toLocaleString('es-AR') : '—';
+            document.getElementById('resumen-producto').textContent  = nombre;
+            document.getElementById('resumen-turno').textContent     = estado.turno;
+            document.getElementById('resumen-pago').textContent      = estado.formaPago;
+            document.getElementById('resumen-modalidad').textContent = estado.modalidad;
         }
     }
 

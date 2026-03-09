@@ -774,6 +774,42 @@
             </div>
         </div>
 
+        <!-- ===== SECCIÓN: INSTALÁ LA APP ===== -->
+        <div id="seccion-app" class="bg-gradient-to-r from-orange-500 to-red-500 rounded-3xl p-8 mb-20 text-white text-center">
+            <div class="text-6xl mb-4">📱</div>
+            <h2 class="text-3xl font-black mb-2">¡Pedí desde tu celular como una app!</h2>
+            <p class="text-orange-100 text-lg mb-6">
+                Agregá Santa Catalina a tu pantalla de inicio y tenés acceso directo para pedir en segundos. ¡Sin descargar nada!
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <!-- Botón instalar (Android) -->
+                <button id="btnInstalarApp"
+                        onclick="instalarAppDesdeInicio()"
+                        class="hidden bg-white text-orange-600 hover:bg-orange-50 font-black text-lg px-8 py-4 rounded-full shadow-lg transition-all transform hover:scale-105">
+                    <i class="fas fa-download mr-2"></i>
+                    Instalar App Gratis
+                </button>
+                <!-- Link directo (siempre visible) -->
+                <a href="pedido_online/index.php"
+                   class="bg-white text-orange-600 hover:bg-orange-50 font-black text-lg px-8 py-4 rounded-full shadow-lg transition-all transform hover:scale-105 inline-flex items-center">
+                    <i class="fas fa-hamburger mr-2"></i>
+                    Ir al Pedido Online
+                </a>
+            </div>
+            <!-- Instrucciones por sistema -->
+            <div id="instrucciones-ios" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+                <p class="font-bold mb-2">📱 En iPhone/iPad:</p>
+                <p>1. Abrí <strong>pedido_online</strong> en Safari</p>
+                <p>2. Tocá el botón <strong>Compartir</strong> (□↑)</p>
+                <p>3. Elegí <strong>"Agregar a pantalla de inicio"</strong></p>
+                <p>4. ¡Listo! Ya tenés tu app 🎉</p>
+            </div>
+            <div id="instrucciones-android" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+                <p class="font-bold mb-2">🤖 En Android:</p>
+                <p>Tocá <strong>"Instalar App Gratis"</strong> arriba o abrí el link y usá el menú del navegador → <strong>"Agregar a pantalla de inicio"</strong></p>
+            </div>
+        </div>
+
         <!-- Testimonios -->
         <div class="text-center mb-16">
             <h2 class="text-4xl font-bold gradient-text mb-12">Lo que dicen nuestros clientes</h2>
@@ -1006,22 +1042,62 @@
         }
     </script>
 
-    <!-- Script para hint de instalación PWA -->
+    <!-- Script PWA: instalación y hints -->
     <script>
-    // Mostrar hint de instalación en móviles después de 3 segundos
-    setTimeout(function() {
+    let deferredInstallPrompt = null;
+    const isIOS        = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isAndroid    = /android/i.test(navigator.userAgent);
+    const isMobile     = isIOS || isAndroid;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+
+    // Capturar evento de instalación (Android/Chrome)
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+
+        // Mostrar botón de instalación nativa
+        const btnInstalar = document.getElementById('btnInstalarApp');
+        if (btnInstalar) btnInstalar.classList.remove('hidden');
+
+        // Mostrar instrucciones Android
+        document.getElementById('instrucciones-android')?.classList.remove('hidden');
+
+        // Mostrar hint en hero
         const hint = document.getElementById('hint-app');
-        if (!hint) return;
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-        const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-        if (isMobile && !isStandalone) {
-            hint.classList.remove('hidden');
-            if (isIOS) {
-                document.getElementById('hint-texto').textContent = 'En iOS: compartir → Agregar a pantalla de inicio';
+        if (hint && !isStandalone) hint.classList.remove('hidden');
+    });
+
+    function instalarAppDesdeInicio() {
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            deferredInstallPrompt.userChoice.then(choice => {
+                deferredInstallPrompt = null;
+                if (choice.outcome === 'accepted') {
+                    document.getElementById('seccion-app')?.remove();
+                }
+            });
+        } else {
+            window.location.href = 'pedido_online/index.php';
+        }
+    }
+
+    // En iOS: mostrar instrucciones manuales
+    document.addEventListener('DOMContentLoaded', () => {
+        if (isIOS && !isStandalone) {
+            document.getElementById('instrucciones-ios')?.classList.remove('hidden');
+            // Hint en hero
+            const hint = document.getElementById('hint-app');
+            if (hint) {
+                hint.classList.remove('hidden');
+                const txt = document.getElementById('hint-texto');
+                if (txt) txt.textContent = 'iPhone: Compartir (□↑) → Agregar a pantalla de inicio';
             }
         }
-    }, 3000);
+        // En desktop: ocultar sección si no es móvil
+        if (!isMobile) {
+            document.getElementById('seccion-app')?.remove();
+        }
+    });
     </script>
 
     <!-- Schema.org para SEO -->
