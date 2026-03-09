@@ -1,0 +1,27 @@
+{
+    "name": "Santa Catalina - Pedidos Online",
+    "short_name": "Pedí Online",
+    "description": "Hacé tu pedido de sándwiches en segundos",
+    "start_url": "/pedido_online/index.php",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "theme_color": "#ea580c",
+    "background_color": "#fff7ed",
+    "icons": [
+        {
+            "src": "/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": ["food", "shopping"],
+    "lang": "es-AR"
+}

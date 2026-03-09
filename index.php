@@ -18,8 +18,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Pedí Online">
-    <link rel="manifest" href="pedido_online/manifest.json">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192.png">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -1042,27 +1042,39 @@
         }
     </script>
 
-    <!-- Script PWA: instalación y hints -->
+    <!-- Script PWA: service worker + instalación -->
     <script>
+    // ── Registrar Service Worker (scope raíz) ──────────────────────────
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(() => {/* registrado OK */})
+                .catch(() => {/* falla silenciosa */});
+        });
+    }
+
+    // ── Variables de plataforma ─────────────────────────────────────────
     let deferredInstallPrompt = null;
     const isIOS        = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isAndroid    = /android/i.test(navigator.userAgent);
     const isMobile     = isIOS || isAndroid;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || navigator.standalone === true;
 
-    // Capturar evento de instalación (Android/Chrome)
+    // ── Android/Chrome: capturar evento de instalación ─────────────────
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredInstallPrompt = e;
 
-        // Mostrar botón de instalación nativa
-        const btnInstalar = document.getElementById('btnInstalarApp');
-        if (btnInstalar) btnInstalar.classList.remove('hidden');
+        // Mostrar botón nativo
+        const btn = document.getElementById('btnInstalarApp');
+        if (btn) btn.classList.remove('hidden');
 
         // Mostrar instrucciones Android
         document.getElementById('instrucciones-android')?.classList.remove('hidden');
+        document.getElementById('instrucciones-ios')?.classList.add('hidden');
 
-        // Mostrar hint en hero
+        // Hint en el hero
         const hint = document.getElementById('hint-app');
         if (hint && !isStandalone) hint.classList.remove('hidden');
     });
@@ -1077,23 +1089,30 @@
                 }
             });
         } else {
-            window.location.href = 'pedido_online/index.php';
+            // Fallback: abrir el pedido directamente
+            window.location.href = '/pedido_online/index.php';
         }
     }
 
-    // En iOS: mostrar instrucciones manuales
+    // ── iOS: mostrar instrucciones manuales ────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
-        if (isIOS && !isStandalone) {
+        // Si ya está instalada como standalone, ocultar la sección
+        if (isStandalone) {
+            document.getElementById('seccion-app')?.remove();
+            return;
+        }
+
+        if (isIOS) {
             document.getElementById('instrucciones-ios')?.classList.remove('hidden');
-            // Hint en hero
             const hint = document.getElementById('hint-app');
             if (hint) {
                 hint.classList.remove('hidden');
                 const txt = document.getElementById('hint-texto');
-                if (txt) txt.textContent = 'iPhone: Compartir (□↑) → Agregar a pantalla de inicio';
+                if (txt) txt.textContent = 'iPhone: tocá Compartir (□↑) → Agregar a pantalla de inicio';
             }
         }
-        // En desktop: ocultar sección si no es móvil
+
+        // En desktop: ocultar sección de app
         if (!isMobile) {
             document.getElementById('seccion-app')?.remove();
         }
