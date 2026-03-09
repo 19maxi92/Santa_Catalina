@@ -1,12 +1,13 @@
 {
-    "name": "Santa Catalina - Pedidos",
+    "name": "Santa Catalina - Pedidos Online",
     "short_name": "Pedí Online",
-    "description": "Hacé tu pedido de sándwiches triples en Santa Catalina",
+    "description": "Hacé tu pedido de sándwiches en segundos",
     "start_url": "/pedido_online/index.php",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#fff7ed",
-    "theme_color": "#ea580c",
     "orientation": "portrait",
+    "theme_color": "#ea580c",
+    "background_color": "#fff7ed",
     "icons": [
         {
             "src": "/img/icon-192.png",
