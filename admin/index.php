@@ -12,7 +12,10 @@ $stats = [
     'ventas_hoy' => $pdo->query("SELECT COALESCE(SUM(precio), 0) FROM pedidos WHERE DATE(created_at) = CURDATE()")->fetchColumn(),
     // ESTADÍSTICAS PARA PRODUCTOS
     'productos_activos' => $pdo->query("SELECT COUNT(*) FROM productos WHERE activo = 1")->fetchColumn(),
-    'promos_activas' => 0 // Default por si no existe la tabla aún
+    'promos_activas' => 0, // Default por si no existe la tabla aún
+    // PEDIDOS ONLINE
+    'pedidos_online_hoy' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE DATE(created_at) = CURDATE() AND observaciones LIKE '%PEDIDO ONLINE%'")->fetchColumn(),
+    'pedidos_online_pendientes' => $pdo->query("SELECT COUNT(*) FROM pedidos WHERE estado = 'Pendiente' AND observaciones LIKE '%PEDIDO ONLINE%'")->fetchColumn(),
 ];
 
 // Verificar si existe tabla promos (para compatibilidad)
@@ -31,7 +34,7 @@ try {
 // Últimos pedidos
 $ultimos_pedidos = $pdo->query("
     SELECT id, nombre, apellido, producto, precio, estado,
-           fecha_display, created_at
+           fecha_display, created_at, observaciones
     FROM pedidos
     ORDER BY created_at DESC
     LIMIT 5
@@ -166,6 +169,43 @@ $ultimos_pedidos = $pdo->query("
             </a>
         </div>
 
+        <!-- ===== MÓDULO PEDIDOS ONLINE ===== -->
+        <div class="bg-gradient-to-r from-teal-500 to-cyan-600 rounded-xl shadow-lg mb-6 sm:mb-8 p-4 sm:p-5 text-white">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="flex items-center">
+                    <div class="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center mr-4 flex-shrink-0">
+                        <i class="fas fa-globe text-2xl"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-black">Pedidos Online</h2>
+                        <p class="text-teal-100 text-sm">Desde la app / link web</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-center">
+                        <div class="text-3xl font-black"><?= $stats['pedidos_online_hoy'] ?></div>
+                        <div class="text-xs text-teal-100">Hoy</div>
+                    </div>
+                    <?php if ($stats['pedidos_online_pendientes'] > 0): ?>
+                    <div class="text-center bg-yellow-400 text-yellow-900 rounded-lg px-3 py-2">
+                        <div class="text-2xl font-black"><?= $stats['pedidos_online_pendientes'] ?></div>
+                        <div class="text-xs font-bold">Pendientes</div>
+                    </div>
+                    <?php endif; ?>
+                    <div class="flex flex-col gap-2">
+                        <a href="modules/pedidos_online/ver_pedidos.php"
+                           class="bg-white text-teal-700 hover:bg-teal-50 px-4 py-2 rounded-lg font-bold text-sm text-center transition-all">
+                            <i class="fas fa-list mr-1"></i>Ver todos
+                        </a>
+                        <a href="modules/pedidos_online/configuracion.php"
+                           class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg font-semibold text-sm text-center transition-all">
+                            <i class="fas fa-cog mr-1"></i>Config turnos
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Sección de Gestión de Productos Responsive -->
         <div class="bg-white rounded-lg shadow mb-6 sm:mb-8 p-4 sm:p-6">
             <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
@@ -229,9 +269,15 @@ $ultimos_pedidos = $pdo->query("
                                 <tr class="hover:bg-gray-50">
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900">
                                         #<?= $pedido['id'] ?>
+                                        <?php if (strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false): ?>
+                                            <span class="ml-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 text-xs rounded-full font-bold hidden sm:inline">🌐</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900">
                                         <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
+                                        <?php if (strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false): ?>
+                                            <span class="block sm:hidden text-xs text-teal-600 font-semibold">🌐 Online</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900 hidden md:table-cell">
                                         <?= htmlspecialchars($pedido['producto']) ?>

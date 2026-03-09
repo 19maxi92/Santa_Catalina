@@ -10,8 +10,16 @@
     <!-- Open Graph para redes sociales -->
     <meta property="og:title" content="Sandwichería Santa Catalina">
     <meta property="og:description" content="Los mejores sándwiches triples de La Plata">
-    <meta property="og:image" content="https://tu-dominio.com/logo-santa-catalina.jpg">
-    <meta property="og:url" content="https://tu-dominio.com">
+    <meta property="og:image" content="https://santacatalina.online/icon-512.png">
+    <meta property="og:url" content="https://santacatalina.online">
+
+    <!-- PWA: apunta al pedido online como app -->
+    <meta name="theme-color" content="#ea580c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pedí Online">
+    <link rel="manifest" href="pedido_online/manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -176,15 +184,27 @@
                     </div>
                 </div>
 
-                <!-- Call to Action -->
-                <div class="mt-6 sm:mt-8 px-4">
+                <!-- Call to Action - Botones principales -->
+                <div class="mt-6 sm:mt-8 px-4 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                    <!-- BOTÓN PRINCIPAL: PEDIDO ONLINE (nueva app) -->
+                    <a href="pedido_online/index.php"
+                       id="btnPedidoOnline"
+                       class="pulse-button inline-flex items-center bg-orange-500 hover:bg-orange-600 text-white text-base sm:text-lg md:text-xl font-bold px-6 sm:px-8 py-3 sm:py-4 rounded-full transition-all duration-300 shadow-lg">
+                        <i class="fas fa-hamburger mr-2 sm:mr-3 text-xl sm:text-2xl"></i>
+                        <span>¡Pedí Online!</span>
+                    </a>
+                    <!-- WhatsApp como alternativa -->
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido"
                        target="_blank"
-                       class="pulse-button inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg md:text-xl font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-full transition-all duration-300 shadow-lg">
-                        <i class="fab fa-whatsapp mr-2 sm:mr-3 text-xl sm:text-2xl"></i>
-                        <span class="hidden sm:inline">Hacer Pedido por WhatsApp</span>
-                        <span class="sm:hidden">Pedir por WhatsApp</span>
+                       class="inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-sm sm:text-base font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-full transition-all duration-300 shadow">
+                        <i class="fab fa-whatsapp mr-2 text-lg sm:text-xl"></i>
+                        <span>WhatsApp</span>
                     </a>
+                </div>
+                <!-- Indicador "Instalá como app" -->
+                <div id="hint-app" class="mt-3 text-white text-xs opacity-70 hidden">
+                    <i class="fas fa-mobile-alt mr-1"></i>
+                    <span id="hint-texto">Tocá "Pedí Online" y agregalo a tu pantalla de inicio</span>
                 </div>
             </div>
         </div>
@@ -984,6 +1004,24 @@
                 imageObserver.observe(img);
             });
         }
+    </script>
+
+    <!-- Script para hint de instalación PWA -->
+    <script>
+    // Mostrar hint de instalación en móviles después de 3 segundos
+    setTimeout(function() {
+        const hint = document.getElementById('hint-app');
+        if (!hint) return;
+        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+        const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+        if (isMobile && !isStandalone) {
+            hint.classList.remove('hidden');
+            if (isIOS) {
+                document.getElementById('hint-texto').textContent = 'En iOS: compartir → Agregar a pantalla de inicio';
+            }
+        }
+    }, 3000);
     </script>
 
     <!-- Schema.org para SEO -->
