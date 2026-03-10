@@ -253,7 +253,9 @@ try {
                                 </label>
                                 <input type="tel" id="telefono"
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-lg"
-                                       placeholder="11 1234-5678">
+                                       placeholder="11 1234-5678"
+                                       onblur="buscarClienteFrecuente(this.value)">
+                                <div id="clienteFrecuenteInfo" class="hidden mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700"></div>
                             </div>
                         </div>
 
@@ -778,6 +780,52 @@ function actualizarIndicadores(paso) {
             indicador.classList.add('completado');
         }
     }
+}
+
+// ============================================
+// BUSCAR CLIENTE FRECUENTE
+// ============================================
+
+function buscarClienteFrecuente(telefono) {
+    telefono = telefono.trim();
+    if (telefono.length < 6) return;
+
+    const infoDiv = document.getElementById('clienteFrecuenteInfo');
+
+    fetch(`buscar_cliente.php?telefono=${encodeURIComponent(telefono)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.found && data.cliente) {
+                const c = data.cliente;
+                infoDiv.innerHTML = `✅ <strong>Cliente frecuente encontrado:</strong> ${c.nombre} ${c.apellido}` +
+                    (c.direccion ? ` - ${c.direccion}` : '') +
+                    ` <button type="button" onclick="cargarClienteFrecuente()" class="ml-2 px-2 py-1 bg-green-500 text-white rounded text-xs">Usar datos</button>`;
+                infoDiv.classList.remove('hidden');
+                window.clienteFrecuenteData = c;
+            } else {
+                infoDiv.classList.add('hidden');
+                window.clienteFrecuenteData = null;
+            }
+        })
+        .catch(() => {
+            infoDiv.classList.add('hidden');
+        });
+}
+
+function cargarClienteFrecuente() {
+    const c = window.clienteFrecuenteData;
+    if (!c) return;
+
+    document.getElementById('nombre').value = c.nombre || '';
+    document.getElementById('apellido').value = c.apellido || '';
+    if (c.direccion) {
+        document.getElementById('direccion').value = c.direccion;
+    }
+
+    document.getElementById('clienteFrecuenteInfo').innerHTML = '✅ Datos cargados correctamente';
+    setTimeout(() => {
+        document.getElementById('clienteFrecuenteInfo').classList.add('hidden');
+    }, 2000);
 }
 
 // ============================================
