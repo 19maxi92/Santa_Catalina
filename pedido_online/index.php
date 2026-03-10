@@ -378,12 +378,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
 
                 <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                    <p class="text-orange-800 font-semibold">
-                        <i class="fas fa-clock mr-2"></i>
-                        Te esperamos en el turno <strong><?= htmlspecialchars($pedido_confirmado['turno']) ?></strong>
-                    </p>
-                    <p class="text-orange-600 text-sm mt-1">Cno. Gral. Belgrano 7287, Juan María Gutiérrez</p>
+                    <?php if ($pedido_confirmado['modalidad'] === 'Delivery'): ?>
+                        <p class="text-orange-800 font-semibold text-lg mb-1">
+                            🛵 ¡Pronto estaremos entregando tu pedido!
+                        </p>
+                        <p class="text-orange-600 text-sm">
+                            Coordinamos el horario exacto de entrega por WhatsApp. ¡Gracias por tu pedido!
+                        </p>
+                    <?php else: ?>
+                        <p class="text-orange-800 font-semibold text-lg mb-1">
+                            <i class="fas fa-clock mr-2"></i>¡Te esperamos en el local!
+                        </p>
+                        <p class="text-orange-600 text-sm mb-1">
+                            Turno <strong><?= htmlspecialchars($pedido_confirmado['turno']) ?></strong>
+                        </p>
+                        <p class="text-orange-500 text-xs">Cno. Gral. Belgrano 7287, Juan María Gutiérrez</p>
+                    <?php endif; ?>
                 </div>
+
+                <?php if ($pedido_confirmado['forma_pago'] === 'Transferencia'): ?>
+                    <?php if ($pedido_confirmado['modalidad'] === 'Delivery'): ?>
+                        <!-- Datos transferencia DELIVERY -->
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                            <p class="font-black text-blue-800 mb-3 flex items-center">
+                                🔄 Datos para transferir — Reparto
+                            </p>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Alias CBU</span>
+                                    <span class="font-black text-blue-700 tracking-wide">MIGA.SANTA.CATALINA</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Banco</span>
+                                    <span class="font-semibold text-gray-800">Santander</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Titular</span>
+                                    <span class="font-semibold text-gray-800">Bozanic Juan Ignacio</span>
+                                </div>
+                                <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
+                                    <span class="text-gray-600 font-bold">Monto</span>
+                                    <span class="font-black text-green-700">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
+                                </div>
+                            </div>
+                            <div class="mt-3 bg-yellow-100 border border-yellow-300 rounded-lg p-2 text-center">
+                                <p class="text-yellow-800 font-bold text-sm">📎 Enviá el comprobante por WhatsApp</p>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <!-- Datos transferencia RETIRO -->
+                        <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+                            <p class="font-black text-blue-800 mb-3 flex items-center">
+                                🔄 Datos para transferir — Retiro por local
+                            </p>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Alias CBU</span>
+                                    <span class="font-black text-blue-700 tracking-wide">SANTA.CATALINA.1</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Banco</span>
+                                    <span class="font-semibold text-gray-800">Mercado Pago</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Titular</span>
+                                    <span class="font-semibold text-gray-800">Bassi Eliana Melisa</span>
+                                </div>
+                                <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
+                                    <span class="text-gray-600 font-bold">Monto</span>
+                                    <span class="font-black text-green-700">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
+                                </div>
+                            </div>
+                            <div class="mt-3 bg-yellow-100 border border-yellow-300 rounded-lg p-2 text-center">
+                                <p class="text-yellow-800 font-bold text-sm">📎 Enviá el comprobante por WhatsApp</p>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
 
                 <div class="grid grid-cols-2 gap-3">
                     <button onclick="location.reload()"
