@@ -118,9 +118,9 @@ $sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, cf.nombre as cliente_fijo_n
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 60 THEN 'atencion'
                    ELSE 'normal'
                END as prioridad
-        FROM pedidos p 
-        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
-        WHERE 1=1";
+        FROM pedidos p
+        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
+        WHERE NOT (p.observaciones LIKE '%PEDIDO ONLINE%' AND p.estado = 'Pendiente')";
 
 $params = [];
 
@@ -693,6 +693,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         
                         // Clases dinámicas según prioridad
                         $clase_prioridad = '';
+                        $es_online = strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false;
                         if ($pedido['prioridad'] === 'urgente' && $pedido['estado'] !== 'Entregado') {
                             $clase_prioridad = 'urgente';
                         } elseif ($pedido['prioridad'] === 'atencion' && $pedido['estado'] !== 'Entregado') {
@@ -709,7 +710,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         };
                         ?>
                         
-                        <div class="pedido-card bg-white rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
+                        <div class="pedido-card <?= $es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white' ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
                              data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>">
                             <div class="flex items-center gap-3">
 
@@ -737,6 +738,9 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                         </div>
                                         <?php if ($pedido['prioridad'] === 'urgente'): ?>
                                             <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
+                                        <?php endif; ?>
+                                        <?php if (strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false): ?>
+                                            <span class="bg-teal-500 text-white text-xs px-2 py-0.5 rounded-full font-bold" title="Pedido Online">🌐</span>
                                         <?php endif; ?>
                                         <?php if (!$pedido['impreso']): ?>
                                             <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>

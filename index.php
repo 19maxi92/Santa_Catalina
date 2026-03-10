@@ -10,8 +10,16 @@
     <!-- Open Graph para redes sociales -->
     <meta property="og:title" content="Sandwichería Santa Catalina">
     <meta property="og:description" content="Los mejores sándwiches triples de La Plata">
-    <meta property="og:image" content="https://tu-dominio.com/logo-santa-catalina.jpg">
-    <meta property="og:url" content="https://tu-dominio.com">
+    <meta property="og:image" content="https://santacatalina.online/icon-512.png">
+    <meta property="og:url" content="https://santacatalina.online">
+
+    <!-- PWA: apunta al pedido online como app -->
+    <meta name="theme-color" content="#ea580c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Pedí Online">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/img/icon-192.png">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -176,15 +184,27 @@
                     </div>
                 </div>
 
-                <!-- Call to Action -->
-                <div class="mt-6 sm:mt-8 px-4">
+                <!-- Call to Action - Botones principales -->
+                <div class="mt-6 sm:mt-8 px-4 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                    <!-- BOTÓN PRINCIPAL: PEDIDO ONLINE (nueva app) -->
+                    <a href="pedido_online/index.php"
+                       id="btnPedidoOnline"
+                       class="pulse-button inline-flex items-center bg-orange-500 hover:bg-orange-600 text-white text-base sm:text-lg md:text-xl font-bold px-6 sm:px-8 py-3 sm:py-4 rounded-full transition-all duration-300 shadow-lg">
+                        <i class="fas fa-hamburger mr-2 sm:mr-3 text-xl sm:text-2xl"></i>
+                        <span>¡Pedí Online!</span>
+                    </a>
+                    <!-- WhatsApp como alternativa -->
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido"
                        target="_blank"
-                       class="pulse-button inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg md:text-xl font-semibold px-6 sm:px-8 py-3 sm:py-4 rounded-full transition-all duration-300 shadow-lg">
-                        <i class="fab fa-whatsapp mr-2 sm:mr-3 text-xl sm:text-2xl"></i>
-                        <span class="hidden sm:inline">Hacer Pedido por WhatsApp</span>
-                        <span class="sm:hidden">Pedir por WhatsApp</span>
+                       class="inline-flex items-center bg-green-500 hover:bg-green-600 text-white text-sm sm:text-base font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-full transition-all duration-300 shadow">
+                        <i class="fab fa-whatsapp mr-2 text-lg sm:text-xl"></i>
+                        <span>WhatsApp</span>
                     </a>
+                </div>
+                <!-- Indicador "Instalá como app" -->
+                <div id="hint-app" class="mt-3 text-white text-xs opacity-70 hidden">
+                    <i class="fas fa-mobile-alt mr-1"></i>
+                    <span id="hint-texto">Tocá "Pedí Online" y agregalo a tu pantalla de inicio</span>
                 </div>
             </div>
         </div>
@@ -754,6 +774,42 @@
             </div>
         </div>
 
+        <!-- ===== SECCIÓN: INSTALÁ LA APP ===== -->
+        <div id="seccion-app" class="bg-gradient-to-r from-orange-500 to-red-500 rounded-3xl p-8 mb-20 text-white text-center">
+            <div class="text-6xl mb-4">📱</div>
+            <h2 class="text-3xl font-black mb-2">¡Pedí desde tu celular como una app!</h2>
+            <p class="text-orange-100 text-lg mb-6">
+                Agregá Santa Catalina a tu pantalla de inicio y tenés acceso directo para pedir en segundos. ¡Sin descargar nada!
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <!-- Botón instalar (Android) -->
+                <button id="btnInstalarApp"
+                        onclick="instalarAppDesdeInicio()"
+                        class="hidden bg-white text-orange-600 hover:bg-orange-50 font-black text-lg px-8 py-4 rounded-full shadow-lg transition-all transform hover:scale-105">
+                    <i class="fas fa-download mr-2"></i>
+                    Instalar App Gratis
+                </button>
+                <!-- Link directo (siempre visible) -->
+                <a href="pedido_online/index.php"
+                   class="bg-white text-orange-600 hover:bg-orange-50 font-black text-lg px-8 py-4 rounded-full shadow-lg transition-all transform hover:scale-105 inline-flex items-center">
+                    <i class="fas fa-hamburger mr-2"></i>
+                    Ir al Pedido Online
+                </a>
+            </div>
+            <!-- Instrucciones por sistema -->
+            <div id="instrucciones-ios" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+                <p class="font-bold mb-2">📱 En iPhone/iPad:</p>
+                <p>1. Abrí <strong>pedido_online</strong> en Safari</p>
+                <p>2. Tocá el botón <strong>Compartir</strong> (□↑)</p>
+                <p>3. Elegí <strong>"Agregar a pantalla de inicio"</strong></p>
+                <p>4. ¡Listo! Ya tenés tu app 🎉</p>
+            </div>
+            <div id="instrucciones-android" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+                <p class="font-bold mb-2">🤖 En Android:</p>
+                <p>Tocá <strong>"Instalar App Gratis"</strong> arriba o abrí el link y usá el menú del navegador → <strong>"Agregar a pantalla de inicio"</strong></p>
+            </div>
+        </div>
+
         <!-- Testimonios -->
         <div class="text-center mb-16">
             <h2 class="text-4xl font-bold gradient-text mb-12">Lo que dicen nuestros clientes</h2>
@@ -984,6 +1040,83 @@
                 imageObserver.observe(img);
             });
         }
+    </script>
+
+    <!-- Script PWA: service worker + instalación -->
+    <script>
+    // ── Registrar Service Worker (scope raíz) ──────────────────────────
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                .then(() => {/* registrado OK */})
+                .catch(() => {/* falla silenciosa */});
+        });
+    }
+
+    // ── Variables de plataforma ─────────────────────────────────────────
+    let deferredInstallPrompt = null;
+    const isIOS        = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isAndroid    = /android/i.test(navigator.userAgent);
+    const isMobile     = isIOS || isAndroid;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || navigator.standalone === true;
+
+    // ── Android/Chrome: capturar evento de instalación ─────────────────
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+
+        // Mostrar botón nativo
+        const btn = document.getElementById('btnInstalarApp');
+        if (btn) btn.classList.remove('hidden');
+
+        // Mostrar instrucciones Android
+        document.getElementById('instrucciones-android')?.classList.remove('hidden');
+        document.getElementById('instrucciones-ios')?.classList.add('hidden');
+
+        // Hint en el hero
+        const hint = document.getElementById('hint-app');
+        if (hint && !isStandalone) hint.classList.remove('hidden');
+    });
+
+    function instalarAppDesdeInicio() {
+        if (deferredInstallPrompt) {
+            deferredInstallPrompt.prompt();
+            deferredInstallPrompt.userChoice.then(choice => {
+                deferredInstallPrompt = null;
+                if (choice.outcome === 'accepted') {
+                    document.getElementById('seccion-app')?.remove();
+                }
+            });
+        } else {
+            // Fallback: abrir el pedido directamente
+            window.location.href = '/pedido_online/index.php';
+        }
+    }
+
+    // ── iOS: mostrar instrucciones manuales ────────────────────────────
+    document.addEventListener('DOMContentLoaded', () => {
+        // Si ya está instalada como standalone, ocultar la sección
+        if (isStandalone) {
+            document.getElementById('seccion-app')?.remove();
+            return;
+        }
+
+        if (isIOS) {
+            document.getElementById('instrucciones-ios')?.classList.remove('hidden');
+            const hint = document.getElementById('hint-app');
+            if (hint) {
+                hint.classList.remove('hidden');
+                const txt = document.getElementById('hint-texto');
+                if (txt) txt.textContent = 'iPhone: tocá Compartir (□↑) → Agregar a pantalla de inicio';
+            }
+        }
+
+        // En desktop: ocultar sección de app
+        if (!isMobile) {
+            document.getElementById('seccion-app')?.remove();
+        }
+    });
     </script>
 
     <!-- Schema.org para SEO -->
