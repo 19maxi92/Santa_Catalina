@@ -254,7 +254,13 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             
             <!-- FECHA Y TURNO -->
             <div class="fecha-turno">
-                <span><?= $fecha_formatted ?></span>
+                <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
+                    <span style="background:#9c27b0;color:white;padding:2px 6px;border-radius:3px;">
+                        ENTREGA: <?= $fecha_formatted ?>
+                    </span>
+                <?php else: ?>
+                    <span><?= $fecha_formatted ?></span>
+                <?php endif; ?>
                 <span class="turno-badge"><?= $turno ?></span>
             </div>
             
@@ -350,7 +356,11 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <div class="info-admin">
                 Modalidad: <?= $pedido['modalidad'] ?> | Pago: <?= $pedido['forma_pago'] ?>
                 <br>
-                <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?>
+                <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
+                    <strong>ENTREGA: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></strong>
+                <?php else: ?>
+                    <?= $pedido['fecha_display'] ?? formatDateTime($pedido['created_at'], 'd/m/Y H:i') ?>
+                <?php endif; ?>
             </div>
             
         </div>

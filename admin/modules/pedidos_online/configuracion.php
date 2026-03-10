@@ -8,20 +8,28 @@ requireLogin();
 
 $pdo = getConnection();
 
+// Migración: agregar columna minutos_antes_corte si no existe
+try {
+    $pdo->exec("ALTER TABLE config_pedidos_online ADD COLUMN minutos_antes_corte INT NOT NULL DEFAULT 30");
+    // Default para Mañana: 900 min = 15 hs antes (corte a las 18:00 del día anterior)
+    $pdo->exec("UPDATE config_pedidos_online SET minutos_antes_corte = 900 WHERE turno = 'Mañana' AND minutos_antes_corte = 30");
+} catch (PDOException $e) { /* Columna ya existe */ }
+
 // Procesar actualización
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     if ($_POST['accion'] === 'actualizar_turno') {
-        $turno = $_POST['turno'];
-        $max_pedidos = (int)$_POST['max_pedidos'];
-        $stock_actual = (int)$_POST['stock_actual'];
-        $activo = isset($_POST['activo']) ? 1 : 0;
+        $turno            = $_POST['turno'];
+        $max_pedidos      = (int)$_POST['max_pedidos'];
+        $stock_actual     = (int)$_POST['stock_actual'];
+        $activo           = isset($_POST['activo']) ? 1 : 0;
+        $minutos_corte    = max(0, (int)$_POST['minutos_antes_corte']);
 
         $stmt = $pdo->prepare("
             UPDATE config_pedidos_online
-            SET max_pedidos = ?, stock_actual = ?, activo = ?
+            SET max_pedidos = ?, stock_actual = ?, activo = ?, minutos_antes_corte = ?
             WHERE turno = ?
         ");
-        $stmt->execute([$max_pedidos, $stock_actual, $activo, $turno]);
+        $stmt->execute([$max_pedidos, $stock_actual, $activo, $minutos_corte, $turno]);
 
         $mensaje_exito = "✅ Configuración de {$turno} actualizada";
     }
@@ -147,6 +155,30 @@ $stats = $stmt->fetch();
                             <p class="text-xs text-gray-500 mt-1">
                                 Ocupados: <?= $config['max_pedidos'] - $config['stock_actual'] ?> /
                                 <?= $config['max_pedidos'] ?>
+                            </p>
+                        </div>
+
+                        <!-- Minutos antes del corte -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">
+                                <i class="fas fa-stopwatch mr-1 text-red-500"></i>
+                                Corte de pedidos (minutos antes)
+                            </label>
+                            <input type="number" name="minutos_antes_corte"
+                                   value="<?= $config['minutos_antes_corte'] ?? 30 ?>"
+                                   min="0" max="1440"
+                                   class="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-semibold text-lg">
+                            <p class="text-xs text-gray-500 mt-1">
+                                <?php
+                                $min = $config['minutos_antes_corte'] ?? 30;
+                                if ($min >= 60) {
+                                    $hs = floor($min / 60);
+                                    $resto = $min % 60;
+                                    echo "= {$hs}h" . ($resto ? " {$resto}min" : '') . " antes del turno";
+                                } else {
+                                    echo "= {$min} minutos antes del turno";
+                                }
+                                ?>
                             </p>
                         </div>
 

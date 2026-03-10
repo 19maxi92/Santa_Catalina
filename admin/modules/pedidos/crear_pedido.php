@@ -4,6 +4,14 @@ requireLogin();
 
 $pdo = getConnection();
 
+// CARGAR CLIENTE FRECUENTE SI VIENE cliente_id
+$clientePreCargado = null;
+if (isset($_GET['cliente_id']) && is_numeric($_GET['cliente_id'])) {
+    $stmt = $pdo->prepare("SELECT * FROM clientes_fijos WHERE id = ? AND activo = 1");
+    $stmt->execute([$_GET['cliente_id']]);
+    $clientePreCargado = $stmt->fetch();
+}
+
 // OBTENER PRECIOS ACTUALIZADOS DESDE LA BASE DE DATOS
 $preciosDB = [
     'jyq24' => ['nombre' => 'Jamón y Queso x24', 'precio_efectivo' => 18000, 'precio_transferencia' => 20000, 'cantidad' => 24],
@@ -245,7 +253,9 @@ try {
                                 </label>
                                 <input type="tel" id="telefono"
                                        class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-lg"
-                                       placeholder="11 1234-5678">
+                                       placeholder="11 1234-5678"
+                                       onblur="buscarClienteFrecuente(this.value)">
+                                <div id="clienteFrecuenteInfo" class="hidden mt-2 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700"></div>
                             </div>
                         </div>
 
@@ -355,6 +365,17 @@ try {
                                 <div>
                                     <span class="font-bold text-gray-800">✅ Ya está pagado</span>
                                     <p class="text-xs text-gray-600 mt-1">(Para clientes que pagaron por WhatsApp/anticipado)</p>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Impresión automática de comanda -->
+                        <div class="mb-6 bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="imprimirAuto" name="imprimir_auto" value="1" class="w-5 h-5 text-orange-600 mr-3">
+                                <div>
+                                    <span class="font-bold text-gray-800">🖨️ Imprimir comanda automáticamente</span>
+                                    <p class="text-xs text-gray-600 mt-1" id="imprimirAutoInfo">(Se imprimirá en la ubicación seleccionada al crear el pedido)</p>
                                 </div>
                             </label>
                         </div>
@@ -666,6 +687,7 @@ let pedidosAcumulados = [];
 let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
+let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -761,6 +783,52 @@ function actualizarIndicadores(paso) {
 }
 
 // ============================================
+// BUSCAR CLIENTE FRECUENTE
+// ============================================
+
+function buscarClienteFrecuente(telefono) {
+    telefono = telefono.trim();
+    if (telefono.length < 6) return;
+
+    const infoDiv = document.getElementById('clienteFrecuenteInfo');
+
+    fetch(`buscar_cliente.php?telefono=${encodeURIComponent(telefono)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.found && data.cliente) {
+                const c = data.cliente;
+                infoDiv.innerHTML = `✅ <strong>Cliente frecuente encontrado:</strong> ${c.nombre} ${c.apellido}` +
+                    (c.direccion ? ` - ${c.direccion}` : '') +
+                    ` <button type="button" onclick="cargarClienteFrecuente()" class="ml-2 px-2 py-1 bg-green-500 text-white rounded text-xs">Usar datos</button>`;
+                infoDiv.classList.remove('hidden');
+                window.clienteFrecuenteData = c;
+            } else {
+                infoDiv.classList.add('hidden');
+                window.clienteFrecuenteData = null;
+            }
+        })
+        .catch(() => {
+            infoDiv.classList.add('hidden');
+        });
+}
+
+function cargarClienteFrecuente() {
+    const c = window.clienteFrecuenteData;
+    if (!c) return;
+
+    document.getElementById('nombre').value = c.nombre || '';
+    document.getElementById('apellido').value = c.apellido || '';
+    if (c.direccion) {
+        document.getElementById('direccion').value = c.direccion;
+    }
+
+    document.getElementById('clienteFrecuenteInfo').innerHTML = '✅ Datos cargados correctamente';
+    setTimeout(() => {
+        document.getElementById('clienteFrecuenteInfo').classList.add('hidden');
+    }, 2000);
+}
+
+// ============================================
 // VALIDACIONES
 // ============================================
 
@@ -812,6 +880,7 @@ function validarPaso1() {
         turno: turno.value,
         formaPago: formaPago.value,
         yaPagado: document.getElementById('yaPagado').checked,
+        imprimirAuto: document.getElementById('imprimirAuto').checked,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
     };
 
@@ -844,6 +913,24 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // PRE-LLENAR DATOS DE CLIENTE FRECUENTE
+    <?php if ($clientePreCargado): ?>
+    document.getElementById('nombre').value = <?= json_encode($clientePreCargado['nombre']) ?>;
+    document.getElementById('apellido').value = <?= json_encode($clientePreCargado['apellido']) ?>;
+    document.getElementById('telefono').value = <?= json_encode($clientePreCargado['telefono']) ?>;
+    <?php if (!empty($clientePreCargado['direccion'])): ?>
+    document.getElementById('direccion').value = <?= json_encode($clientePreCargado['direccion']) ?>;
+    // Si tiene dirección, seleccionar Delivery por defecto
+    const deliveryInput = document.querySelector('input[name="modalidad"][value="Delivery"]');
+    if (deliveryInput) {
+        deliveryInput.checked = true;
+        direccionContainer.classList.remove('hidden');
+        document.getElementById('direccion').required = true;
+    }
+    <?php endif; ?>
+    console.log('✅ Cliente frecuente cargado: <?= htmlspecialchars($clientePreCargado['nombre'] . ' ' . $clientePreCargado['apellido']) ?>');
+    <?php endif; ?>
 });
 
 // ============================================
@@ -1158,7 +1245,8 @@ function finalizarYCrearPedidos() {
             ubicacion: datosCliente.ubicacion,
             fecha_entrega: datosCliente.fecha_entrega,
             estado: 'Pendiente',
-            observaciones: observacionesCompletas
+            observaciones: observacionesCompletas,
+            cliente_fijo_id: clienteFijoId
         };
 
         if (item.sabores_personalizados_json) {
@@ -1197,8 +1285,27 @@ function finalizarYCrearPedidos() {
                 });
                 msg += `\nTOTAL: $${total.toLocaleString()}`;
 
-                alert(msg);
-                window.location.href = '../../index.php';
+                // IMPRESIÓN AUTOMÁTICA si está marcado el checkbox
+                if (datosCliente.imprimirAuto) {
+                    msg += `\n\n🖨️ Abriendo ${resultados.length} comanda(s) para imprimir...`;
+                    alert(msg);
+
+                    // Abrir ventanas de impresión para cada pedido
+                    resultados.forEach((r, index) => {
+                        setTimeout(() => {
+                            const url = `../impresion/comanda_simple.php?pedido=${r.pedido_id}`;
+                            window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
+                        }, index * 500); // Delay de 500ms entre cada ventana
+                    });
+
+                    // Redirigir después de abrir las ventanas
+                    setTimeout(() => {
+                        window.location.href = '../../index.php';
+                    }, resultados.length * 500 + 1000);
+                } else {
+                    alert(msg);
+                    window.location.href = '../../index.php';
+                }
             } else {
                 // Mostrar errores específicos
                 let errorMsg = '❌ Error al crear pedidos:\n\n';

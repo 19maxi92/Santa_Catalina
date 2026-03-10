@@ -38,7 +38,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['mensaje'] = "✅ Marcado como impreso";
                 }
                 break;
-                
+
+            case 'marcar_pagado':
+                if ($id) {
+                    $pagado = (int)($_POST['pagado'] ?? 1);
+                    $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$pagado, $id]);
+                    echo json_encode(['success' => true, 'pagado' => $pagado]);
+                    exit;
+                }
+                break;
+
             // ACCIONES MASIVAS
             case 'accion_masiva':
                 $pedidos = $_POST['pedidos'] ?? [];
@@ -101,16 +111,16 @@ if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_
 // ============================================
 // CONSTRUIR SQL
 // ============================================
-$sql = "SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido,
+$sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido,
                TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos,
                CASE 
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 120 THEN 'urgente'
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 60 THEN 'atencion'
                    ELSE 'normal'
                END as prioridad
-        FROM pedidos p 
-        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
-        WHERE 1=1";
+        FROM pedidos p
+        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
+        WHERE NOT (p.observaciones LIKE '%PEDIDO ONLINE%' AND p.estado = 'Pendiente')";
 
 $params = [];
 
@@ -712,12 +722,19 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                 <!-- INFO COMPACTA EN UNA SOLA LÍNEA -->
                                 <div class="flex-1 flex items-center justify-between gap-4">
                                     
-                                    <!-- ID + TIEMPO + BADGES -->
-                                    <div class="flex items-center gap-2 min-w-[120px]">
+                                    <!-- ID + TIEMPO + FECHAS + BADGES -->
+                                    <div class="flex items-center gap-2 min-w-[140px]">
                                         <span class="text-xl font-bold text-blue-600">#<?= $pedido['id'] ?></span>
-                                        <div class="flex flex-col text-xs">
-                                            <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>'</span>
-                                            <span class="text-gray-600 font-semibold"><?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : formatDateTime($pedido['created_at'], 'd/m H:i') ?></span>
+                                        <div class="flex flex-col text-xs leading-tight">
+                                            <span class="text-gray-500"><?= $pedido['minutos_transcurridos'] ?>' atrás</span>
+                                            <span class="text-gray-600" title="Fecha del pedido">
+                                                🕐 <?= !empty($pedido['fecha_display']) ? htmlspecialchars($pedido['fecha_display']) : formatDateTime($pedido['created_at'], 'd/m H:i') ?>
+                                            </span>
+                                            <?php if (!empty($pedido['fecha_entrega'])): ?>
+                                                <span class="font-semibold <?= $pedido['fecha_entrega'] == date('Y-m-d') ? 'text-green-600' : 'text-purple-600' ?>" title="Fecha de entrega">
+                                                    📅 <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?><?= !empty($pedido['hora_entrega']) ? ' ' . substr($pedido['hora_entrega'], 0, 5) : '' ?>
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
                                         <?php if ($pedido['prioridad'] === 'urgente'): ?>
                                             <i class="fas fa-exclamation-triangle text-red-500 text-sm" title="URGENTE"></i>
@@ -727,11 +744,6 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                         <?php endif; ?>
                                         <?php if (!$pedido['impreso']): ?>
                                             <i class="fas fa-print text-orange-500 text-xs" title="Sin imprimir"></i>
-                                        <?php endif; ?>
-                                        <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                                            <span class="bg-purple-500 text-white text-xs px-2 py-0.5 rounded font-bold" title="Programado para: <?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?>">
-                                                📅 <?= date('d/m', strtotime($pedido['fecha_entrega'])) ?>
-                                            </span>
                                         <?php endif; ?>
                                     </div>
                                     
@@ -752,6 +764,12 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                                 <span title="<?= $pedido['forma_pago'] ?>">
                                                     <?= $pedido['forma_pago'] === 'Efectivo' ? '💵' : '💳' ?>
                                                 </span>
+                                                <?php if ($pedido['forma_pago'] === 'Transferencia'): ?>
+                                                    <span title="<?= $pedido['pagado'] ? 'Pago confirmado' : 'Pago pendiente' ?>"
+                                                          class="font-bold <?= $pedido['pagado'] ? 'text-green-600' : 'text-red-500' ?>">
+                                                        <?= $pedido['pagado'] ? '✔' : '!' ?>
+                                                    </span>
+                                                <?php endif; ?>
                                                 <span title="<?= $pedido['ubicacion'] ?>">
                                                     <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : '🏭' ?>
                                                 </span>
@@ -885,7 +903,8 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             'observaciones' => $p['observaciones'] ?? '',
             'created_at' => $p['created_at'],
             'minutos' => $p['minutos_transcurridos'],
-            'impreso' => $p['impreso']
+            'impreso' => $p['impreso'],
+            'pagado' => (int)($p['pagado'] ?? 0)
         ];
     }, $pedidos)) ?>;
     </script>
@@ -1023,10 +1042,20 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                     <div class="detalle-label">
                         <i class="fas fa-credit-card mr-2"></i>Pago
                     </div>
-                    <div class="detalle-valor">
+                    <div class="detalle-valor flex items-center gap-3 flex-wrap">
                         <span class="badge bg-purple-100 text-purple-800">
                             ${pedido.forma_pago === 'Efectivo' ? '💵' : '💳'} ${pedido.forma_pago}
                         </span>
+                        ${pedido.forma_pago === 'Transferencia' ? `
+                        <span id="badge-pago-${pedido.id}" class="badge ${pedido.pagado ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${pedido.pagado ? '✅ Confirmado' : '⏳ Pendiente'}
+                        </span>
+                        <button id="btn-pago-${pedido.id}"
+                                onclick="togglePago(${pedido.id}, ${pedido.pagado})"
+                                class="btn text-xs px-3 py-1 rounded font-semibold ${pedido.pagado ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-green-500 text-white hover:bg-green-600'}">
+                            ${pedido.pagado ? 'Desmarcar' : '✔ Confirmar Pago'}
+                        </button>
+                        ` : '<span class="badge bg-green-100 text-green-800">✅ Efectivo</span>'}
                     </div>
                 </div>
                 
@@ -1248,6 +1277,46 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         setTimeout(() => marcarImpreso(pedidoId), 2000);
 
         return true;
+    }
+
+    function togglePago(pedidoId, estadoActual) {
+        const nuevoPagado = estadoActual ? 0 : 1;
+        const msg = nuevoPagado ? '¿Confirmar que este pedido ya fue PAGADO?' : '¿Desmarcar el pago de este pedido?';
+
+        if (!confirm(msg)) return;
+
+        const formData = new FormData();
+        formData.append('accion', 'marcar_pagado');
+        formData.append('id', pedidoId);
+        formData.append('pagado', nuevoPagado);
+
+        fetch('ver_pedidos.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // Actualizar badge y botón en el modal
+                const badge = document.getElementById(`badge-pago-${pedidoId}`);
+                const btn = document.getElementById(`btn-pago-${pedidoId}`);
+                if (badge) {
+                    badge.textContent = nuevoPagado ? '✅ Confirmado' : '⏳ Pendiente';
+                    badge.className = `badge ${nuevoPagado ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`;
+                }
+                if (btn) {
+                    btn.textContent = nuevoPagado ? 'Desmarcar' : '✔ Confirmar Pago';
+                    btn.className = `btn text-xs px-3 py-1 rounded font-semibold ${nuevoPagado ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-green-500 text-white hover:bg-green-600'}`;
+                    btn.setAttribute('onclick', `togglePago(${pedidoId}, ${nuevoPagado})`);
+                }
+                // Actualizar en pedidosData
+                const p = pedidosData.find(x => x.id == pedidoId);
+                if (p) p.pagado = nuevoPagado;
+                // Recargar fila para actualizar badge en la lista
+                location.reload();
+            }
+        })
+        .catch(err => console.error('Error al actualizar pago:', err));
     }
 
     function marcarImpreso(pedidoId) {
