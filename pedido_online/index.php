@@ -15,6 +15,15 @@ $stmt = $pdo->query("
 ");
 $turnos_disponibles = $stmt->fetchAll();
 
+// JSON de config de turnos para JS (incluye minutos de corte)
+$turnos_config_json = json_encode(array_values(array_map(fn($t) => [
+    'turno'              => $t['turno'],
+    'hora_inicio'        => substr($t['hora_inicio'], 0, 5),
+    'minutos_antes_corte'=> (int)($t['minutos_antes_corte'] ?? 30),
+    'stock_actual'       => (int)$t['stock_actual'],
+    'activo'             => (bool)$t['activo'],
+], $turnos_disponibles)));
+
 // Obtener productos activos
 $stmt = $pdo->query("SELECT * FROM productos WHERE activo = 1 ORDER BY nombre ASC");
 $productos_todos = $stmt->fetchAll();
@@ -82,9 +91,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tipo_pedido  = trim($_POST['tipo_pedido'] ?? 'simple');
         $producto_id  = (int)($_POST['producto_id'] ?? 0);
         $cantidad     = (int)($_POST['cantidad'] ?? 1);
-        $forma_pago   = trim($_POST['forma_pago'] ?? '');
-        $modalidad    = trim($_POST['modalidad'] ?? 'Retiro');
-        $direccion    = trim($_POST['direccion'] ?? '');
+        $forma_pago    = trim($_POST['forma_pago'] ?? '');
+        $modalidad     = trim($_POST['modalidad'] ?? 'Retiro');
+        $direccion     = trim($_POST['direccion'] ?? '');
+        $fecha_pedido  = trim($_POST['fecha_pedido'] ?? '');
         $observaciones = trim($_POST['observaciones'] ?? '');
 
         // Validaciones
@@ -109,6 +119,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($modalidad === 'Delivery' && empty($direccion)) {
             throw new Exception('Si elegís Delivery, ingresá la dirección de entrega');
         }
+        if ($modalidad === 'Delivery' && empty($fecha_pedido)) {
+            throw new Exception('Seleccioná la fecha de entrega');
+        }
+
+        // Validar que la fecha no sea pasada
+        if (!empty($fecha_pedido)) {
+            $tz = new DateTimeZone('America/Argentina/Buenos_Aires');
+            $hoy = new DateTime('today', $tz);
+            try {
+                $fecha_dt = new DateTime($fecha_pedido, $tz);
+            } catch (Exception $ex) {
+                throw new Exception('Fecha de entrega inválida');
+            }
+            if ($fecha_dt < $hoy) {
+                throw new Exception('La fecha de entrega no puede ser en el pasado');
+            }
+        }
 
         // Verificar stock del turno
         $stmt = $pdo->prepare("SELECT * FROM config_pedidos_online WHERE turno = ? AND activo = 1");
@@ -122,10 +149,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('¡Lo sentimos! No hay cupos disponibles para el turno seleccionado. Elegí otro turno.');
         }
 
+        // Validar corte de horario server-side (zona horaria Argentina)
+        $tz_ar = new DateTimeZone('America/Argentina/Buenos_Aires');
+        $fecha_para_turno = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
+        $minutos_corte = (int)($config_turno['minutos_antes_corte'] ?? 30);
+        $turno_start = new DateTime($fecha_para_turno . ' ' . $config_turno['hora_inicio'], $tz_ar);
+        $cutoff = clone $turno_start;
+        $cutoff->modify("-{$minutos_corte} minutes");
+        $now_ar = new DateTime('now', $tz_ar);
+        if ($now_ar >= $cutoff) {
+            throw new Exception('Ya no se pueden tomar pedidos para ese turno. El plazo de pedido venció.');
+        }
+
         $precio = 0;
         $nombre_producto = '';
         $cantidad_sandwiches = 0;
+        $fecha_entrega = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
         $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}\nEmail: {$email}";
+        if ($modalidad === 'Delivery' && !empty($fecha_pedido)) {
+            $obs_interna .= "\nFecha entrega: " . date('d/m/Y', strtotime($fecha_pedido));
+        }
 
         if ($tipo_pedido === 'personalizado') {
             // Pedido de elegidos con sabores
@@ -201,8 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $obs_interna .= "\n\nNotas del cliente:\n{$observaciones}";
         }
 
-        // Insertar pedido
-        $fecha_entrega = date('Y-m-d');
+        // Insertar pedido ($fecha_entrega ya fue definida arriba)
         $fecha_display = date('d/m H:i');
 
         $stmt = $pdo->prepare("
@@ -236,13 +278,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ->execute([$turno]);
 
         $pedido_confirmado = [
-            'id'       => $pedido_id,
-            'nombre'   => $nombre,
-            'turno'    => $turno,
-            'producto' => $nombre_producto,
-            'precio'   => $precio,
-            'modalidad'=> $modalidad,
-            'forma_pago'=> $forma_pago,
+            'id'          => $pedido_id,
+            'nombre'      => $nombre,
+            'turno'       => $turno,
+            'producto'    => $nombre_producto,
+            'precio'      => $precio,
+            'modalidad'   => $modalidad,
+            'forma_pago'  => $forma_pago,
+            'fecha_pedido'=> $fecha_entrega,
         ];
 
     } catch (Exception $e) {
@@ -379,6 +422,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="text-gray-600 font-medium">Modalidad</span>
                         <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['modalidad']) ?></span>
                     </div>
+                    <?php if ($pedido_confirmado['modalidad'] === 'Delivery' && !empty($pedido_confirmado['fecha_pedido'])): ?>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600 font-medium">Fecha entrega</span>
+                        <span class="font-bold text-blue-700"><?= date('d/m/Y', strtotime($pedido_confirmado['fecha_pedido'])) ?></span>
+                    </div>
+                    <?php endif; ?>
                     <div class="flex justify-between items-center">
                         <span class="text-gray-600 font-medium">Pago</span>
                         <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['forma_pago']) ?></span>
@@ -526,6 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="forma_pago" id="campo_forma_pago" value="">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
                 <input type="hidden" name="direccion" id="campo_direccion" value="">
+                <input type="hidden" name="fecha_pedido" id="campo_fecha_pedido" value="">
                 <input type="hidden" name="elegidos_prod_id" id="campo_elegidos_prod_id" value="">
                 <input type="hidden" name="elegidos_cantidad" id="campo_elegidos_cantidad" value="">
                 <input type="hidden" name="sabores_json" id="campo_sabores_json" value="{}">
@@ -760,38 +810,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <i class="fas fa-truck text-orange-500 mr-2"></i>Entrega y pago
                         </h2>
 
-                        <!-- Turno -->
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-3">
-                                <i class="fas fa-clock text-purple-500 mr-1"></i>¿Cuándo lo retirás?
-                            </label>
-                            <?php if (empty($turnos_disponibles)): ?>
-                                <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-600">
-                                    <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
-                                    <p class="font-bold">No hay turnos disponibles en este momento</p>
-                                    <p class="text-sm">Consultanos por WhatsApp</p>
-                                </div>
-                            <?php else: ?>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <?php foreach ($turnos_disponibles as $t): ?>
-                                        <div class="turno-card p-4 text-center <?= $t['stock_actual'] <= 0 ? 'sin-stock' : '' ?>"
-                                             onclick="<?= $t['stock_actual'] > 0 ? "seleccionarTurno('{$t['turno']}')" : '' ?>">
-                                            <div class="text-2xl font-black text-gray-900"><?= $t['turno'] ?></div>
-                                            <div class="text-sm text-gray-500 mt-1">
-                                                <?= substr($t['hora_inicio'], 0, 5) ?> - <?= substr($t['hora_fin'], 0, 5) ?>
-                                            </div>
-                                            <div class="mt-2 text-xs font-bold <?= $t['stock_actual'] > 0 ? 'text-green-600' : 'text-red-500' ?>">
-                                                <?= $t['stock_actual'] > 0
-                                                    ? "✅ {$t['stock_actual']} cupos"
-                                                    : "❌ Sin cupos" ?>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-
-                        <!-- Modalidad -->
+                        <!-- 1. Modalidad -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-3">
                                 <i class="fas fa-map-marker-alt text-blue-500 mr-1"></i>¿Cómo lo recibís?
@@ -808,24 +827,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div class="text-xs text-gray-500 mt-1">Te lo llevamos</div>
                                 </div>
                             </div>
+                        </div>
 
-                            <!-- Dirección delivery: 4 campos -->
-                            <div id="bloque-direccion" class="hidden mt-3 space-y-2">
-                                <label class="block text-sm font-bold text-gray-700">Dirección de entrega *</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="text" id="dir_calle" placeholder="Calle *"
-                                           class="col-span-2 px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
-                                    <input type="text" id="dir_numero" placeholder="Número *"
-                                           class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
-                                </div>
-                                <input type="text" id="dir_localidad" placeholder="Localidad *"
-                                       class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
-                                <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
-                                       class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                        <!-- 2. Fecha de entrega (solo delivery) -->
+                        <div id="bloque-fecha" class="hidden">
+                            <label class="block text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-calendar text-purple-500 mr-1"></i>¿Para qué día?
+                            </label>
+                            <div id="opciones-fecha" class="flex gap-2 flex-wrap"></div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Los turnos disponibles se actualizan según el día y la hora de corte de pedidos
+                            </p>
+                        </div>
+
+                        <!-- 3. Turno (renderizado por JS) -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-clock text-purple-500 mr-1"></i>¿En qué turno?
+                            </label>
+                            <div id="grid-turnos" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <!-- Se renderiza por JS en mostrarPaso(4) -->
                             </div>
                         </div>
 
-                        <!-- Forma de pago -->
+                        <!-- 4. Dirección delivery -->
+                        <div id="bloque-direccion" class="hidden space-y-2">
+                            <label class="block text-sm font-bold text-gray-700">Dirección de entrega *</label>
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="text" id="dir_calle" placeholder="Calle *"
+                                       class="col-span-2 px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                                <input type="text" id="dir_numero" placeholder="Número *"
+                                       class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                            </div>
+                            <input type="text" id="dir_localidad" placeholder="Localidad *"
+                                   class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                            <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
+                                   class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                        </div>
+
+                        <!-- 5. Forma de pago -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-3">
                                 <i class="fas fa-credit-card text-green-500 mr-1"></i>Forma de pago
@@ -844,7 +885,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                         </div>
 
-                        <!-- Observaciones -->
+                        <!-- 6. Observaciones -->
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
                                 Observaciones <span class="text-gray-400 font-normal">(opcional)</span>
@@ -854,7 +895,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm"></textarea>
                         </div>
 
-                        <!-- Resumen del pedido -->
+                        <!-- 7. Resumen del pedido -->
                         <div id="resumen-pedido" class="hidden bg-orange-50 border-2 border-orange-200 rounded-xl p-4">
                             <h3 class="font-bold text-gray-800 mb-3 flex items-center">
                                 <i class="fas fa-receipt text-orange-500 mr-2"></i>Resumen del pedido
@@ -863,6 +904,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Producto:</span>
                                     <span class="font-semibold text-gray-900 text-right max-w-xs" id="resumen-producto">—</span>
+                                </div>
+                                <div id="resumen-fila-fecha" class="hidden flex justify-between">
+                                    <span class="text-gray-600">Fecha entrega:</span>
+                                    <span class="font-semibold text-blue-700" id="resumen-fecha">—</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Turno:</span>
@@ -904,6 +949,130 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
     // ============================================================
+    // CONFIG DE TURNOS (desde PHP)
+    // ============================================================
+    const turnosConfig = <?= $turnos_config_json ?>;
+
+    // ============================================================
+    // UTILIDADES ZONA HORARIA ARGENTINA (UTC-3, sin DST)
+    // ============================================================
+    function getArgentinaDate(offsetDays = 0) {
+        // Restar 3h a UTC = tiempo en Argentina
+        const arMs = Date.now() - 3 * 3600000;
+        const d = new Date(arMs);
+        d.setUTCDate(d.getUTCDate() + offsetDays);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+    }
+
+    function formatFechaCorta(isoDate) {
+        const [y, m, d] = isoDate.split('-').map(Number);
+        const dias = ['dom','lun','mar','mié','jue','vie','sáb'];
+        const dt = new Date(y, m - 1, d);
+        return `${dias[dt.getDay()]} ${d}/${m}`;
+    }
+
+    // ============================================================
+    // DISPONIBILIDAD DE TURNOS POR FECHA
+    // ============================================================
+    function turnoDisponible(cfg, fechaISO) {
+        if (!cfg.activo || cfg.stock_actual <= 0) return false;
+        const [h, min] = cfg.hora_inicio.split(':').map(Number);
+        const [y, mo, d] = fechaISO.split('-').map(Number);
+        // AR = UTC-3 → AR h:min = UTC (h+3):min
+        const turnoUTC = Date.UTC(y, mo - 1, d, h + 3, min);
+        const cutoffUTC = turnoUTC - cfg.minutos_antes_corte * 60000;
+        return Date.now() < cutoffUTC;
+    }
+
+    function turnoMotivoBloqueo(cfg, fechaISO) {
+        if (!cfg.activo) return 'No disponible';
+        if (cfg.stock_actual <= 0) return 'Sin cupos';
+        return 'Fuera de horario';
+    }
+
+    // ============================================================
+    // RENDER DINÁMICO DE TURNOS
+    // ============================================================
+    function renderTurnos(fechaISO) {
+        fechaISO = fechaISO || estado.fechaPedido || getArgentinaDate(0);
+        const grid = document.getElementById('grid-turnos');
+        if (!turnosConfig || turnosConfig.length === 0) {
+            grid.innerHTML = `<div class="col-span-3 bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-600">
+                <i class="fas fa-exclamation-circle text-2xl mb-2"></i>
+                <p class="font-bold">No hay turnos configurados</p>
+                <p class="text-sm">Consultanos por WhatsApp</p></div>`;
+            return;
+        }
+        grid.innerHTML = turnosConfig.map(cfg => {
+            const ok = turnoDisponible(cfg, fechaISO);
+            const sel = estado.turno === cfg.turno;
+            return `<div class="turno-card p-4 text-center ${!ok ? 'sin-stock' : ''} ${sel ? 'seleccionado' : ''}"
+                         onclick="${ok ? `seleccionarTurno('${cfg.turno}','${fechaISO}')` : ''}">
+                <div class="text-2xl font-black text-gray-900">${cfg.turno}</div>
+                <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}</div>
+                <div class="mt-2 text-xs font-bold ${ok ? 'text-green-600' : 'text-red-500'}">
+                    ${ok ? `✅ ${cfg.stock_actual} cupos` : `❌ ${turnoMotivoBloqueo(cfg, fechaISO)}`}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ============================================================
+    // SELECTOR DE FECHAS (delivery)
+    // ============================================================
+    function generarFechas() {
+        const cont = document.getElementById('opciones-fecha');
+        const opciones = [
+            { iso: getArgentinaDate(0), label: 'Hoy' },
+            { iso: getArgentinaDate(1), label: 'Mañana' },
+            { iso: getArgentinaDate(2), label: formatFechaCorta(getArgentinaDate(2)) },
+            { iso: getArgentinaDate(3), label: formatFechaCorta(getArgentinaDate(3)) },
+        ];
+        cont.innerHTML = opciones.map(op => {
+            const activo = estado.fechaPedido === op.iso;
+            return `<button type="button" onclick="seleccionarFecha('${op.iso}')"
+                class="px-4 py-2 rounded-xl border-2 font-bold text-sm transition-all flex-1 min-w-[70px]
+                       ${activo ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 text-gray-700'}">
+                ${op.label}
+            </button>`;
+        }).join('');
+    }
+
+    function seleccionarFecha(fechaISO) {
+        // Si cambió la fecha, resetear el turno seleccionado
+        if (estado.fechaPedido !== fechaISO) {
+            estado.turno = '';
+            document.getElementById('campo_turno').value = '';
+        }
+        estado.fechaPedido = fechaISO;
+        document.getElementById('campo_fecha_pedido').value = fechaISO;
+        generarFechas();
+        renderTurnos(fechaISO);
+        actualizarDisplayResumen();
+    }
+
+    // ============================================================
+    // INICIALIZAR PASO 4
+    // ============================================================
+    function initializarPaso4() {
+        // Para retiro: siempre hoy
+        if (estado.modalidad !== 'Delivery' || !estado.fechaPedido) {
+            estado.fechaPedido = getArgentinaDate(0);
+            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+        }
+        renderTurnos(estado.fechaPedido);
+        if (estado.modalidad === 'Delivery') {
+            document.getElementById('bloque-fecha').classList.remove('hidden');
+            generarFechas();
+        } else {
+            document.getElementById('bloque-fecha').classList.add('hidden');
+        }
+    }
+
+    // ============================================================
     // ESTADO DEL PEDIDO
     // ============================================================
     let estado = {
@@ -922,6 +1091,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         turno: '',
         modalidad: 'Retiro',
         formaPago: '',
+        fechaPedido: '',
         pasoActual: 1,
     };
 
@@ -947,6 +1117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         estado.pasoActual = num;
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (num === 4) initializarPaso4();
     }
 
     function irAPaso(num) {
@@ -1123,11 +1294,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // TURNO, MODALIDAD, PAGO
     // ============================================================
-    function seleccionarTurno(turno) {
+    function seleccionarTurno(turno, fechaISO) {
         estado.turno = turno;
+        estado.fechaPedido = fechaISO || estado.fechaPedido || getArgentinaDate(0);
         document.getElementById('campo_turno').value = turno;
-        document.querySelectorAll('.turno-card').forEach(c => c.classList.remove('seleccionado'));
-        event.currentTarget.classList.add('seleccionado');
+        document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+        renderTurnos(estado.fechaPedido); // Re-renderiza con el tick de seleccionado
         actualizarDisplayResumen();
     }
 
@@ -1136,14 +1308,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.getElementById('campo_modalidad').value = modalidad;
         document.querySelectorAll('.modalidad-card').forEach(c => c.classList.remove('seleccionado'));
         event.currentTarget.classList.add('seleccionado');
-        const bloqueDir = document.getElementById('bloque-direccion');
-        bloqueDir.classList.toggle('hidden', modalidad !== 'Delivery');
-        if (modalidad !== 'Delivery') {
+        const bloqueDir   = document.getElementById('bloque-direccion');
+        const bloqueFecha = document.getElementById('bloque-fecha');
+
+        if (modalidad === 'Delivery') {
+            bloqueDir.classList.remove('hidden');
+            bloqueFecha.classList.remove('hidden');
+            if (!estado.fechaPedido) {
+                estado.fechaPedido = getArgentinaDate(0);
+                document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+            }
+            generarFechas();
+            renderTurnos(estado.fechaPedido);
+        } else {
+            bloqueDir.classList.add('hidden');
+            bloqueFecha.classList.add('hidden');
             ['dir_calle', 'dir_numero', 'dir_localidad', 'dir_entre_calles'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
+            // Retiro: siempre hoy
+            estado.fechaPedido = getArgentinaDate(0);
+            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+            renderTurnos(estado.fechaPedido);
         }
     }
 
@@ -1171,6 +1359,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-turno').textContent     = estado.turno;
             document.getElementById('resumen-pago').textContent      = estado.formaPago;
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
+
+            // Fecha de entrega (solo delivery)
+            const filaFecha = document.getElementById('resumen-fila-fecha');
+            if (estado.modalidad === 'Delivery' && estado.fechaPedido) {
+                const [y, m, d] = estado.fechaPedido.split('-');
+                document.getElementById('resumen-fecha').textContent = `${d}/${m}/${y}`;
+                filaFecha?.classList.remove('hidden');
+            } else {
+                filaFecha?.classList.add('hidden');
+            }
 
             // Precio según forma de pago y tipo de pedido
             let precio = 0;
@@ -1206,16 +1404,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return false;
         }
         if (estado.modalidad === 'Delivery') {
-            const calle      = document.getElementById('dir_calle')?.value.trim();
-            const numero     = document.getElementById('dir_numero')?.value.trim();
-            const localidad  = document.getElementById('dir_localidad')?.value.trim();
+            if (!document.getElementById('campo_fecha_pedido').value) {
+                alert('Seleccioná la fecha de entrega');
+                e.preventDefault();
+                return false;
+            }
+            const calle       = document.getElementById('dir_calle')?.value.trim();
+            const numero      = document.getElementById('dir_numero')?.value.trim();
+            const localidad   = document.getElementById('dir_localidad')?.value.trim();
             const entrecalles = document.getElementById('dir_entre_calles')?.value.trim();
             if (!calle || !numero || !localidad) {
                 alert('Ingresá calle, número y localidad para el delivery');
                 e.preventDefault();
                 return false;
             }
-            // Componer en el campo oculto que envía el form
             let dirCompuesta = `${calle} ${numero}, ${localidad}`;
             if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
