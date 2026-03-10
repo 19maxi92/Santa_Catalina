@@ -43,16 +43,28 @@ foreach ($productos_todos as $prod) {
     }
 }
 
-// Sabores disponibles para pedidos personalizados
+// Sabores disponibles — idénticos al pedido express del admin
 $sabores_disponibles = [
-    ['id' => 'jamon_queso', 'nombre' => 'Jamón y Queso', 'emoji' => '🧀', 'color' => 'orange'],
-    ['id' => 'jamon_queso_tomate', 'nombre' => 'Jamón, Queso y Tomate', 'emoji' => '🍅', 'color' => 'red'],
-    ['id' => 'jamon_queso_morron', 'nombre' => 'Jamón, Queso y Morrón', 'emoji' => '🌶️', 'color' => 'orange'],
-    ['id' => 'vegetal', 'nombre' => 'Vegetal', 'emoji' => '🥗', 'color' => 'green'],
-    ['id' => 'especial', 'nombre' => 'Especial de la Casa', 'emoji' => '⭐', 'color' => 'purple'],
-    ['id' => 'suprema', 'nombre' => 'Suprema', 'emoji' => '🍗', 'color' => 'yellow'],
-    ['id' => 'milanesa', 'nombre' => 'Milanesa', 'emoji' => '🥩', 'color' => 'brown'],
-    ['id' => 'caprese', 'nombre' => 'Caprese', 'emoji' => '🫒', 'color' => 'green'],
+    // Comunes
+    ['id' => 'jamon_queso',     'nombre' => 'Jamón y Queso',    'emoji' => '🧀', 'tipo' => 'comun'],
+    ['id' => 'lechuga',         'nombre' => 'Lechuga',           'emoji' => '🥬', 'tipo' => 'comun'],
+    ['id' => 'tomate',          'nombre' => 'Tomate',            'emoji' => '🍅', 'tipo' => 'comun'],
+    ['id' => 'huevo',           'nombre' => 'Huevo',             'emoji' => '🥚', 'tipo' => 'comun'],
+    ['id' => 'choclo',          'nombre' => 'Choclo',            'emoji' => '🌽', 'tipo' => 'comun'],
+    ['id' => 'aceitunas',       'nombre' => 'Aceitunas',         'emoji' => '🫒', 'tipo' => 'comun'],
+    ['id' => 'zanahoria_queso', 'nombre' => 'Zanahoria y Queso', 'emoji' => '🥕', 'tipo' => 'comun'],
+    ['id' => 'zanahoria_huevo', 'nombre' => 'Zanahoria y Huevo', 'emoji' => '🥕', 'tipo' => 'comun'],
+    // Premium
+    ['id' => 'anana',       'nombre' => 'Ananá',       'emoji' => '🍍', 'tipo' => 'premium'],
+    ['id' => 'atun',        'nombre' => 'Atún',        'emoji' => '🐟', 'tipo' => 'premium'],
+    ['id' => 'berenjena',   'nombre' => 'Berenjena',   'emoji' => '🍆', 'tipo' => 'premium'],
+    ['id' => 'jamon_crudo', 'nombre' => 'Jamón Crudo', 'emoji' => '🥓', 'tipo' => 'premium'],
+    ['id' => 'morron',      'nombre' => 'Morrón',      'emoji' => '🌶️', 'tipo' => 'premium'],
+    ['id' => 'palmito',     'nombre' => 'Palmito',     'emoji' => '🌿', 'tipo' => 'premium'],
+    ['id' => 'panceta',     'nombre' => 'Panceta',     'emoji' => '🥓', 'tipo' => 'premium'],
+    ['id' => 'pollo',       'nombre' => 'Pollo',       'emoji' => '🍗', 'tipo' => 'premium'],
+    ['id' => 'roquefort',   'nombre' => 'Roquefort',   'emoji' => '🧀', 'tipo' => 'premium'],
+    ['id' => 'salame',      'nombre' => 'Salame',      'emoji' => '🍕', 'tipo' => 'premium'],
 ];
 
 // Procesar formulario
@@ -457,7 +469,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php endif; ?>
 
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="location.reload()"
+                    <button onclick="window.location.href='/pedido_online/index.php'"
                             class="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold transition-all">
                         <i class="fas fa-plus mr-2"></i>Otro pedido
                     </button>
@@ -678,28 +690,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <!-- Selector de sabores -->
                         <div id="bloque-sabores" class="hidden">
-                            <label class="block text-sm font-bold text-gray-700 mb-3">
-                                Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(de a planchas de 8)</span>
-                                <span class="font-normal text-gray-500"> — <span id="contador-planchas">0</span>/<span id="max-planchas">0</span> planchas</span>
-                            </label>
-                            <div class="grid grid-cols-2 gap-2">
-                                <?php foreach ($sabores_disponibles as $sabor): ?>
-                                    <div class="sabor-btn flex items-center justify-between"
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="text-sm font-bold text-gray-700">
+                                    Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(de a planchas de 8)</span>
+                                </label>
+                                <span class="text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">
+                                    <span id="contador-planchas">0</span>/<span id="max-planchas">0</span> planchas
+                                </span>
+                            </div>
+
+                            <!-- COMUNES -->
+                            <p class="text-xs font-bold text-green-700 mb-2 mt-1">🟢 SABORES COMUNES</p>
+                            <div class="grid grid-cols-2 gap-2 mb-4">
+                                <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'comun') as $sabor): ?>
+                                    <div class="sabor-btn flex items-center justify-between border-green-200 hover:border-green-500 hover:bg-green-50"
                                          id="sabor-<?= $sabor['id'] ?>">
                                         <div class="flex items-center">
-                                            <span class="text-xl mr-2"><?= $sabor['emoji'] ?></span>
+                                            <span class="text-lg mr-2"><?= $sabor['emoji'] ?></span>
                                             <span class="text-xs font-medium text-gray-700 leading-tight"><?= htmlspecialchars($sabor['nombre']) ?></span>
                                         </div>
                                         <div class="flex items-center space-x-1">
                                             <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
-                                                    class="w-6 h-6 border border-gray-300 rounded text-gray-600 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">
-                                                −
-                                            </button>
-                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-5 text-center font-bold text-gray-900 text-sm">0</span>
+                                                    class="w-6 h-6 border border-green-300 rounded text-green-700 font-bold text-xs hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">−</button>
+                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900 text-sm">0</span>
                                             <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
-                                                    class="w-6 h-6 border border-gray-300 rounded text-gray-600 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">
-                                                +
-                                            </button>
+                                                    class="w-6 h-6 border border-green-300 rounded text-green-700 font-bold text-xs hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">+</button>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <!-- PREMIUM -->
+                            <p class="text-xs font-bold text-orange-600 mb-2">🟠 SABORES PREMIUM</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'premium') as $sabor): ?>
+                                    <div class="sabor-btn flex items-center justify-between border-orange-200 hover:border-orange-500 hover:bg-orange-50"
+                                         id="sabor-<?= $sabor['id'] ?>">
+                                        <div class="flex items-center">
+                                            <span class="text-lg mr-2"><?= $sabor['emoji'] ?></span>
+                                            <span class="text-xs font-medium text-gray-700 leading-tight"><?= htmlspecialchars($sabor['nombre']) ?></span>
+                                        </div>
+                                        <div class="flex items-center space-x-1">
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
+                                                    class="w-6 h-6 border border-orange-300 rounded text-orange-700 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">−</button>
+                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900 text-sm">0</span>
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
+                                                    class="w-6 h-6 border border-orange-300 rounded text-orange-700 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">+</button>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
