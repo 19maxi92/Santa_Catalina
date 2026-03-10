@@ -144,10 +144,10 @@ $ultimos_pedidos = $pdo->query("
 
         <!-- Quick Actions Responsive -->
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
-            <a href="modules/clientes/lista_clientes.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center">
-                <i class="fas fa-address-book text-2xl sm:text-3xl text-green-500 mb-2 sm:mb-3"></i>
-                <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Clientes Fijos</h3>
-                <p class="text-xs sm:text-sm text-gray-600 hidden sm:block">Gestionar clientes</p>
+            <a href="modules/clientes_fijos/index.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center group">
+                <i class="fas fa-bolt text-2xl sm:text-3xl text-yellow-500 mb-2 sm:mb-3 group-hover:scale-110 transition-transform"></i>
+                <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Pedido Rapido</h3>
+                <p class="text-xs sm:text-sm text-gray-600 hidden sm:block">Clientes frecuentes</p>
             </a>
 
             <a href="modules/productos/index.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center group">
