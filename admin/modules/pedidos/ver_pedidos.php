@@ -108,9 +108,9 @@ $sql = "SELECT p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fij
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 60 THEN 'atencion'
                    ELSE 'normal'
                END as prioridad
-        FROM pedidos p 
-        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id 
-        WHERE 1=1";
+        FROM pedidos p
+        LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
+        WHERE NOT (p.observaciones LIKE '%PEDIDO ONLINE%' AND p.estado = 'Pendiente')";
 
 $params = [];
 

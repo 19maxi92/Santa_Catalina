@@ -1034,6 +1034,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             { iso: getArgentinaDate(1), label: 'Mañana' },
             { iso: getArgentinaDate(2), label: formatFechaCorta(getArgentinaDate(2)) },
             { iso: getArgentinaDate(3), label: formatFechaCorta(getArgentinaDate(3)) },
+            { iso: getArgentinaDate(4), label: formatFechaCorta(getArgentinaDate(4)) },
+            { iso: getArgentinaDate(5), label: formatFechaCorta(getArgentinaDate(5)) },
+            { iso: getArgentinaDate(6), label: formatFechaCorta(getArgentinaDate(6)) },
         ];
         cont.innerHTML = opciones.map(op => {
             const activo = estado.fechaPedido === op.iso;

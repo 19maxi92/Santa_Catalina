@@ -50,6 +50,7 @@ $query = "
         OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) = CURDATE())
     )
     AND estado != 'Entregado'
+    AND NOT (observaciones LIKE '%PEDIDO ONLINE%' AND estado = 'Pendiente')
     $where_ubicacion
     ORDER BY
         CASE estado
