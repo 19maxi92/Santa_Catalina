@@ -2,25 +2,35 @@
 /**
  * Historial de pedidos de un cliente
  */
+require_once '../../config.php';
+requireLogin();
 
-require_once '../../../config/database.php';
+$pdo = getConnection();
 
 $telefono = $_GET['telefono'] ?? '';
 if (!$telefono) {
-    echo '<div class="text-red-500">Teléfono no especificado</div>';
+    echo '<div class="text-red-500">Telefono no especificado</div>';
+    exit;
+}
+
+// Si piden solo favoritos, devolver JSON
+if (isset($_GET['solo_favoritos'])) {
+    header('Content-Type: application/json');
+    $stmt = $pdo->prepare("
+        SELECT producto, precio, COUNT(*) as veces
+        FROM pedidos WHERE telefono = ?
+        GROUP BY producto, precio
+        ORDER BY veces DESC LIMIT 5
+    ");
+    $stmt->execute([$telefono]);
+    echo json_encode(['favoritos' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
     exit;
 }
 
 // Obtener pedidos del cliente
-$stmt = $pdo->prepare("
-    SELECT *
-    FROM pedidos
-    WHERE telefono = ?
-    ORDER BY created_at DESC
-    LIMIT 20
-");
+$stmt = $pdo->prepare("SELECT * FROM pedidos WHERE telefono = ? ORDER BY created_at DESC LIMIT 20");
 $stmt->execute([$telefono]);
-$pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$pedidos = $stmt->fetchAll();
 
 if (empty($pedidos)):
 ?>
@@ -52,18 +62,13 @@ if (empty($pedidos)):
                     <span><?= $pedido['modalidad'] === 'Retiro' ? '🏪' : '🛵' ?> <?= $pedido['modalidad'] ?></span>
                     <span><?= $pedido['forma_pago'] === 'Efectivo' ? '💵' : '💳' ?> <?= $pedido['forma_pago'] ?></span>
                 </div>
-                <?php if ($pedido['observaciones']): ?>
-                <div class="text-xs text-gray-500 mt-1 italic"><?= nl2br(htmlspecialchars($pedido['observaciones'])) ?></div>
-                <?php endif; ?>
             </div>
             <button onclick="repetirPedido(<?= $pedido['id'] ?>)"
-                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1"
-                    title="Repetir este pedido">
+                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-1">
                 <i class="fas fa-redo"></i> Repetir
             </button>
         </div>
     </div>
     <?php endforeach; ?>
 </div>
-
 <?php endif; ?>

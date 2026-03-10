@@ -1,9 +1,11 @@
 <?php
 /**
- * Procesar pedido rápido desde cliente fijo
+ * Procesar pedido rapido desde cliente fijo
  */
+require_once '../../config.php';
+requireLogin();
 
-require_once '../../../config/database.php';
+$pdo = getConnection();
 
 header('Content-Type: application/json');
 
@@ -25,7 +27,6 @@ try {
         throw new Exception('Faltan datos obligatorios');
     }
 
-    // Agregar info del turno a observaciones
     $observaciones = "Turno: $turno" . ($observaciones ? "\n$observaciones" : '');
     if ($ya_pagado) {
         $observaciones .= "\n✅ PAGADO";
@@ -37,16 +38,8 @@ try {
     ");
 
     $stmt->execute([
-        $nombre,
-        $apellido,
-        $telefono,
-        $direccion,
-        $producto,
-        $precio,
-        $modalidad,
-        $ubicacion,
-        $forma_pago,
-        $observaciones
+        $nombre, $apellido, $telefono, $direccion, $producto, $precio,
+        $modalidad, $ubicacion, $forma_pago, $observaciones
     ]);
 
     $pedidoId = $pdo->lastInsertId();
@@ -59,8 +52,5 @@ try {
     ]);
 
 } catch (Exception $e) {
-    echo json_encode([
-        'success' => false,
-        'error' => $e->getMessage()
-    ]);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
