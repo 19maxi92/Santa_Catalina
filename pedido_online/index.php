@@ -82,6 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (strlen($telefono) < 8) {
             throw new Exception('Ingresá un teléfono válido');
         }
+        if (empty($email)) {
+            throw new Exception('Por favor ingresá tu email');
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception('Ingresá un email válido (ej: juan@gmail.com)');
+        }
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
         }
@@ -107,10 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $precio = 0;
         $nombre_producto = '';
         $cantidad_sandwiches = 0;
-        $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}";
-        if (!empty($email)) {
-            $obs_interna .= "\nEmail: {$email}";
-        }
+        $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}\nEmail: {$email}";
 
         if ($tipo_pedido === 'personalizado') {
             // Pedido de elegidos con sabores
@@ -368,6 +371,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="text-gray-600 font-medium">Pago</span>
                         <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['forma_pago']) ?></span>
                     </div>
+                    <div class="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
+                        <span class="text-gray-700 font-bold">Total</span>
+                        <span class="font-black text-green-700 text-lg">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
+                    </div>
                 </div>
 
                 <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
@@ -435,6 +442,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="turno" id="campo_turno" value="">
                 <input type="hidden" name="forma_pago" id="campo_forma_pago" value="">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
+                <input type="hidden" name="direccion" id="campo_direccion" value="">
                 <input type="hidden" name="elegidos_prod_id" id="campo_elegidos_prod_id" value="">
                 <input type="hidden" name="elegidos_cantidad" id="campo_elegidos_cantidad" value="">
                 <input type="hidden" name="sabores_json" id="campo_sabores_json" value="{}">
@@ -469,9 +477,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-2">
-                                Email <span class="text-gray-400 font-normal">(para que te avisemos cuando tu pedido está listo)</span>
+                                Email * <span class="text-gray-400 font-normal">(te avisamos cuando tu pedido esté listo)</span>
                             </label>
-                            <input type="email" id="campo_email" name="email"
+                            <input type="email" id="campo_email" name="email" required
                                    value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
                                    placeholder="Ej: juan@gmail.com"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
@@ -514,11 +522,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <?php foreach ($productos_simples as $prod): ?>
                                 <div class="producto-card p-4" onclick="seleccionarProducto(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>)">
                                     <div class="flex items-center justify-between">
-                                        <div>
+                                        <div class="flex-1">
                                             <h3 class="font-bold text-gray-900"><?= htmlspecialchars($prod['nombre']) ?></h3>
                                             <?php if (!empty($prod['descripcion'])): ?>
                                                 <p class="text-sm text-gray-500"><?= htmlspecialchars($prod['descripcion']) ?></p>
                                             <?php endif; ?>
+                                            <div class="flex gap-3 mt-1">
+                                                <span class="text-sm font-bold text-green-600">💵 $<?= number_format($prod['precio_efectivo'], 0, ',', '.') ?></span>
+                                                <span class="text-xs text-blue-500 self-center">🏦 $<?= number_format($prod['precio_transferencia'], 0, ',', '.') ?></span>
+                                            </div>
                                         </div>
                                         <div class="ml-3 flex-shrink-0 w-8 h-8 border-2 border-gray-300 rounded-full flex items-center justify-center check-icon">
                                             <i class="fas fa-check text-orange-500 hidden"></i>
@@ -565,7 +577,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         <!-- Selector de cantidad de elegidos -->
                         <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-3">¿Cuántos sándwiches querés?</label>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">¿Cuántos sándwiches querés?</label>
+                            <p class="text-xs text-orange-600 mb-3">Los pedidos elegidos se arman en planchas de 8 unidades</p>
                             <div class="grid grid-cols-3 gap-2" id="grid-elegidos">
                                 <?php
                                 $opciones_elegidos = [
@@ -578,12 +591,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ];
                                 foreach ($opciones_elegidos as $cant => $prod_e):
                                     if ($prod_e):
+                                    $planchas = $cant / 8;
                                 ?>
                                     <button type="button"
                                             class="elegido-qty-btn border-2 border-gray-300 rounded-xl p-3 text-center hover:border-orange-500 hover:bg-orange-50 transition-all"
                                             onclick="seleccionarElegidos(<?= $cant ?>, <?= $prod_e['id'] ?>, <?= $prod_e['precio_efectivo'] ?>, <?= $prod_e['precio_transferencia'] ?>, '<?= htmlspecialchars(addslashes($prod_e['nombre'])) ?>')">
                                         <div class="text-2xl font-black text-gray-900"><?= $cant ?></div>
-                                        <div class="text-xs text-gray-500">sándwiches</div>
+                                        <div class="text-xs text-gray-500"><?= $planchas ?> plancha<?= $planchas > 1 ? 's' : '' ?></div>
+                                        <div class="text-xs font-bold text-green-600 mt-1">$<?= number_format($prod_e['precio_efectivo'], 0, ',', '.') ?></div>
+                                        <div class="text-xs text-blue-400">Trans: $<?= number_format($prod_e['precio_transferencia'], 0, ',', '.') ?></div>
                                     </button>
                                 <?php endif; endforeach; ?>
                             </div>
@@ -592,8 +608,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <!-- Selector de sabores -->
                         <div id="bloque-sabores" class="hidden">
                             <label class="block text-sm font-bold text-gray-700 mb-3">
-                                Elegí tus sabores
-                                <span class="font-normal text-gray-500">(Total: <span id="contador-sabores">0</span>/<span id="max-sabores">0</span>)</span>
+                                Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(de a planchas de 8)</span>
+                                <span class="font-normal text-gray-500"> — <span id="contador-planchas">0</span>/<span id="max-planchas">0</span> planchas</span>
                             </label>
                             <div class="grid grid-cols-2 gap-2">
                                 <?php foreach ($sabores_disponibles as $sabor): ?>
@@ -686,12 +702,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                             </div>
 
-                            <!-- Dirección delivery -->
-                            <div id="bloque-direccion" class="hidden mt-3">
-                                <label class="block text-sm font-bold text-gray-700 mb-2">Dirección de entrega *</label>
-                                <input type="text" name="direccion" id="campo_direccion"
-                                       placeholder="Calle, número, piso, etc."
-                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200">
+                            <!-- Dirección delivery: 4 campos -->
+                            <div id="bloque-direccion" class="hidden mt-3 space-y-2">
+                                <label class="block text-sm font-bold text-gray-700">Dirección de entrega *</label>
+                                <div class="grid grid-cols-3 gap-2">
+                                    <input type="text" id="dir_calle" placeholder="Calle *"
+                                           class="col-span-2 px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                                    <input type="text" id="dir_numero" placeholder="Número *"
+                                           class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                                </div>
+                                <input type="text" id="dir_localidad" placeholder="Localidad *"
+                                       class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                                <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
+                                       class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                             </div>
                         </div>
 
@@ -746,10 +769,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <span class="text-gray-600">Modalidad:</span>
                                     <span class="font-semibold text-gray-900" id="resumen-modalidad">—</span>
                                 </div>
+                                <div id="resumen-fila-precio" class="hidden flex justify-between border-t border-orange-300 pt-2 mt-1">
+                                    <span class="text-gray-700 font-bold">Total:</span>
+                                    <span class="font-black text-green-700 text-base" id="resumen-precio">—</span>
+                                </div>
                             </div>
-                            <p class="text-xs text-orange-600 mt-3">
-                                <i class="fas fa-info-circle mr-1"></i>El precio lo coordinamos cuando tomamos tu pedido
-                            </p>
                         </div>
 
                         <div class="flex gap-3">
@@ -844,7 +868,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return;
         }
         if (totalSabores !== estado.elegidosCantidad) {
-            alert(`Seleccionaste ${totalSabores} sándwiches pero elegiste ${estado.elegidosCantidad}. Ajustá los sabores.`);
+            const planchasActuales  = totalSabores / 8;
+            const planchasNecesarias = estado.elegidosCantidad / 8;
+            alert(`Tenés ${planchasActuales} plancha${planchasActuales !== 1 ? 's' : ''} elegida${planchasActuales !== 1 ? 's' : ''} pero necesitás ${planchasNecesarias}. Ajustá los sabores.`);
             return;
         }
         document.getElementById('campo_elegidos_prod_id').value = estado.elegidosId;
@@ -864,15 +890,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     function irAPaso(num) {
         if (num === 2) {
             // Validar paso 1
-            const nombre = document.getElementById('campo_nombre').value.trim();
+            const nombre   = document.getElementById('campo_nombre').value.trim();
             const apellido = document.getElementById('campo_apellido').value.trim();
             const telefono = document.getElementById('campo_telefono').value.trim();
+            const email    = document.getElementById('campo_email').value.trim();
             if (!nombre || !apellido || !telefono) {
                 alert('Por favor completá todos tus datos');
                 return;
             }
             if (telefono.length < 8) {
                 alert('Ingresá un teléfono válido');
+                return;
+            }
+            if (!email) {
+                alert('Por favor ingresá tu email');
+                return;
+            }
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Ingresá un email válido (ej: juan@gmail.com)');
                 return;
             }
         }
@@ -942,36 +978,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
         document.querySelectorAll('.sabor-btn').forEach(el => el.classList.remove('activo'));
 
-        // Actualizar contador
-        document.getElementById('max-sabores').textContent = cantidad;
-        document.getElementById('contador-sabores').textContent = 0;
+        // Actualizar contador de planchas
+        document.getElementById('max-planchas').textContent = cantidad / 8;
+        document.getElementById('contador-planchas').textContent = 0;
 
         document.getElementById('bloque-sabores').classList.remove('hidden');
         actualizarDisplayResumen();
     }
 
     function cambiarSabor(saborId, delta) {
+        const paso = 8; // 1 unidad = 1 plancha de 8 sándwiches
         const maxTotal = estado.elegidosCantidad;
         const actual = estado.sabores[saborId] || 0;
         const totalActual = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
 
-        if (delta > 0 && totalActual >= maxTotal) {
-            alert(`Máximo ${maxTotal} sándwiches en total`);
+        if (delta > 0 && totalActual + paso > maxTotal) {
+            const maxPlanchas = maxTotal / 8;
+            alert(`Máximo ${maxPlanchas} plancha${maxPlanchas > 1 ? 's' : ''} (${maxTotal} sándwiches) en total`);
             return;
         }
 
-        const nuevo = Math.max(0, actual + delta);
+        const nuevo = Math.max(0, actual + delta * paso);
         estado.sabores[saborId] = nuevo;
 
         const el = document.getElementById('cant-sabor-' + saborId);
-        if (el) el.textContent = nuevo;
+        if (el) el.textContent = nuevo > 0 ? `${nuevo / 8}P` : '0';
 
         const saborBtn = document.getElementById('sabor-' + saborId);
         if (nuevo > 0) saborBtn?.classList.add('activo');
         else saborBtn?.classList.remove('activo');
 
         const total = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
-        document.getElementById('contador-sabores').textContent = total;
+        document.getElementById('contador-planchas').textContent = total / 8;
         actualizarDisplayResumen();
     }
 
@@ -994,6 +1032,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const bloqueDir = document.getElementById('bloque-direccion');
         bloqueDir.classList.toggle('hidden', modalidad !== 'Delivery');
         if (modalidad !== 'Delivery') {
+            ['dir_calle', 'dir_numero', 'dir_localidad', 'dir_entre_calles'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
             document.getElementById('campo_direccion').value = '';
         }
     }
@@ -1007,8 +1049,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ============================================================
-    // RESUMEN (sin precios visibles para el cliente)
+    // RESUMEN
     // ============================================================
+    function formatPrecio(n) {
+        return '$' + Math.round(n).toLocaleString('es-AR');
+    }
+
     function actualizarDisplayResumen() {
         const nombre = estado.tipoPedido === 'personalizado' ? estado.elegidosNombre : estado.productoNombre;
         const resumen = document.getElementById('resumen-pedido');
@@ -1018,6 +1064,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-turno').textContent     = estado.turno;
             document.getElementById('resumen-pago').textContent      = estado.formaPago;
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
+
+            // Precio según forma de pago y tipo de pedido
+            let precio = 0;
+            if (estado.tipoPedido === 'personalizado') {
+                precio = estado.formaPago === 'Efectivo'
+                    ? estado.elegidosPrecioEfectivo
+                    : estado.elegidosPrecioTransferencia;
+            } else {
+                precio = estado.formaPago === 'Efectivo'
+                    ? estado.precioEfectivo * estado.cantidad
+                    : estado.precioTransferencia * estado.cantidad;
+            }
+            if (precio > 0) {
+                document.getElementById('resumen-fila-precio').classList.remove('hidden');
+                document.getElementById('resumen-precio').textContent = formatPrecio(precio);
+            }
         }
     }
 
@@ -1037,12 +1099,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return false;
         }
         if (estado.modalidad === 'Delivery') {
-            const dir = document.getElementById('campo_direccion')?.value.trim();
-            if (!dir) {
-                alert('Ingresá la dirección de entrega');
+            const calle      = document.getElementById('dir_calle')?.value.trim();
+            const numero     = document.getElementById('dir_numero')?.value.trim();
+            const localidad  = document.getElementById('dir_localidad')?.value.trim();
+            const entrecalles = document.getElementById('dir_entre_calles')?.value.trim();
+            if (!calle || !numero || !localidad) {
+                alert('Ingresá calle, número y localidad para el delivery');
                 e.preventDefault();
                 return false;
             }
+            // Componer en el campo oculto que envía el form
+            let dirCompuesta = `${calle} ${numero}, ${localidad}`;
+            if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
+            document.getElementById('campo_direccion').value = dirCompuesta;
         }
 
         const btn = document.getElementById('btn-confirmar');
