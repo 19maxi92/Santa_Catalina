@@ -149,16 +149,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('¡Lo sentimos! No hay cupos disponibles para el turno seleccionado. Elegí otro turno.');
         }
 
-        // Validar corte de horario server-side (zona horaria Argentina)
-        $tz_ar = new DateTimeZone('America/Argentina/Buenos_Aires');
-        $fecha_para_turno = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
-        $minutos_corte = (int)($config_turno['minutos_antes_corte'] ?? 30);
-        $turno_start = new DateTime($fecha_para_turno . ' ' . $config_turno['hora_inicio'], $tz_ar);
-        $cutoff = clone $turno_start;
-        $cutoff->modify("-{$minutos_corte} minutes");
-        $now_ar = new DateTime('now', $tz_ar);
-        if ($now_ar >= $cutoff) {
-            throw new Exception('Ya no se pueden tomar pedidos para ese turno. El plazo de pedido venció.');
+        // Validar corte de horario server-side solo para Delivery (Retiro no tiene corte)
+        if ($modalidad === 'Delivery') {
+            $tz_ar = new DateTimeZone('America/Argentina/Buenos_Aires');
+            $fecha_para_turno = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
+            $minutos_corte = (int)($config_turno['minutos_antes_corte'] ?? 30);
+            $turno_start = new DateTime($fecha_para_turno . ' ' . $config_turno['hora_inicio'], $tz_ar);
+            $cutoff = clone $turno_start;
+            $cutoff->modify("-{$minutos_corte} minutes");
+            $now_ar = new DateTime('now', $tz_ar);
+            if ($now_ar >= $cutoff) {
+                throw new Exception('Ya no se pueden tomar pedidos para ese turno. El plazo de pedido venció.');
+            }
         }
 
         $precio = 0;
@@ -979,6 +981,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     function turnoDisponible(cfg, fechaISO) {
         if (!cfg.activo || cfg.stock_actual <= 0) return false;
+        // Retiro en persona: sin corte horario, siempre disponible si hay stock
+        if (estado.modalidad === 'Retiro') return true;
         const [h, min] = cfg.hora_inicio.split(':').map(Number);
         const [y, mo, d] = fechaISO.split('-').map(Number);
         // AR = UTC-3 → AR h:min = UTC (h+3):min
