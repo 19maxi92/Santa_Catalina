@@ -1,3 +1,83 @@
+<?php
+// ── Precios dinámicos desde la base de datos ──────────────────────────────────
+require_once __DIR__ . '/config.php';
+
+// Fallbacks: se usan si la BD no responde
+$precios = [
+    'jyq24'       => ['ef' => 12500,  'tr' => 12500],
+    'jyq48'       => ['ef' => 22000,  'tr' => 24000],
+    'clas24'      => ['ef' => 12500,  'tr' => 12500],
+    'clas48'      => ['ef' => 20000,  'tr' => 22000],
+    'esp24'       => ['ef' => 12500,  'tr' => 12500],
+    'esp48'       => ['ef' => 22000,  'tr' => 24000],
+    'prem24'      => ['ef' => 22500,  'tr' => 22500],
+    'prem48'      => ['ef' => 44000,  'tr' => 44000],
+    'eleg8'       => ['ef' => 4200,   'tr' => 4200],
+    'eleg16'      => ['ef' => 8400,   'tr' => 8400],
+    'eleg24'      => ['ef' => 12500,  'tr' => 12500],
+    'eleg32'      => ['ef' => 16700,  'tr' => 16700],
+    'eleg40'      => ['ef' => 20900,  'tr' => 20900],
+    'eleg48'      => ['ef' => 25000,  'tr' => 25000],
+];
+
+try {
+    $pdo = getConnection();
+    $stmt = $pdo->query("
+        SELECT id, nombre, precio_efectivo, precio_transferencia
+        FROM productos
+        WHERE activo = 1
+        ORDER BY id
+    ");
+    $productos_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Mapear por nombre exacto (key = nombre en BD)
+    $map = [];
+    foreach ($productos_db as $p) {
+        $map[$p['nombre']] = ['ef' => (float)$p['precio_efectivo'], 'tr' => (float)$p['precio_transferencia']];
+    }
+
+    // Asignar según nombre exacto del producto en la BD
+    if (isset($map['24 Jamón y Queso']))      $precios['jyq24']  = $map['24 Jamón y Queso'];
+    if (isset($map['48 Jamón y Queso']))      $precios['jyq48']  = $map['48 Jamón y Queso'];
+    if (isset($map['24 Surtidos Clásicos']))  $precios['clas24'] = $map['24 Surtidos Clásicos'];
+    if (isset($map['48 Surtidos Clásicos']))  $precios['clas48'] = $map['48 Surtidos Clásicos'];
+    if (isset($map['24 Surtidos Especiales']))$precios['esp24']  = $map['24 Surtidos Especiales'];
+    if (isset($map['48 Surtidos Especiales']))$precios['esp48']  = $map['48 Surtidos Especiales'];
+    if (isset($map['24 Surtidos Premium']))   $precios['prem24'] = $map['24 Surtidos Premium'];
+    if (isset($map['48 Surtidos Premium']))   $precios['prem48'] = $map['48 Surtidos Premium'];
+    if (isset($map['8 Surtidos Elegidos']))   $precios['eleg8']  = $map['8 Surtidos Elegidos'];
+    if (isset($map['16 Surtidos Elegidos']))  $precios['eleg16'] = $map['16 Surtidos Elegidos'];
+    if (isset($map['24 Surtidos Elegidos']))  $precios['eleg24'] = $map['24 Surtidos Elegidos'];
+    if (isset($map['32 Surtidos Elegidos']))  $precios['eleg32'] = $map['32 Surtidos Elegidos'];
+    if (isset($map['40 Surtidos Elegidos']))  $precios['eleg40'] = $map['40 Surtidos Elegidos'];
+    if (isset($map['48 Surtidos Elegidos']))  $precios['eleg48'] = $map['48 Surtidos Elegidos'];
+
+} catch (Exception $e) {
+    // Si falla la BD, se usan los fallbacks definidos arriba
+    error_log('index.php: no se pudieron cargar los precios desde la BD – ' . $e->getMessage());
+}
+
+// Helper: formatea número como precio argentino  →  $12.500
+function fmt($n) {
+    return '$' . number_format((float)$n, 0, ',', '.');
+}
+
+// Helper: devuelve precio formateado + indicador de diferencia si aplica
+function precioDisplay($key, $precios) {
+    $ef = $precios[$key]['ef'];
+    $tr = $precios[$key]['tr'];
+    $html = '<span class="precio-efectivo">' . fmt($ef) . '</span>';
+    if ($ef !== $tr) {
+        $html .= '<div class="text-sm text-gray-500 mt-1">Transferencia: ' . fmt($tr) . '</div>';
+    }
+    return $html;
+}
+
+// Precio para URL de WhatsApp (usa efectivo)
+function wa($n) {
+    return urlencode(fmt($n));
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -231,14 +311,14 @@
                     <p class="text-gray-600 mb-6">Clásico triple de jamón y queso. Pan fresco, jamón cocido y queso cremoso. Perfectos para cualquier ocasión.</p>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-orange-600">$12.500</div>
+                            <div class="text-3xl font-bold text-orange-600"><?php echo precioDisplay('jyq24', $precios); ?></div>
                         </div>
                         <div class="text-right">
                             <div class="text-sm text-gray-500">24 unidades</div>
                             <div class="text-xs text-gray-400">Para 8-12 personas</div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20sándwiches%20de%20jamón%20y%20queso%20por%20%2412.500" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20de%20jam%C3%B3n%20y%20queso%20por%20<?php echo wa($precios['jyq24']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -260,14 +340,14 @@
                     <p class="text-gray-600 mb-6">Pack grande de clásicos jamón y queso. Ideal para eventos, oficinas y reuniones familiares.</p>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-red-600">$24.000</div>
+                            <div class="text-3xl font-bold text-red-600"><?php echo precioDisplay('jyq48', $precios); ?></div>
                         </div>
                         <div class="text-right">
                             <div class="text-sm text-gray-500">48 unidades</div>
                             <div class="text-xs text-gray-400">Para 15-20 personas</div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20sándwiches%20de%20jamón%20y%20queso%20por%20%2424.000" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20de%20jam%C3%B3n%20y%20queso%20por%20<?php echo wa($precios['jyq48']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -295,10 +375,10 @@
                     </div>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-blue-600">$12.500</div>
+                            <div class="text-3xl font-bold text-blue-600"><?php echo precioDisplay('clas24', $precios); ?></div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20sándwiches%20surtidos%20clásicos%20por%20%2412.500" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas24']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -317,10 +397,10 @@
                     <p class="text-gray-600 mb-6">Jamón y queso, lechuga, tomate, huevo. Pack grande con los sabores tradicionales.</p>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-blue-600">$22.000</div>
+                            <div class="text-3xl font-bold text-blue-600"><?php echo precioDisplay('clas48', $precios); ?></div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20sándwiches%20surtidos%20clásicos%20por%20%2422.000" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas48']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -350,10 +430,10 @@
                     </div>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-purple-600">$12.500</div>
+                            <div class="text-3xl font-bold text-purple-600"><?php echo precioDisplay('esp24', $precios); ?></div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20sándwiches%20surtidos%20especiales%20por%20%2412.500" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20especiales%20por%20<?php echo wa($precios['esp24']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -372,10 +452,10 @@
                     <p class="text-gray-600 mb-6">Clásicos + choclo y aceitunas. Pack grande con mayor variedad de sabores.</p>
                     <div class="flex items-end justify-between mb-6">
                         <div>
-                            <div class="text-3xl font-bold text-purple-600">$24.000</div>
+                            <div class="text-3xl font-bold text-purple-600"><?php echo precioDisplay('esp48', $precios); ?></div>
                         </div>
                     </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20sándwiches%20surtidos%20especiales%20por%20%2422.000%20(efectivo)" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20surtidos%20especiales%20por%20<?php echo wa($precios['esp48']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -420,10 +500,10 @@
                         </div>
                         <div class="flex items-end justify-between mb-6">
                             <div>
-                                <div class="text-3xl font-bold text-yellow-600">$22.500</div>
+                                <div class="text-3xl font-bold text-yellow-600"><?php echo precioDisplay('prem24', $precios); ?></div>
                             </div>
                         </div>
-                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20sándwiches%20premium%20por%20%2422.500%20-%20Sabores:" 
+                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem24']['ef']); ?>%20-%20Sabores%3A"
                            target="_blank" 
                            class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                             <i class="fab fa-whatsapp mr-2"></i>
@@ -445,14 +525,14 @@
                         <p class="text-gray-600 mb-6">Pack grande de sabores gourmet. Perfecto para eventos especiales. Podés elegir hasta 6 sabores premium diferentes.</p>
                         <div class="flex items-end justify-between mb-6">
                             <div>
-                                <div class="text-3xl font-bold text-orange-600">$44.000</div>
+                                <div class="text-3xl font-bold text-orange-600"><?php echo precioDisplay('prem48', $precios); ?></div>
                             </div>
                             <div class="text-right">
                                 <div class="text-sm text-gray-500">Hasta 6 sabores</div>
                                 <div class="text-xs text-gray-400">8 de cada sabor</div>
                             </div>
                         </div>
-                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20sándwiches%20premium%20por%20%2444.000%20-%20Sabores:" 
+                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem48']['ef']); ?>%20-%20Sabores%3A"
                            target="_blank" 
                            class="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                             <i class="fab fa-whatsapp mr-2"></i>
@@ -479,9 +559,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center border-2 border-red-200">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">48 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$25.000</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg48', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 15-20 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20sándwiches%20elegidos%20por%20%2425.000%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg48']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -493,9 +573,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">40 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$20.900</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg40', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 12-15 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2040%20sándwiches%20elegidos%20por%20%2420.900%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2040%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg40']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -507,9 +587,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">32 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$16.700</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg32', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 10-12 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2032%20sándwiches%20elegidos%20por%20%2416.700%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2032%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg32']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -521,9 +601,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">24 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$12.500</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg24', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 8-10 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20sándwiches%20elegidos%20por%20%2412.500%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg24']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -535,9 +615,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">16 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$8.400</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg16', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 5-6 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2016%20sándwiches%20elegidos%20por%20%248.400%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2016%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg16']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
@@ -549,9 +629,9 @@
                 <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">8 Elegidos</h3>
-                    <div class="text-3xl font-bold text-red-600 mb-3">$4.200</div>
+                    <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg8', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 2-3 personas</div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%208%20sándwiches%20elegidos%20por%20%244.200%20-%20Sabores:" 
+                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%208%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg8']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
                        class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
