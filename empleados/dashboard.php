@@ -1788,25 +1788,120 @@ function cambiarEstado(pedidoId, nuevoEstado) {
     }
 }
 
-function imprimir(pedidoId, buttonElement) {
+const SERVIDOR_IMPRESION = 'http://localhost:3000';
+
+// Intenta imprimir via servidor local; si falla abre el popup de fallback
+async function imprimir(pedidoId, buttonElement) {
+    // Deshabilitar botón para evitar doble click
+    if (buttonElement) {
+        buttonElement.disabled = true;
+        buttonElement.style.opacity = '0.5';
+    }
+
+    // 1. Intentar servidor local primero
+    const impresoLocal = await imprimirConServidorLocal(pedidoId);
+
+    if (impresoLocal) {
+        // Exito: marcar como impreso y ocultar botón
+        if (buttonElement) buttonElement.style.display = 'none';
+        marcarImpreso(pedidoId);
+        return true;
+    }
+
+    // 2. Fallback: abrir popup con comanda_simple.php
+    if (buttonElement) {
+        buttonElement.disabled = false;
+        buttonElement.style.opacity = '';
+    }
+
     const url = `comanda_simple.php?pedido=${pedidoId}&auto=1`;
     const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
 
     if (!ventana) {
-        alert('❌ Permitir ventanas emergentes');
+        alert('❌ Permitir ventanas emergentes o iniciar el servidor de impresion local');
         return false;
     }
 
     ventana.focus();
-
-    // Ocultar el botón inmediatamente para que no puedan volver a hacer click
-    if (buttonElement) {
-        buttonElement.style.display = 'none';
-    }
-
-    // Marcar como impreso en la base de datos (sin recargar)
+    if (buttonElement) buttonElement.style.display = 'none';
     setTimeout(() => marcarImpreso(pedidoId), 2000);
     return true;
+}
+
+// Llama al servidor local con los datos del pedido
+async function imprimirConServidorLocal(pedidoId) {
+    try {
+        // Obtener datos del pedido desde el servidor
+        const formData = new FormData();
+        formData.append('accion', 'obtener_pedido');
+        formData.append('pedido_id', pedidoId);
+
+        const resp = await fetch('dashboard.php', { method: 'POST', body: formData });
+        const resultado = await resp.json();
+
+        if (!resultado.success || !resultado.pedido) return false;
+
+        const p = resultado.pedido;
+
+        // Calcular turno igual que comanda_simple.php
+        let turno = 'M';
+        const obsRaw = p.observaciones || '';
+        const matchTurno = obsRaw.match(/Turno:\s*([MST]|Ma[ñn]ana|Siesta|Tarde)/i);
+        if (matchTurno) {
+            const t = matchTurno[1].toLowerCase();
+            if (t === 'm' || t.startsWith('ma')) turno = 'M';
+            else if (t === 's' || t === 'siesta')  turno = 'S';
+            else if (t === 't' || t === 'tarde')   turno = 'T';
+        }
+
+        // Calcular fecha
+        const fechaBase = p.fecha_entrega || p.created_at;
+        const meses = {
+            'Jan':'ene','Feb':'feb','Mar':'mar','Apr':'abr','May':'may','Jun':'jun',
+            'Jul':'jul','Aug':'ago','Sep':'sep','Oct':'oct','Nov':'nov','Dec':'dic'
+        };
+        let fechaStr = new Date(fechaBase).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        Object.entries(meses).forEach(([eng, esp]) => { fechaStr = fechaStr.replace(eng, esp); });
+
+        // Limpiar observaciones
+        let obs = obsRaw
+            .replace(/===\s*SABORES PERSONALIZADOS\s*===[\s\S]*?(?=---|$)/g, '')
+            .replace(/---\s*Info del Sistema\s*---[\s\S]*$/g, '')
+            .replace(/Pedido Express - Empleado ID:.*$/mg, '')
+            .replace(/Fecha\/Hora:.*$/mg, '')
+            .replace(/🔗\s*PEDIDO COMBINADO.*$/mg, '')
+            .replace(/^Turno:.*$/mg, '')
+            .replace(/\n\s*\n+/g, '\n')
+            .trim();
+
+        const precio = '$' + parseFloat(p.precio || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+
+        const nombre = (p.nombre || '') + ' ' + (p.apellido || '');
+
+        // Enviar al servidor de impresión
+        const printResp = await fetch(SERVIDOR_IMPRESION + '/imprimir', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                pedido_id:    pedidoId,
+                nombre:       nombre.trim(),
+                turno:        turno,
+                fecha:        fechaStr,
+                producto:     p.producto || '',
+                precio:       precio,
+                observaciones: obs,
+                modalidad:    p.modalidad   || '',
+                forma_pago:   p.forma_pago  || ''
+            }),
+            signal: AbortSignal.timeout(5000)
+        });
+
+        return printResp.ok;
+
+    } catch(e) {
+        console.warn('Servidor de impresion no disponible:', e.message);
+        return false;
+    }
 }
 
 function reimprimirEmergencia(pedidoId) {

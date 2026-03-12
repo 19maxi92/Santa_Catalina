@@ -1,0 +1,12 @@
+{
+  "name": "santa-catalina-print-server",
+  "version": "1.0.0",
+  "description": "Servidor local de impresion para comanderas termicas - Santa Catalina",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "printer": "^0.3.4"
+  }
+}
