@@ -370,19 +370,6 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     <script src="https://cdn.jsdelivr.net/npm/qz-tray/qz-tray.js"></script>
     <script>
     // ============================================================
-    // CONFIGURACIÓN DE IMPRESORAS
-    // Cambiar los valores por el nombre exacto de cada impresora
-    // tal como aparece en Windows > Dispositivos e impresoras
-    // ============================================================
-    const IMPRESORAS = {
-        'Local 1': 'IMPRESORA_LOCAL_1',   // ← Poner nombre real de la impresora en Local 1
-        'Fábrica':  'IMPRESORA_FABRICA'   // ← Poner nombre real de la impresora en Fábrica
-    };
-
-    const UBICACION_PEDIDO  = '<?= addslashes($pedido['ubicacion'] ?? 'Local 1') ?>';
-    const IMPRESORA_DESTINO = IMPRESORAS[UBICACION_PEDIDO] || null;
-
-    // ============================================================
     // IMPRESIÓN CLÁSICA (fallback con diálogo del navegador)
     // ============================================================
     function imprimirYCerrar() {
@@ -407,16 +394,16 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
 
     // ============================================================
     // IMPRESIÓN SILENCIOSA CON QZ TRAY
-    // Si QZ Tray no está instalado/corriendo cae a window.print()
+    // Usa la impresora predeterminada de la máquina (sin diálogo).
+    // Si QZ Tray no está corriendo, cae a window.print() normal.
     // ============================================================
     async function imprimirConQZTray() {
-        if (typeof qz === 'undefined' || !IMPRESORA_DESTINO) {
-            console.warn('QZ Tray no disponible o impresora no configurada. Usando window.print().');
+        if (typeof qz === 'undefined') {
+            console.warn('QZ Tray no disponible. Usando window.print().');
             imprimirYCerrar();
             return;
         }
         try {
-            // Sin certificado: QZ Tray debe tener habilitado "Allow unsigned"
             qz.security.setCertificatePromise(function(resolve) { resolve(); });
             qz.security.setSignaturePromise(function() {
                 return function(resolve) { resolve(); };
@@ -426,12 +413,15 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 await qz.websocket.connect();
             }
 
+            // Usa la impresora predeterminada de esta máquina
+            const impresora = await qz.printers.getDefault();
+
             // Capturar HTML de la comanda (sin los controles)
             document.querySelector('.controles').style.display = 'none';
             const htmlContent = document.documentElement.outerHTML;
             document.querySelector('.controles').style.display = '';
 
-            const config = qz.configs.create(IMPRESORA_DESTINO, {
+            const config = qz.configs.create(impresora, {
                 colorType: 'blackwhite',
                 units: 'mm',
                 size: { width: 90, height: null }
@@ -469,7 +459,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     });
 
     window.focus();
-    console.log('🎫 Comanda ADMIN - Pedido #<?= $pedido_id ?> | Ubicación: ' + UBICACION_PEDIDO + ' | Impresora: ' + (IMPRESORA_DESTINO || 'no configurada'));
+    console.log('🎫 Comanda ADMIN - Pedido #<?= $pedido_id ?>');
     </script>
 
 </body>
