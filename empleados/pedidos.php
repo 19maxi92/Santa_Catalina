@@ -409,7 +409,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
     function imprimir(pedidoId) {
         console.log('🖨️ Imprimiendo comanda simple - Pedido #' + pedidoId);
         
-        const url = `comanda_simple.php?pedido=${pedidoId}`;
+        const url = `comanda_simple.php?pedido=${pedidoId}&auto=1`;
         const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
         
         if (!ventana) {

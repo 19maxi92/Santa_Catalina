@@ -1293,7 +1293,7 @@ function finalizarYCrearPedidos() {
                     // Abrir ventanas de impresión para cada pedido
                     resultados.forEach((r, index) => {
                         setTimeout(() => {
-                            const url = `../impresion/comanda_simple.php?pedido=${r.pedido_id}`;
+                            const url = `../impresion/comanda_simple.php?pedido=${r.pedido_id}&auto=1`;
                             window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
                         }, index * 500); // Delay de 500ms entre cada ventana
                     });

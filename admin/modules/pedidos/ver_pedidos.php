@@ -1257,7 +1257,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     function imprimir(pedidoId, buttonElement) {
         console.log('🖨️ Imprimiendo comanda - Pedido #' + pedidoId);
 
-        const url = `../impresion/comanda_simple.php?pedido=${pedidoId}`;
+        const url = `../impresion/comanda_simple.php?pedido=${pedidoId}&auto=1`;
         const ventana = window.open(url, '_blank', 'width=320,height=500,scrollbars=yes');
 
         if (!ventana) {
