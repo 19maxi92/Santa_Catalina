@@ -236,7 +236,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         <div style="margin-bottom: 8px; font-size: 12px; color: #666;">
             <strong>Pedido:</strong> #<?= $pedido_id ?> | <strong>Turno:</strong> <?= $turno ?>
         </div>
-        <button onclick="imprimirConQZTray()" class="btn btn-print">
+        <button id="btn-imprimir" onclick="imprimirComanda()" class="btn btn-print">
             🖨️ IMPRIMIR
         </button>
         <button onclick="window.close()" class="btn btn-cancel">
@@ -361,13 +361,39 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         </div>
     </div>
 
-    <!-- QZ Tray para impresión silenciosa sin diálogo del navegador -->
-    <script src="https://cdn.jsdelivr.net/npm/qz-tray/qz-tray.js"></script>
     <script>
     // ============================================================
-    // IMPRESIÓN CLÁSICA (fallback con diálogo del navegador)
+    // DATOS DE LA COMANDA (generados por PHP)
     // ============================================================
-    function imprimirYCerrar() {
+    const COMANDA_DATA = {
+        pedido_id:    <?= $pedido_id ?>,
+        nombre:       <?= json_encode($nombre_completo) ?>,
+        turno:        <?= json_encode($turno) ?>,
+        fecha:        <?= json_encode($fecha_formatted) ?>,
+        producto:     <?= json_encode($pedido['producto']) ?>,
+        precio:       <?= json_encode($precio_formatted) ?>,
+        modalidad:    <?= json_encode($pedido['modalidad'] ?? '') ?>,
+        forma_pago:   <?= json_encode($pedido['forma_pago'] ?? '') ?>,
+        observaciones: <?php
+            // Limpiar observaciones igual que el bloque PHP de arriba
+            $obs_para_js = $pedido['observaciones'] ?? '';
+            $obs_para_js = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_para_js);
+            $obs_para_js = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_para_js);
+            $obs_para_js = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_para_js);
+            $obs_para_js = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_para_js);
+            $obs_para_js = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_para_js);
+            $obs_para_js = preg_replace('/^Turno:.*$/m', '', $obs_para_js);
+            $obs_para_js = trim(preg_replace('/\n\s*\n+/', "\n", $obs_para_js));
+            echo json_encode($obs_para_js);
+        ?>
+    };
+
+    const SERVIDOR_LOCAL = 'http://localhost:3000';
+
+    // ============================================================
+    // FALLBACK: impresion con dialogo del navegador
+    // ============================================================
+    function imprimirConDialogo() {
         document.querySelector('.controles').style.display = 'none';
         setTimeout(() => {
             window.print();
@@ -376,48 +402,47 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     }
 
     // ============================================================
-    // IMPRESIÓN SILENCIOSA CON QZ TRAY
-    // Usa la impresora predeterminada de la máquina (sin diálogo).
-    // Si QZ Tray no está corriendo, cae a window.print() normal.
+    // PRIMARIO: impresion directa via servidor local (sin dialogo)
     // ============================================================
-    async function imprimirConQZTray() {
-        if (typeof qz === 'undefined') {
-            console.warn('QZ Tray no disponible. Usando window.print().');
-            imprimirYCerrar();
-            return;
-        }
+    async function imprimirConServidorLocal() {
         try {
-            qz.security.setCertificatePromise(function(resolve) { resolve(); });
-            qz.security.setSignaturePromise(function() {
-                return function(resolve) { resolve(); };
+            const resp = await fetch(SERVIDOR_LOCAL + '/imprimir', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(COMANDA_DATA),
+                signal:  AbortSignal.timeout(5000)
             });
 
-            if (!qz.websocket.isActive()) {
-                await qz.websocket.connect();
+            if (resp.ok) {
+                const resultado = await resp.json();
+                console.log('Impreso en:', resultado.impresora, '| job:', resultado.job);
+                setTimeout(() => window.close(), 1200);
+                return true;
+            } else {
+                const err = await resp.json().catch(() => ({}));
+                console.warn('Servidor local error:', err.error || resp.status);
+                return false;
             }
+        } catch(e) {
+            console.warn('Servidor local no disponible:', e.message);
+            return false;
+        }
+    }
 
-            // Usa la impresora predeterminada de esta máquina
-            const impresora = await qz.printers.getDefault();
+    // ============================================================
+    // IMPRIMIR: intenta servidor local, si falla usa dialogo
+    // ============================================================
+    async function imprimirComanda() {
+        const btnImprimir = document.getElementById('btn-imprimir');
+        if (btnImprimir) {
+            btnImprimir.disabled = true;
+            btnImprimir.textContent = 'Imprimiendo...';
+        }
 
-            // Capturar HTML de la comanda (sin los controles)
-            document.querySelector('.controles').style.display = 'none';
-            const htmlContent = document.documentElement.outerHTML;
-            document.querySelector('.controles').style.display = '';
-
-            const config = qz.configs.create(impresora, {
-                colorType: 'blackwhite',
-                units: 'mm',
-                size: { width: 90, height: null }
-            });
-
-            await qz.print(config, [{ type: 'html', format: 'plain', data: htmlContent }]);
-
-            if (qz.websocket.isActive()) await qz.websocket.disconnect();
-            setTimeout(() => window.close(), 1500);
-
-        } catch (e) {
-            console.error('Error QZ Tray:', e.message || e);
-            imprimirYCerrar();
+        const exito = await imprimirConServidorLocal();
+        if (!exito) {
+            // Servidor no disponible: fallback al dialogo del navegador
+            imprimirConDialogo();
         }
     }
 
@@ -426,21 +451,21 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     // ============================================================
     if (new URLSearchParams(window.location.search).get('auto') === '1') {
         window.addEventListener('load', function() {
-            setTimeout(imprimirConQZTray, 400);
+            setTimeout(imprimirComanda, 400);
         });
     }
 
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            imprimirConQZTray();
+            imprimirComanda();
         } else if (e.key === 'Escape') {
             window.close();
         }
     });
 
     window.focus();
-    console.log('🎫 Comanda - Pedido #<?= $pedido_id ?>');
+    console.log('Comanda - Pedido #<?= $pedido_id ?>');
     </script>
 
 </body>

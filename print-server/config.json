@@ -1,0 +1,5 @@
+{
+  "puerto": 3000,
+  "nombreImpresora": "",
+  "comentario": "Dejar nombreImpresora vacío para usar la impresora predeterminada de Windows. Si hay varias impresoras, poner el nombre exacto como aparece en 'Dispositivos e impresoras'."
+}
