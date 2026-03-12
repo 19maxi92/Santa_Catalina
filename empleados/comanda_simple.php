@@ -362,110 +362,27 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     </div>
 
     <script>
-    // ============================================================
-    // DATOS DE LA COMANDA (generados por PHP)
-    // ============================================================
-    const COMANDA_DATA = {
-        pedido_id:    <?= $pedido_id ?>,
-        nombre:       <?= json_encode($nombre_completo) ?>,
-        turno:        <?= json_encode($turno) ?>,
-        fecha:        <?= json_encode($fecha_formatted) ?>,
-        producto:     <?= json_encode($pedido['producto']) ?>,
-        precio:       <?= json_encode($precio_formatted) ?>,
-        modalidad:    <?= json_encode($pedido['modalidad'] ?? '') ?>,
-        forma_pago:   <?= json_encode($pedido['forma_pago'] ?? '') ?>,
-        observaciones: <?php
-            // Limpiar observaciones igual que el bloque PHP de arriba
-            $obs_para_js = $pedido['observaciones'] ?? '';
-            $obs_para_js = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_para_js);
-            $obs_para_js = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_para_js);
-            $obs_para_js = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_para_js);
-            $obs_para_js = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_para_js);
-            $obs_para_js = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_para_js);
-            $obs_para_js = preg_replace('/^Turno:.*$/m', '', $obs_para_js);
-            $obs_para_js = trim(preg_replace('/\n\s*\n+/', "\n", $obs_para_js));
-            echo json_encode($obs_para_js);
-        ?>
-    };
-
-    const SERVIDOR_LOCAL = 'http://localhost:3000';
-
-    // ============================================================
-    // FALLBACK: impresion con dialogo del navegador
-    // ============================================================
-    function imprimirConDialogo() {
+    function imprimirComanda() {
+        const btn = document.getElementById('btn-imprimir');
+        if (btn) { btn.disabled = true; btn.textContent = 'Imprimiendo...'; }
         document.querySelector('.controles').style.display = 'none';
         setTimeout(() => {
             window.print();
-            setTimeout(() => window.close(), 500);
-        }, 200);
+            setTimeout(() => window.close(), 800);
+        }, 150);
     }
 
-    // ============================================================
-    // PRIMARIO: impresion directa via servidor local (sin dialogo)
-    // ============================================================
-    async function imprimirConServidorLocal() {
-        try {
-            const resp = await fetch(SERVIDOR_LOCAL + '/imprimir', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify(COMANDA_DATA),
-                signal:  AbortSignal.timeout(5000)
-            });
-
-            if (resp.ok) {
-                const resultado = await resp.json();
-                console.log('Impreso en:', resultado.impresora, '| job:', resultado.job);
-                setTimeout(() => window.close(), 1200);
-                return true;
-            } else {
-                const err = await resp.json().catch(() => ({}));
-                console.warn('Servidor local error:', err.error || resp.status);
-                return false;
-            }
-        } catch(e) {
-            console.warn('Servidor local no disponible:', e.message);
-            return false;
-        }
-    }
-
-    // ============================================================
-    // IMPRIMIR: intenta servidor local, si falla usa dialogo
-    // ============================================================
-    async function imprimirComanda() {
-        const btnImprimir = document.getElementById('btn-imprimir');
-        if (btnImprimir) {
-            btnImprimir.disabled = true;
-            btnImprimir.textContent = 'Imprimiendo...';
-        }
-
-        const exito = await imprimirConServidorLocal();
-        if (!exito) {
-            // Servidor no disponible: fallback al dialogo del navegador
-            imprimirConDialogo();
-        }
-    }
-
-    // ============================================================
-    // AUTO-IMPRIMIR cuando se abre con ?auto=1
-    // ============================================================
+    // Auto-imprimir cuando se abre con ?auto=1
     if (new URLSearchParams(window.location.search).get('auto') === '1') {
-        window.addEventListener('load', function() {
-            setTimeout(imprimirComanda, 400);
-        });
+        window.addEventListener('load', () => setTimeout(imprimirComanda, 400));
     }
 
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            imprimirComanda();
-        } else if (e.key === 'Escape') {
-            window.close();
-        }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); imprimirComanda(); }
+        else if (e.key === 'Escape') { window.close(); }
     });
 
     window.focus();
-    console.log('Comanda - Pedido #<?= $pedido_id ?>');
     </script>
 
 </body>
