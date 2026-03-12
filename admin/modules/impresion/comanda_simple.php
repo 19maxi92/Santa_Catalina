@@ -236,7 +236,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <span class="admin-badge">ADMIN</span>
             <strong>Pedido:</strong> #<?= $pedido_id ?> | <strong>Ubicación:</strong> <?= $pedido['ubicacion'] ?>
         </div>
-        <button onclick="imprimirYCerrar()" class="btn btn-print">
+        <button onclick="imprimirConQZTray()" class="btn btn-print">
             🖨️ IMPRIMIR
         </button>
         <button onclick="window.close()" class="btn btn-cancel">
@@ -366,49 +366,110 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
         </div>
     </div>
 
+    <!-- QZ Tray para impresión silenciosa sin diálogo del navegador -->
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray/qz-tray.js"></script>
     <script>
+    // ============================================================
+    // CONFIGURACIÓN DE IMPRESORAS
+    // Cambiar los valores por el nombre exacto de cada impresora
+    // tal como aparece en Windows > Dispositivos e impresoras
+    // ============================================================
+    const IMPRESORAS = {
+        'Local 1': 'IMPRESORA_LOCAL_1',   // ← Poner nombre real de la impresora en Local 1
+        'Fábrica':  'IMPRESORA_FABRICA'   // ← Poner nombre real de la impresora en Fábrica
+    };
+
+    const UBICACION_PEDIDO  = '<?= addslashes($pedido['ubicacion'] ?? 'Local 1') ?>';
+    const IMPRESORA_DESTINO = IMPRESORAS[UBICACION_PEDIDO] || null;
+
+    // ============================================================
+    // IMPRESIÓN CLÁSICA (fallback con diálogo del navegador)
+    // ============================================================
     function imprimirYCerrar() {
         document.querySelector('.controles').style.display = 'none';
-        
         setTimeout(() => {
             window.print();
-            
             marcarComoImpreso(<?= $pedido_id ?>);
-            
-            setTimeout(() => {
-                window.close();
-            }, 500);
+            setTimeout(() => window.close(), 500);
         }, 200);
     }
-    
+
     function marcarComoImpreso(pedidoId) {
         fetch('../../modules/pedidos/marcar_impreso.php', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: `pedido_id=${pedidoId}`
         })
-        .then(response => response.json())
-        .then(data => {
-            console.log('✅ Pedido marcado como impreso');
-        })
-        .catch(error => {
-            console.warn('⚠️ Error marcando como impreso:', error);
+        .then(r => r.json())
+        .then(() => console.log('✅ Pedido marcado como impreso'))
+        .catch(e => console.warn('⚠️ Error marcando como impreso:', e));
+    }
+
+    // ============================================================
+    // IMPRESIÓN SILENCIOSA CON QZ TRAY
+    // Si QZ Tray no está instalado/corriendo cae a window.print()
+    // ============================================================
+    async function imprimirConQZTray() {
+        if (typeof qz === 'undefined' || !IMPRESORA_DESTINO) {
+            console.warn('QZ Tray no disponible o impresora no configurada. Usando window.print().');
+            imprimirYCerrar();
+            return;
+        }
+        try {
+            // Sin certificado: QZ Tray debe tener habilitado "Allow unsigned"
+            qz.security.setCertificatePromise(function(resolve) { resolve(); });
+            qz.security.setSignaturePromise(function() {
+                return function(resolve) { resolve(); };
+            });
+
+            if (!qz.websocket.isActive()) {
+                await qz.websocket.connect();
+            }
+
+            // Capturar HTML de la comanda (sin los controles)
+            document.querySelector('.controles').style.display = 'none';
+            const htmlContent = document.documentElement.outerHTML;
+            document.querySelector('.controles').style.display = '';
+
+            const config = qz.configs.create(IMPRESORA_DESTINO, {
+                colorType: 'blackwhite',
+                units: 'mm',
+                size: { width: 90, height: null }
+            });
+
+            await qz.print(config, [{ type: 'html', format: 'plain', data: htmlContent }]);
+
+            marcarComoImpreso(<?= $pedido_id ?>);
+
+            if (qz.websocket.isActive()) await qz.websocket.disconnect();
+            setTimeout(() => window.close(), 1500);
+
+        } catch (e) {
+            console.error('Error QZ Tray:', e.message || e);
+            imprimirYCerrar();
+        }
+    }
+
+    // ============================================================
+    // AUTO-IMPRIMIR cuando se abre con ?auto=1
+    // ============================================================
+    if (new URLSearchParams(window.location.search).get('auto') === '1') {
+        window.addEventListener('load', function() {
+            setTimeout(imprimirConQZTray, 400);
         });
     }
 
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            imprimirYCerrar();
+            imprimirConQZTray();
         } else if (e.key === 'Escape') {
             window.close();
         }
     });
 
     window.focus();
-    console.log('🎫 Comanda ADMIN - Pedido #<?= $pedido_id ?>');
+    console.log('🎫 Comanda ADMIN - Pedido #<?= $pedido_id ?> | Ubicación: ' + UBICACION_PEDIDO + ' | Impresora: ' + (IMPRESORA_DESTINO || 'no configurada'));
     </script>
 
 </body>

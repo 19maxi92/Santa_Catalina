@@ -1651,7 +1651,7 @@ function finalizarYCrearPedidos() {
                     // Abrir ventanas de impresión para cada pedido
                     resultados.forEach((r, index) => {
                         setTimeout(() => {
-                            const url = `comanda_simple.php?pedido=${r.pedido_id}`;
+                            const url = `comanda_simple.php?pedido=${r.pedido_id}&auto=1`;
                             window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
                         }, index * 500);
                     });
@@ -1789,7 +1789,7 @@ function cambiarEstado(pedidoId, nuevoEstado) {
 }
 
 function imprimir(pedidoId, buttonElement) {
-    const url = `comanda_simple.php?pedido=${pedidoId}`;
+    const url = `comanda_simple.php?pedido=${pedidoId}&auto=1`;
     const ventana = window.open(url, '_blank', 'width=400,height=650,scrollbars=yes');
 
     if (!ventana) {
