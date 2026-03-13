@@ -1132,38 +1132,48 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     // SELECCIÓN DE PEDIDOS
     // ============================================
     
-    // Seleccionar todos
+    // Devuelve solo los checkboxes de filas visibles (respeta el filtro de estados)
+    function getCheckboxesVisibles() {
+        return Array.from(document.querySelectorAll('.checkbox-pedido')).filter(cb => {
+            const fila = cb.closest('[data-pedido-id]');
+            return fila && fila.style.display !== 'none';
+        });
+    }
+
+    // Seleccionar todos (solo los visibles según el filtro activo)
     document.getElementById('selectAll')?.addEventListener('change', function() {
-        const checkboxes = document.querySelectorAll('.checkbox-pedido');
+        const checkboxes = getCheckboxesVisibles();
         checkboxes.forEach(cb => cb.checked = this.checked);
         actualizarContador();
     });
-    
-    // Actualizar contador de seleccionados
+
+    // Actualizar contador de seleccionados (solo filas visibles)
     function actualizarContador() {
-        const seleccionados = document.querySelectorAll('.checkbox-pedido:checked').length;
+        const visibles = getCheckboxesVisibles();
+        const seleccionados = visibles.filter(cb => cb.checked).length;
         const contador = document.getElementById('contador');
-        
+
         if (contador) {
             contador.textContent = seleccionados + ' seleccionados';
-            contador.className = seleccionados > 0 ? 
-                'badge bg-green-500 text-white animate-pulse' : 
+            contador.className = seleccionados > 0 ?
+                'badge bg-green-500 text-white animate-pulse' :
                 'badge bg-blue-500 text-white';
         }
-        
+
         // Actualizar checkbox "Seleccionar todos"
         const selectAll = document.getElementById('selectAll');
-        const total = document.querySelectorAll('.checkbox-pedido').length;
+        const total = visibles.length;
         if (selectAll) {
             selectAll.checked = seleccionados === total && total > 0;
             selectAll.indeterminate = seleccionados > 0 && seleccionados < total;
         }
     }
-    
-    // Obtener IDs seleccionados
+
+    // Obtener IDs seleccionados (solo de filas visibles)
     function getSeleccionados() {
-        const checks = document.querySelectorAll('.checkbox-pedido:checked');
-        return Array.from(checks).map(c => c.value);
+        return getCheckboxesVisibles()
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
     }
     
     // ============================================
@@ -1453,7 +1463,13 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
             const estado = pedido.dataset.estado;
             const mostrar = estadosSeleccionados.includes(estado);
             pedido.style.display = mostrar ? '' : 'none';
+            // Desmarcar checkboxes de filas ocultas para que no se incluyan en acciones masivas
+            if (!mostrar) {
+                const cb = pedido.querySelector('.checkbox-pedido');
+                if (cb) cb.checked = false;
+            }
         });
+        actualizarContador();
 
         localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
     }
