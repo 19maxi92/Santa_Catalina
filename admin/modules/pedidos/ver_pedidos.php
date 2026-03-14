@@ -620,7 +620,6 @@ arsort($productos_unicos); // más pedidos primero
                                    onchange="aplicarFiltroProductos()">
                             <span class="chip-producto-label bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full border-2 border-transparent hover:border-indigo-400 transition-all select-none">
                                 🥪 <?= htmlspecialchars($prod) ?>
-                                <span class="ml-1 bg-gray-300 text-gray-600 text-xs px-1.5 py-0.5 rounded-full font-semibold"><?= $cant ?></span>
                             </span>
                         </label>
                         <?php endforeach; ?>
