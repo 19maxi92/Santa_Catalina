@@ -581,6 +581,24 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                     </div>
                 </form>
             </details>
+
+            <!-- ============================================ -->
+            <!-- RESUMEN DE PAQUETES -->
+            <!-- ============================================ -->
+            <details id="detalles-resumen-paquetes" class="text-sm mt-3">
+                <summary class="cursor-pointer text-gray-600 hover:text-gray-800 font-semibold mb-2 inline-flex items-center gap-2">
+                    <i class="fas fa-box-open"></i>
+                    Resumen de Paquetes
+                    <span id="resumen-total-badge" class="badge bg-indigo-500 text-white ml-1 text-xs">0 und.</span>
+                    <span id="filtro-producto-activo-badge" class="hidden badge bg-orange-500 text-white text-xs">
+                        <i class="fas fa-filter mr-1"></i><span id="filtro-producto-nombre"></span>
+                        <button onclick="limpiarFiltroProducto(event)" class="ml-1 hover:text-orange-200">✕</button>
+                    </span>
+                </summary>
+                <div id="resumen-paquetes-contenido" class="mt-2 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <p class="text-gray-400 text-sm italic">Cargando resumen...</p>
+                </div>
+            </details>
         </div>
     </div>
 
@@ -711,7 +729,9 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         ?>
                         
                         <div class="pedido-card <?= $es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white' ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
-                             data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>">
+                             data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>"
+                             data-producto="<?= htmlspecialchars($pedido['producto'] ?? '', ENT_QUOTES) ?>"
+                             data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>">
                             <div class="flex items-center gap-3">
 
                                 <!-- CHECKBOX -->
@@ -1449,6 +1469,13 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     // ============================================
 
     function aplicarFiltrosMultiples() {
+        // Si hay un filtro de producto activo, limpiarlo primero
+        if (filtroProductoActivo) {
+            filtroProductoActivo = null;
+            const badge = document.getElementById('filtro-producto-activo-badge');
+            if (badge) badge.classList.add('hidden');
+        }
+
         const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
         const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
 
@@ -1456,6 +1483,7 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
 
         if (estadosSeleccionados.length === 0) {
             pedidos.forEach(pedido => pedido.style.display = 'none');
+            actualizarResumenPaquetes();
             return;
         }
 
@@ -1472,6 +1500,109 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         actualizarContador();
 
         localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
+        actualizarResumenPaquetes();
+    }
+
+    // ============================================
+    // RESUMEN DE PAQUETES
+    // ============================================
+
+    let filtroProductoActivo = null;
+
+    function actualizarResumenPaquetes() {
+        const filas = document.querySelectorAll('[data-pedido-id]');
+        const resumen = {};
+        let totalUnidades = 0;
+
+        filas.forEach(fila => {
+            if (fila.style.display === 'none') return;
+
+            const producto = fila.dataset.producto || '';
+            const cantidad = parseInt(fila.dataset.cantidad || 0);
+
+            // Excluir personalizados complejos
+            if (!producto || /personaliza/i.test(producto)) return;
+
+            if (!resumen[producto]) resumen[producto] = { pedidos: 0, unidades: 0 };
+            resumen[producto].pedidos++;
+            resumen[producto].unidades += cantidad;
+            totalUnidades += cantidad;
+        });
+
+        const badge = document.getElementById('resumen-total-badge');
+        if (badge) badge.textContent = totalUnidades + ' und.';
+
+        const contenido = document.getElementById('resumen-paquetes-contenido');
+        if (!contenido) return;
+
+        const entries = Object.entries(resumen).sort((a, b) => b[1].unidades - a[1].unidades);
+
+        if (entries.length === 0) {
+            contenido.innerHTML = '<p class="text-gray-500 text-sm italic">No hay paquetes estándar en la vista actual</p>';
+            return;
+        }
+
+        let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">';
+        entries.forEach(([producto, data]) => {
+            const esActivo = filtroProductoActivo === producto;
+            html += `
+                <div class="resumen-item flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm border cursor-pointer transition-all
+                            ${esActivo ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-300' : 'border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300'}"
+                     onclick="filtrarPorProducto(this, ${JSON.stringify(producto)})">
+                    <span class="font-semibold text-gray-800 text-sm truncate mr-2">${producto}</span>
+                    <div class="flex gap-1 items-center text-xs shrink-0">
+                        <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${data.pedidos} ped.</span>
+                        <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">${data.unidades} und.</span>
+                    </div>
+                </div>`;
+        });
+        html += '</div>';
+        html += `<div class="mt-3 pt-2 border-t border-indigo-200 flex justify-between items-center">
+            <span class="font-bold text-gray-700 text-sm">TOTAL paquetes estándar (vista actual)</span>
+            <span class="font-bold text-indigo-700">${totalUnidades} sándwiches</span>
+        </div>`;
+
+        contenido.innerHTML = html;
+    }
+
+    function filtrarPorProducto(el, producto) {
+        if (filtroProductoActivo === producto) {
+            limpiarFiltroProducto();
+            return;
+        }
+
+        filtroProductoActivo = producto;
+
+        // Mostrar badge de filtro activo
+        const badge = document.getElementById('filtro-producto-activo-badge');
+        const nombre = document.getElementById('filtro-producto-nombre');
+        if (badge) badge.classList.remove('hidden');
+        if (nombre) nombre.textContent = producto;
+
+        // Aplicar filtro: mostrar solo filas con ese producto
+        document.querySelectorAll('[data-pedido-id]').forEach(fila => {
+            const prod = fila.dataset.producto || '';
+            const visible = prod === producto;
+            fila.style.display = visible ? '' : 'none';
+            if (!visible) {
+                const cb = fila.querySelector('.checkbox-pedido');
+                if (cb) cb.checked = false;
+            }
+        });
+
+        actualizarContador();
+        actualizarResumenPaquetes();
+    }
+
+    function limpiarFiltroProducto(e) {
+        if (e) e.stopPropagation();
+        filtroProductoActivo = null;
+
+        const badge = document.getElementById('filtro-producto-activo-badge');
+        if (badge) badge.classList.add('hidden');
+
+        // Volver a aplicar filtro de estados
+        aplicarFiltrosMultiples();
     }
 
     function toggleTodosEstados() {
