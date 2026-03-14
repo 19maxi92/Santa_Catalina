@@ -618,7 +618,8 @@ arsort($productos_unicos); // más pedidos primero
                             <input type="checkbox" class="filter-producto-checkbox sr-only"
                                    value="<?= htmlspecialchars($prod, ENT_QUOTES) ?>"
                                    onchange="aplicarFiltroProductos()">
-                            <span class="chip-producto-label bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full border-2 border-transparent hover:border-indigo-400 transition-all select-none">
+                            <span class="chip-producto-label bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full border-2 border-transparent hover:border-indigo-400 transition-all select-none"
+                                  data-prod="<?= htmlspecialchars($prod, ENT_QUOTES) ?>">
                                 🥪 <?= htmlspecialchars($prod) ?>
                             </span>
                         </label>
@@ -1566,10 +1567,31 @@ arsort($productos_unicos); // más pedidos primero
         });
 
         actualizarContador();
+
+        // Actualizar labels de chips: mostrar (N) solo en los seleccionados
+        document.querySelectorAll('.chip-producto').forEach(chip => {
+            const cb    = chip.querySelector('.filter-producto-checkbox');
+            const label = chip.querySelector('.chip-producto-label');
+            if (!cb || !label) return;
+            const prod = cb.value;
+            if (cb.checked) {
+                // Contar filas visibles con este producto
+                const count = Array.from(
+                    document.querySelectorAll('[data-pedido-id]')
+                ).filter(f => f.style.display !== 'none' && f.dataset.producto === prod).length;
+                label.textContent = `🥪 ${label.dataset.prod} (${count})`;
+            } else {
+                label.textContent = `🥪 ${label.dataset.prod}`;
+            }
+        });
     }
 
     function limpiarFiltroProducto() {
         document.querySelectorAll('.filter-producto-checkbox').forEach(cb => cb.checked = false);
+        // Resetear todos los labels
+        document.querySelectorAll('.chip-producto-label').forEach(label => {
+            label.textContent = `🥪 ${label.dataset.prod}`;
+        });
         const btnLimpiar = document.getElementById('btn-limpiar-producto');
         if (btnLimpiar) btnLimpiar.classList.add('hidden');
         aplicarFiltrosMultiples();
