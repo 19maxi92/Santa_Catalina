@@ -310,9 +310,10 @@ try {
                                 <span class="text-xs text-gray-500">(¿Para cuándo es el pedido?)</span>
                             </label>
                             <input type="date" id="fecha_entrega" required
-                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-lg"
+                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-lg cursor-pointer"
                                    value="<?php echo date('Y-m-d'); ?>"
-                                   min="<?php echo date('Y-m-d'); ?>">
+                                   min="<?php echo date('Y-m-d'); ?>"
+                                   onclick="try{this.showPicker()}catch(e){}">
                         </div>
 
                         <!-- Turno -->

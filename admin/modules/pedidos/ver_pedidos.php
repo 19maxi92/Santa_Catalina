@@ -183,6 +183,19 @@ $entregados = count(array_filter($pedidos, fn($p) => $p['estado'] === 'Entregado
 $impresos = count(array_filter($pedidos, fn($p) => $p['impreso'] == 1));
 $total_ventas = array_sum(array_column($pedidos, 'precio'));
 $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente' && $p['estado'] !== 'Entregado'));
+
+// Productos únicos (excluye personalizados) para chips de filtro
+$productos_unicos = [];
+foreach ($pedidos as $p) {
+    $prod = trim($p['producto'] ?? '');
+    if ($prod && !preg_match('/personaliza/i', $prod) && !isset($productos_unicos[$prod])) {
+        $productos_unicos[$prod] = 0;
+    }
+    if ($prod && !preg_match('/personaliza/i', $prod)) {
+        $productos_unicos[$prod]++;
+    }
+}
+arsort($productos_unicos); // más pedidos primero
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -293,6 +306,14 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         }
 
         /* FILTROS MÚLTIPLES */
+        .chip-producto .filter-producto-checkbox:checked + .chip-producto-label {
+            background-color: #e0e7ff;
+            color: #3730a3;
+            border-color: #6366f1;
+            font-weight: 700;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
         .filter-checkbox-label input[type="checkbox"]:checked + span {
             border-color: currentColor;
             box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
@@ -554,22 +575,22 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                     Filtros Avanzados
                 </summary>
                 <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-3 mt-2">
-                    <input type="text" name="buscar" value="<?= htmlspecialchars($busqueda) ?>" 
-                           placeholder="🔍 Buscar por nombre, tel, producto..." 
+                    <input type="text" name="buscar" value="<?= htmlspecialchars($busqueda) ?>"
+                           placeholder="🔍 Buscar por nombre, tel, producto..."
                            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    
-                    <input type="date" name="fecha_desde" value="<?= $fecha_desde ?>" 
+
+                    <input type="date" name="fecha_desde" value="<?= $fecha_desde ?>"
                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                    
-                    <input type="date" name="fecha_hasta" value="<?= $fecha_hasta ?>" 
+
+                    <input type="date" name="fecha_hasta" value="<?= $fecha_hasta ?>"
                            class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                    
+
                     <select name="modalidad" class="px-4 py-2 border border-gray-300 rounded-lg text-sm">
                         <option value="">🚚 Todas modalidades</option>
                         <option value="Retiro" <?= $filtro_modalidad === 'Retiro' ? 'selected' : '' ?>>📦 Retiro</option>
                         <option value="Delivery" <?= $filtro_modalidad === 'Delivery' ? 'selected' : '' ?>>🏍️ Delivery</option>
                     </select>
-                    
+
                     <div class="flex gap-2">
                         <button type="submit" class="btn flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                             <i class="fas fa-search"></i>
@@ -580,25 +601,34 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                         </a>
                     </div>
                 </form>
+
+                <?php if (!empty($productos_unicos)): ?>
+                <!-- FILTRO POR TIPO DE SÁNDWICH -->
+                <div class="mt-4 pt-3 border-t border-gray-200">
+                    <div class="text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-bread-slice mr-1"></i>Filtrar por tipo de sándwich:
+                        <button onclick="limpiarFiltroProducto()" id="btn-limpiar-producto"
+                                class="hidden ml-2 text-xs bg-orange-100 text-orange-700 border border-orange-300 px-2 py-0.5 rounded-full hover:bg-orange-200">
+                            ✕ Limpiar filtro
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2" id="chips-productos">
+                        <?php foreach ($productos_unicos as $prod => $cant): ?>
+                        <label class="chip-producto inline-flex items-center cursor-pointer">
+                            <input type="checkbox" class="filter-producto-checkbox sr-only"
+                                   value="<?= htmlspecialchars($prod, ENT_QUOTES) ?>"
+                                   onchange="aplicarFiltroProductos()">
+                            <span class="chip-producto-label bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full border-2 border-transparent hover:border-indigo-400 transition-all select-none"
+                                  data-prod="<?= htmlspecialchars($prod, ENT_QUOTES) ?>">
+                                🥪 <?= htmlspecialchars($prod) ?>
+                            </span>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </details>
 
-            <!-- ============================================ -->
-            <!-- RESUMEN DE PAQUETES -->
-            <!-- ============================================ -->
-            <details id="detalles-resumen-paquetes" class="text-sm mt-3">
-                <summary class="cursor-pointer text-gray-600 hover:text-gray-800 font-semibold mb-2 inline-flex items-center gap-2">
-                    <i class="fas fa-box-open"></i>
-                    Resumen de Paquetes
-                    <span id="resumen-total-badge" class="badge bg-indigo-500 text-white ml-1 text-xs">0 und.</span>
-                    <span id="filtro-producto-activo-badge" class="hidden badge bg-orange-500 text-white text-xs">
-                        <i class="fas fa-filter mr-1"></i><span id="filtro-producto-nombre"></span>
-                        <button onclick="limpiarFiltroProducto(event)" class="ml-1 hover:text-orange-200">✕</button>
-                    </span>
-                </summary>
-                <div id="resumen-paquetes-contenido" class="mt-2 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                    <p class="text-gray-400 text-sm italic">Cargando resumen...</p>
-                </div>
-            </details>
         </div>
     </div>
 
@@ -771,6 +801,20 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
                                     <div class="flex-1 min-w-[150px]">
                                         <div class="font-semibold text-sm text-gray-800 truncate"><?= htmlspecialchars($nombre_completo) ?></div>
                                         <div class="text-xs text-gray-600"><?= htmlspecialchars($pedido['telefono']) ?></div>
+                                    </div>
+
+                                    <!-- ESTADO DE PAGO -->
+                                    <div class="flex flex-col items-center gap-1 min-w-[80px]">
+                                        <span id="badge-pago-row-<?= $pedido['id'] ?>"
+                                              class="text-xs font-bold px-2 py-0.5 rounded-full <?= $pedido['pagado'] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600' ?>">
+                                            <?= $pedido['pagado'] ? 'PAGADO' : 'NO PAGADO' ?>
+                                        </span>
+                                        <button onclick="togglePagoRow(<?= $pedido['id'] ?>, <?= (int)$pedido['pagado'] ?>)"
+                                                id="btn-pago-row-<?= $pedido['id'] ?>"
+                                                class="text-xs px-2 py-0.5 rounded border font-semibold transition-all
+                                                       <?= $pedido['pagado'] ? 'border-gray-300 text-gray-500 hover:bg-gray-100' : 'border-green-500 text-green-600 hover:bg-green-50' ?>">
+                                            <?= $pedido['pagado'] ? 'Desmarcar' : 'Marcar pago' ?>
+                                        </button>
                                     </div>
                                     
                                     <!-- PRODUCTO + MINI BADGES + BOTÓN OJO -->
@@ -1309,6 +1353,38 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         return true;
     }
 
+    function togglePagoRow(pedidoId, estadoActual) {
+        const nuevoPagado = estadoActual ? 0 : 1;
+        const msg = nuevoPagado ? '¿Confirmar que este pedido ya fue PAGADO?' : '¿Desmarcar el pago?';
+        if (!confirm(msg)) return;
+
+        const formData = new FormData();
+        formData.append('accion', 'marcar_pagado');
+        formData.append('id', pedidoId);
+        formData.append('pagado', nuevoPagado);
+
+        fetch('ver_pedidos.php', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const badge = document.getElementById(`badge-pago-row-${pedidoId}`);
+            const btn   = document.getElementById(`btn-pago-row-${pedidoId}`);
+            if (badge) {
+                badge.textContent = nuevoPagado ? 'PAGADO' : 'NO PAGADO';
+                badge.className = `text-xs font-bold px-2 py-0.5 rounded-full ${nuevoPagado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`;
+            }
+            if (btn) {
+                btn.textContent = nuevoPagado ? 'Desmarcar' : 'Marcar pago';
+                btn.className = `text-xs px-2 py-0.5 rounded border font-semibold transition-all ${nuevoPagado ? 'border-gray-300 text-gray-500 hover:bg-gray-100' : 'border-green-500 text-green-600 hover:bg-green-50'}`;
+                btn.setAttribute('onclick', `togglePagoRow(${pedidoId}, ${nuevoPagado})`);
+            }
+            // Actualizar también en pedidosData para el modal
+            const p = pedidosData.find(x => x.id == pedidoId);
+            if (p) p.pagado = nuevoPagado;
+        })
+        .catch(err => console.error('Error:', err));
+    }
+
     function togglePago(pedidoId, estadoActual) {
         const nuevoPagado = estadoActual ? 0 : 1;
         const msg = nuevoPagado ? '¿Confirmar que este pedido ya fue PAGADO?' : '¿Desmarcar el pago de este pedido?';
@@ -1469,29 +1545,31 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
     // ============================================
 
     function aplicarFiltrosMultiples() {
-        // Si hay un filtro de producto activo, limpiarlo primero
-        if (filtroProductoActivo) {
-            filtroProductoActivo = null;
-            const badge = document.getElementById('filtro-producto-activo-badge');
-            if (badge) badge.classList.add('hidden');
-        }
-
         const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
         const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+
+        // Productos seleccionados (pueden estar activos al mismo tiempo)
+        const productosSeleccionados = Array.from(
+            document.querySelectorAll('.filter-producto-checkbox:checked')
+        ).map(cb => cb.value);
 
         const pedidos = document.querySelectorAll('[data-pedido-id]');
 
         if (estadosSeleccionados.length === 0) {
             pedidos.forEach(pedido => pedido.style.display = 'none');
-            actualizarResumenPaquetes();
+            actualizarContador();
             return;
         }
 
         pedidos.forEach(pedido => {
             const estado = pedido.dataset.estado;
-            const mostrar = estadosSeleccionados.includes(estado);
+            const prod = pedido.dataset.producto || '';
+
+            const pasaEstado   = estadosSeleccionados.includes(estado);
+            const pasaProducto = productosSeleccionados.length === 0 || productosSeleccionados.includes(prod);
+            const mostrar = pasaEstado && pasaProducto;
+
             pedido.style.display = mostrar ? '' : 'none';
-            // Desmarcar checkboxes de filas ocultas para que no se incluyan en acciones masivas
             if (!mostrar) {
                 const cb = pedido.querySelector('.checkbox-pedido');
                 if (cb) cb.checked = false;
@@ -1500,89 +1578,33 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         actualizarContador();
 
         localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
-        actualizarResumenPaquetes();
     }
 
     // ============================================
-    // RESUMEN DE PAQUETES
+    // FILTRO POR TIPO DE SÁNDWICH
     // ============================================
 
-    let filtroProductoActivo = null;
+    function aplicarFiltroProductos() {
+        const seleccionados = Array.from(
+            document.querySelectorAll('.filter-producto-checkbox:checked')
+        ).map(cb => cb.value);
 
-    function actualizarResumenPaquetes() {
-        const filas = document.querySelectorAll('[data-pedido-id]');
-        const resumen = {};
-        let totalUnidades = 0;
+        const btnLimpiar = document.getElementById('btn-limpiar-producto');
+        if (btnLimpiar) btnLimpiar.classList.toggle('hidden', seleccionados.length === 0);
 
-        filas.forEach(fila => {
-            if (fila.style.display === 'none') return;
+        // Combinar con el filtro de estados
+        const estadosActivos = Array.from(
+            document.querySelectorAll('.filter-estado-checkbox:checked')
+        ).map(cb => cb.value);
 
-            const producto = fila.dataset.producto || '';
-            const cantidad = parseInt(fila.dataset.cantidad || 0);
-
-            // Excluir personalizados complejos
-            if (!producto || /personaliza/i.test(producto)) return;
-
-            if (!resumen[producto]) resumen[producto] = { pedidos: 0, unidades: 0 };
-            resumen[producto].pedidos++;
-            resumen[producto].unidades += cantidad;
-            totalUnidades += cantidad;
-        });
-
-        const badge = document.getElementById('resumen-total-badge');
-        if (badge) badge.textContent = totalUnidades + ' und.';
-
-        const contenido = document.getElementById('resumen-paquetes-contenido');
-        if (!contenido) return;
-
-        const entries = Object.entries(resumen).sort((a, b) => b[1].unidades - a[1].unidades);
-
-        if (entries.length === 0) {
-            contenido.innerHTML = '<p class="text-gray-500 text-sm italic">No hay paquetes estándar en la vista actual</p>';
-            return;
-        }
-
-        let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">';
-        entries.forEach(([producto, data]) => {
-            const esActivo = filtroProductoActivo === producto;
-            html += `
-                <div class="resumen-item flex items-center justify-between bg-white rounded-lg px-3 py-2 shadow-sm border cursor-pointer transition-all
-                            ${esActivo ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-300' : 'border-indigo-100 hover:bg-indigo-50 hover:border-indigo-300'}"
-                     onclick="filtrarPorProducto(this, ${JSON.stringify(producto)})">
-                    <span class="font-semibold text-gray-800 text-sm truncate mr-2">${producto}</span>
-                    <div class="flex gap-1 items-center text-xs shrink-0">
-                        <span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">${data.pedidos} ped.</span>
-                        <span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">${data.unidades} und.</span>
-                    </div>
-                </div>`;
-        });
-        html += '</div>';
-        html += `<div class="mt-3 pt-2 border-t border-indigo-200 flex justify-between items-center">
-            <span class="font-bold text-gray-700 text-sm">TOTAL paquetes estándar (vista actual)</span>
-            <span class="font-bold text-indigo-700">${totalUnidades} sándwiches</span>
-        </div>`;
-
-        contenido.innerHTML = html;
-    }
-
-    function filtrarPorProducto(el, producto) {
-        if (filtroProductoActivo === producto) {
-            limpiarFiltroProducto();
-            return;
-        }
-
-        filtroProductoActivo = producto;
-
-        // Mostrar badge de filtro activo
-        const badge = document.getElementById('filtro-producto-activo-badge');
-        const nombre = document.getElementById('filtro-producto-nombre');
-        if (badge) badge.classList.remove('hidden');
-        if (nombre) nombre.textContent = producto;
-
-        // Aplicar filtro: mostrar solo filas con ese producto
         document.querySelectorAll('[data-pedido-id]').forEach(fila => {
-            const prod = fila.dataset.producto || '';
-            const visible = prod === producto;
+            const prod  = fila.dataset.producto || '';
+            const estado = fila.dataset.estado || '';
+
+            const pasaEstado  = estadosActivos.length === 0 || estadosActivos.includes(estado);
+            const pasaProducto = seleccionados.length === 0 || seleccionados.includes(prod);
+            const visible = pasaEstado && pasaProducto;
+
             fila.style.display = visible ? '' : 'none';
             if (!visible) {
                 const cb = fila.querySelector('.checkbox-pedido');
@@ -1591,17 +1613,33 @@ $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente'
         });
 
         actualizarContador();
-        actualizarResumenPaquetes();
+
+        // Actualizar labels de chips: mostrar (N) solo en los seleccionados
+        document.querySelectorAll('.chip-producto').forEach(chip => {
+            const cb    = chip.querySelector('.filter-producto-checkbox');
+            const label = chip.querySelector('.chip-producto-label');
+            if (!cb || !label) return;
+            const prod = cb.value;
+            if (cb.checked) {
+                // Contar filas visibles con este producto
+                const count = Array.from(
+                    document.querySelectorAll('[data-pedido-id]')
+                ).filter(f => f.style.display !== 'none' && f.dataset.producto === prod).length;
+                label.textContent = `🥪 ${label.dataset.prod} (${count})`;
+            } else {
+                label.textContent = `🥪 ${label.dataset.prod}`;
+            }
+        });
     }
 
-    function limpiarFiltroProducto(e) {
-        if (e) e.stopPropagation();
-        filtroProductoActivo = null;
-
-        const badge = document.getElementById('filtro-producto-activo-badge');
-        if (badge) badge.classList.add('hidden');
-
-        // Volver a aplicar filtro de estados
+    function limpiarFiltroProducto() {
+        document.querySelectorAll('.filter-producto-checkbox').forEach(cb => cb.checked = false);
+        // Resetear todos los labels
+        document.querySelectorAll('.chip-producto-label').forEach(label => {
+            label.textContent = `🥪 ${label.dataset.prod}`;
+        });
+        const btnLimpiar = document.getElementById('btn-limpiar-producto');
+        if (btnLimpiar) btnLimpiar.classList.add('hidden');
         aplicarFiltrosMultiples();
     }
 
