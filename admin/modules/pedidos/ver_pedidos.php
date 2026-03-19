@@ -802,6 +802,20 @@ arsort($productos_unicos); // más pedidos primero
                                         <div class="font-semibold text-sm text-gray-800 truncate"><?= htmlspecialchars($nombre_completo) ?></div>
                                         <div class="text-xs text-gray-600"><?= htmlspecialchars($pedido['telefono']) ?></div>
                                     </div>
+
+                                    <!-- ESTADO DE PAGO -->
+                                    <div class="flex flex-col items-center gap-1 min-w-[80px]">
+                                        <span id="badge-pago-row-<?= $pedido['id'] ?>"
+                                              class="text-xs font-bold px-2 py-0.5 rounded-full <?= $pedido['pagado'] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600' ?>">
+                                            <?= $pedido['pagado'] ? 'PAGADO' : 'NO PAGADO' ?>
+                                        </span>
+                                        <button onclick="togglePagoRow(<?= $pedido['id'] ?>, <?= (int)$pedido['pagado'] ?>)"
+                                                id="btn-pago-row-<?= $pedido['id'] ?>"
+                                                class="text-xs px-2 py-0.5 rounded border font-semibold transition-all
+                                                       <?= $pedido['pagado'] ? 'border-gray-300 text-gray-500 hover:bg-gray-100' : 'border-green-500 text-green-600 hover:bg-green-50' ?>">
+                                            <?= $pedido['pagado'] ? 'Desmarcar' : 'Marcar pago' ?>
+                                        </button>
+                                    </div>
                                     
                                     <!-- PRODUCTO + MINI BADGES + BOTÓN OJO -->
                                     <div class="flex-1 min-w-[180px] flex items-center gap-2">
@@ -1337,6 +1351,38 @@ arsort($productos_unicos); // más pedidos primero
         setTimeout(() => marcarImpreso(pedidoId), 2000);
 
         return true;
+    }
+
+    function togglePagoRow(pedidoId, estadoActual) {
+        const nuevoPagado = estadoActual ? 0 : 1;
+        const msg = nuevoPagado ? '¿Confirmar que este pedido ya fue PAGADO?' : '¿Desmarcar el pago?';
+        if (!confirm(msg)) return;
+
+        const formData = new FormData();
+        formData.append('accion', 'marcar_pagado');
+        formData.append('id', pedidoId);
+        formData.append('pagado', nuevoPagado);
+
+        fetch('ver_pedidos.php', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const badge = document.getElementById(`badge-pago-row-${pedidoId}`);
+            const btn   = document.getElementById(`btn-pago-row-${pedidoId}`);
+            if (badge) {
+                badge.textContent = nuevoPagado ? 'PAGADO' : 'NO PAGADO';
+                badge.className = `text-xs font-bold px-2 py-0.5 rounded-full ${nuevoPagado ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`;
+            }
+            if (btn) {
+                btn.textContent = nuevoPagado ? 'Desmarcar' : 'Marcar pago';
+                btn.className = `text-xs px-2 py-0.5 rounded border font-semibold transition-all ${nuevoPagado ? 'border-gray-300 text-gray-500 hover:bg-gray-100' : 'border-green-500 text-green-600 hover:bg-green-50'}`;
+                btn.setAttribute('onclick', `togglePagoRow(${pedidoId}, ${nuevoPagado})`);
+            }
+            // Actualizar también en pedidosData para el modal
+            const p = pedidosData.find(x => x.id == pedidoId);
+            if (p) p.pagado = nuevoPagado;
+        })
+        .catch(err => console.error('Error:', err));
     }
 
     function togglePago(pedidoId, estadoActual) {
