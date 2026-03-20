@@ -49,6 +49,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
 
+            case 'guardar_bebidas':
+                if ($id) {
+                    $items  = json_decode($_POST['bebidas_json'] ?? '[]', true) ?: [];
+                    $precio = (int)($_POST['bebidas_precio'] ?? 0);
+                    $json   = count($items) ? json_encode($items, JSON_UNESCAPED_UNICODE) : null;
+                    $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$json, $precio ?: null, $id]);
+                    echo json_encode(['success' => true, 'tiene_bebidas' => !empty($items)]);
+                    exit;
+                }
+                break;
+
             // ACCIONES MASIVAS
             case 'accion_masiva':
                 $pedidos = $_POST['pedidos'] ?? [];
@@ -92,6 +104,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ============================================
+// AUTO-MIGRACIÓN BEBIDAS
+// ============================================
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS `bebidas` (
+        `id` int(11) NOT NULL AUTO_INCREMENT,
+        `nombre` varchar(100) NOT NULL,
+        `activo` tinyint(1) NOT NULL DEFAULT 1,
+        `orden` int(11) NOT NULL DEFAULT 0,
+        `created_at` timestamp NULL DEFAULT current_timestamp(),
+        PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    foreach (['bebidas_json TEXT DEFAULT NULL', 'bebidas_precio INT DEFAULT NULL'] as $col) {
+        try { $pdo->exec("ALTER TABLE pedidos ADD COLUMN $col"); } catch (Exception $e) {}
+    }
+    if ($pdo->query("SELECT COUNT(*) FROM bebidas")->fetchColumn() == 0) {
+        $pdo->exec("INSERT INTO bebidas (nombre, orden) VALUES
+            ('Monster Ultra',1),('Monster Azul',2),('Monster Verde',3),('Monster Negro',4),
+            ('Monster Reserva Ananás',5),('Coca-Cola 500ml',6),('Coca-Cola 2.25L',7),
+            ('Sprite 500ml',8),('Sprite 2L',9),('Fanta 500ml',10),('Fanta 2L',11),
+            ('Baggio Pronto Naranja',12),('Baggio Pronto Multifrutas',13),
+            ('Baggio Fresh Manzana',14),('Baggio Fresh',15)");
+    }
+} catch (Exception $e) {}
+
+// Cargar lista de bebidas activas para el modal
+$bebidas_disponibles = [];
+try {
+    $bebidas_disponibles = $pdo->query("SELECT id, nombre FROM bebidas WHERE activo = 1 ORDER BY orden ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {}
+
+// ============================================
 // FILTROS
 // ============================================
 $filtro_estado = $_GET['estado'] ?? '';
@@ -111,7 +154,7 @@ if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_
 // ============================================
 // CONSTRUIR SQL
 // ============================================
-$sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido,
+$sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, p.bebidas_json, COALESCE(p.bebidas_precio, 0) as bebidas_precio, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido,
                TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) as minutos_transcurridos,
                CASE 
                    WHEN TIMESTAMPDIFF(MINUTE, p.created_at, NOW()) > 120 THEN 'urgente'
@@ -758,10 +801,12 @@ arsort($productos_unicos); // más pedidos primero
                         };
                         ?>
                         
-                        <div class="pedido-card <?= $es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white' ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
+                        <?php $tiene_bebidas_card = !empty($pedido['bebidas_json']); ?>
+                        <div class="pedido-card <?= $tiene_bebidas_card ? 'bg-cyan-50 border-l-4 border-l-cyan-400 border border-cyan-200' : ($es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white') ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
                              data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>"
                              data-producto="<?= htmlspecialchars($pedido['producto'] ?? '', ENT_QUOTES) ?>"
-                             data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>">
+                             data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>"
+                             data-tiene-bebidas="<?= $tiene_bebidas_card ? '1' : '0' ?>">
                             <div class="flex items-center gap-3">
 
                                 <!-- CHECKBOX -->
@@ -816,7 +861,26 @@ arsort($productos_unicos); // más pedidos primero
                                             <?= $pedido['pagado'] ? 'Desmarcar' : 'Marcar pago' ?>
                                         </button>
                                     </div>
-                                    
+
+                                    <!-- BOTÓN BEBIDAS -->
+                                    <?php $tiene_bebidas = !empty($pedido['bebidas_json']); ?>
+                                    <div class="flex flex-col items-center gap-1 min-w-[60px]">
+                                        <button onclick="abrirModalBebidas(<?= $pedido['id'] ?>)"
+                                                id="btn-bebidas-<?= $pedido['id'] ?>"
+                                                title="<?= $tiene_bebidas ? 'Ver/editar bebidas' : 'Agregar bebidas' ?>"
+                                                class="text-2xl leading-none transition-transform hover:scale-110 <?= $tiene_bebidas ? 'animate-bounce' : 'opacity-40 hover:opacity-100' ?>">
+                                            🥤
+                                        </button>
+                                        <?php if ($tiene_bebidas): ?>
+                                        <span id="badge-bebidas-<?= $pedido['id'] ?>"
+                                              class="text-xs font-bold text-cyan-700 bg-cyan-100 px-1.5 py-0.5 rounded-full">
+                                            +beb.
+                                        </span>
+                                        <?php else: ?>
+                                        <span id="badge-bebidas-<?= $pedido['id'] ?>" class="text-xs text-gray-400 hidden">+beb.</span>
+                                        <?php endif; ?>
+                                    </div>
+
                                     <!-- PRODUCTO + MINI BADGES + BOTÓN OJO -->
                                     <div class="flex-1 min-w-[180px] flex items-center gap-2">
                                         <div class="flex-1">
@@ -930,6 +994,56 @@ arsort($productos_unicos); // más pedidos primero
                 </div>
             </div>
             
+            <!-- MODAL BEBIDAS -->
+            <div id="modalBebidas" class="modal-overlay hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+                 onclick="if(event.target===this) cerrarModalBebidas()">
+                <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                    <div class="bg-cyan-600 text-white px-6 py-4 rounded-t-2xl flex items-center justify-between">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            🥤 Bebidas para pedido <span id="modal-beb-id" class="bg-white text-cyan-700 px-2 py-0.5 rounded font-mono text-sm"></span>
+                        </h2>
+                        <button onclick="cerrarModalBebidas()" class="text-white hover:text-cyan-200 text-xl">✕</button>
+                    </div>
+                    <div class="p-5">
+                        <!-- cliente info -->
+                        <p class="text-sm text-gray-600 mb-4" id="modal-beb-cliente"></p>
+
+                        <!-- lista bebidas -->
+                        <div class="grid grid-cols-1 gap-2 mb-5" id="modal-beb-lista">
+                            <!-- generado por JS -->
+                        </div>
+
+                        <!-- precio total -->
+                        <div class="border-t pt-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-1">
+                                💰 Precio total de las bebidas
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <span class="text-gray-500 font-bold">$</span>
+                                <input type="number" id="modal-beb-precio" min="0" step="100"
+                                       placeholder="0" class="flex-1 border-2 border-gray-300 rounded-lg px-3 py-2 text-lg font-semibold focus:border-cyan-500 focus:ring-1 focus:ring-cyan-300">
+                            </div>
+                        </div>
+
+                        <!-- acciones -->
+                        <div class="flex gap-2 mt-5">
+                            <button onclick="guardarBebidas()" id="btn-guardar-beb"
+                                    class="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-xl transition-colors">
+                                <i class="fas fa-save mr-1"></i> Guardar
+                            </button>
+                            <a id="btn-imprimir-beb" href="#" target="_blank"
+                               class="flex items-center gap-1 bg-gray-700 hover:bg-gray-800 text-white font-semibold px-4 py-3 rounded-xl transition-colors text-sm">
+                                <i class="fas fa-print"></i> Comanda
+                            </a>
+                            <button onclick="limpiarBebidas()" id="btn-limpiar-beb"
+                                    class="bg-red-100 hover:bg-red-200 text-red-600 font-semibold px-4 py-3 rounded-xl transition-colors text-sm">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- MODAL DE DETALLES -->
             <div id="modalDetalles" class="modal-overlay" onclick="cerrarModal(event)">
                 <div class="modal-content" onclick="event.stopPropagation()">
@@ -968,9 +1082,13 @@ arsort($productos_unicos); // más pedidos primero
             'created_at' => $p['created_at'],
             'minutos' => $p['minutos_transcurridos'],
             'impreso' => $p['impreso'],
-            'pagado' => (int)($p['pagado'] ?? 0)
+            'pagado'        => (int)($p['pagado'] ?? 0),
+            'bebidas_json'  => $p['bebidas_json'] ?? null,
+            'bebidas_precio'=> (int)($p['bebidas_precio'] ?? 0),
         ];
     }, $pedidos)) ?>;
+
+    const bebidasDisponibles = <?= json_encode($bebidas_disponibles, JSON_UNESCAPED_UNICODE) ?>;
     </script>
 
     <!-- ============================================ -->
@@ -1641,6 +1759,145 @@ arsort($productos_unicos); // más pedidos primero
         const btnLimpiar = document.getElementById('btn-limpiar-producto');
         if (btnLimpiar) btnLimpiar.classList.add('hidden');
         aplicarFiltrosMultiples();
+    }
+
+    // ============================================
+    // MODAL DE BEBIDAS
+    // ============================================
+
+    let modalBebPedidoId = null;
+
+    function abrirModalBebidas(pedidoId) {
+        modalBebPedidoId = pedidoId;
+        const p = pedidosData.find(x => x.id == pedidoId);
+
+        document.getElementById('modal-beb-id').textContent = '#' + pedidoId;
+        document.getElementById('modal-beb-cliente').textContent =
+            (p ? `${p.nombre} ${p.apellido} — ${p.producto}` : '');
+
+        // Cargar ítems guardados
+        let itemsGuardados = {};
+        try { itemsGuardados = JSON.parse(p?.bebidas_json || '{}'); } catch(e) {}
+        // bebidas_json puede ser array de {nombre,cantidad} o mapa {nombre:cantidad}
+        if (Array.isArray(itemsGuardados)) {
+            const map = {};
+            itemsGuardados.forEach(it => map[it.nombre] = it.cantidad);
+            itemsGuardados = map;
+        }
+
+        // Precio
+        document.getElementById('modal-beb-precio').value = p?.bebidas_precio || '';
+
+        // Render lista
+        const lista = document.getElementById('modal-beb-lista');
+        lista.innerHTML = bebidasDisponibles.map(b => {
+            const qty = itemsGuardados[b.nombre] || 0;
+            return `
+            <div class="flex items-center gap-3 p-2 rounded-lg border ${qty > 0 ? 'border-cyan-300 bg-cyan-50' : 'border-gray-100 bg-gray-50'}"
+                 id="beb-row-${b.id}">
+                <span class="flex-1 text-sm font-medium text-gray-800">${b.nombre}</span>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="cambiarCantBeb(${b.id}, -1)"
+                            class="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-200 text-sm font-bold">−</button>
+                    <input type="number" id="beb-qty-${b.id}" value="${qty}" min="0"
+                           class="w-12 text-center border border-gray-300 rounded text-sm font-bold py-0.5"
+                           onchange="actualizarRowBeb(${b.id})">
+                    <button type="button" onclick="cambiarCantBeb(${b.id}, +1)"
+                            class="w-7 h-7 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-200 text-sm font-bold">+</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Link comanda
+        document.getElementById('btn-imprimir-beb').href =
+            `../impresion/comanda_bebidas.php?pedido=${pedidoId}`;
+
+        document.getElementById('modalBebidas').classList.remove('hidden');
+    }
+
+    function cambiarCantBeb(bebId, delta) {
+        const input = document.getElementById(`beb-qty-${bebId}`);
+        const nuevo = Math.max(0, (parseInt(input.value) || 0) + delta);
+        input.value = nuevo;
+        actualizarRowBeb(bebId);
+    }
+
+    function actualizarRowBeb(bebId) {
+        const input = document.getElementById(`beb-qty-${bebId}`);
+        const row   = document.getElementById(`beb-row-${bebId}`);
+        const qty   = parseInt(input.value) || 0;
+        if (qty > 0) {
+            row.classList.replace('border-gray-100', 'border-cyan-300');
+            row.classList.replace('bg-gray-50', 'bg-cyan-50');
+        } else {
+            row.classList.replace('border-cyan-300', 'border-gray-100');
+            row.classList.replace('bg-cyan-50', 'bg-gray-50');
+        }
+    }
+
+    function cerrarModalBebidas() {
+        document.getElementById('modalBebidas').classList.add('hidden');
+        modalBebPedidoId = null;
+    }
+
+    function guardarBebidas() {
+        if (!modalBebPedidoId) return;
+
+        const items = [];
+        bebidasDisponibles.forEach(b => {
+            const qty = parseInt(document.getElementById(`beb-qty-${b.id}`)?.value) || 0;
+            if (qty > 0) items.push({ nombre: b.nombre, cantidad: qty });
+        });
+        const precio = parseInt(document.getElementById('modal-beb-precio').value) || 0;
+
+        const fd = new FormData();
+        fd.append('accion', 'guardar_bebidas');
+        fd.append('id', modalBebPedidoId);
+        fd.append('bebidas_json', JSON.stringify(items));
+        fd.append('bebidas_precio', precio);
+
+        fetch('ver_pedidos.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+
+            // Actualizar pedidosData
+            const p = pedidosData.find(x => x.id == modalBebPedidoId);
+            if (p) {
+                p.bebidas_json  = items.length ? JSON.stringify(items) : null;
+                p.bebidas_precio = precio;
+            }
+
+            // Actualizar UI de la fila
+            const card = document.querySelector(`[data-pedido-id="${modalBebPedidoId}"]`);
+            const badge = document.getElementById(`badge-bebidas-${modalBebPedidoId}`);
+            const btnBeb = document.getElementById(`btn-bebidas-${modalBebPedidoId}`);
+
+            if (data.tiene_bebidas) {
+                card?.classList.add('bg-cyan-50', 'border-l-4', 'border-l-cyan-400', 'border-cyan-200');
+                card?.classList.remove('bg-white');
+                if (badge) { badge.textContent = '+beb.'; badge.classList.remove('hidden'); }
+                if (btnBeb) btnBeb.classList.remove('opacity-40');
+            } else {
+                card?.classList.remove('bg-cyan-50', 'border-l-4', 'border-l-cyan-400', 'border-cyan-200');
+                card?.classList.add('bg-white');
+                if (badge) badge.classList.add('hidden');
+                if (btnBeb) btnBeb.classList.add('opacity-40');
+            }
+
+            cerrarModalBebidas();
+        })
+        .catch(err => console.error('Error:', err));
+    }
+
+    function limpiarBebidas() {
+        if (!confirm('¿Quitar todas las bebidas de este pedido?')) return;
+        bebidasDisponibles.forEach(b => {
+            const input = document.getElementById(`beb-qty-${b.id}`);
+            if (input) { input.value = 0; actualizarRowBeb(b.id); }
+        });
+        document.getElementById('modal-beb-precio').value = '';
+        guardarBebidas();
     }
 
     function toggleTodosEstados() {

@@ -162,6 +162,12 @@ $ultimos_pedidos = $pdo->query("
                 </div>
             </a>
 
+            <a href="modules/bebidas/index.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center group">
+                <span class="text-2xl sm:text-3xl mb-2 sm:mb-3 block group-hover:scale-110 transition-transform">🥤</span>
+                <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Bebidas</h3>
+                <p class="text-xs sm:text-sm text-gray-600 hidden sm:block">Gestionar lista</p>
+            </a>
+
             <a href="modules/pedidos/ver_pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center col-span-2 md:col-span-1">
                 <i class="fas fa-list text-2xl sm:text-3xl text-orange-500 mb-2 sm:mb-3"></i>
                 <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Ver Pedidos</h3>
