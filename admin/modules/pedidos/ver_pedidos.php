@@ -590,22 +590,26 @@ arsort($productos_unicos); // más pedidos primero
             <!-- SEPARADOR -->
             <div class="border-t border-gray-300 mb-4"></div>
 
-            <!-- TABS DE UBICACIÓN -->
+            <!-- TABS DE UBICACIÓN / MODALIDAD -->
             <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
-                
-                <!-- FILTRO POR UBICACIÓN -->
-                <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
-                   class="filter-tab <?= empty($filtro_ubicacion) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
+
+                <!-- TODAS -->
+                <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
+                   class="filter-tab <?= empty($filtro_ubicacion) && empty($filtro_modalidad) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
                     <i class="fas fa-map-marked-alt"></i>
                     Todas
                 </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Local 1&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
+                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Local 1&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_ubicacion === 'Local 1' ? 'active' : 'bg-purple-100 text-purple-800' ?>">
                     🏪 Local 1
                 </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Fábrica&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>" 
+                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Fábrica&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_ubicacion === 'Fábrica' ? 'active' : 'bg-orange-100 text-orange-800' ?>">
                     🏭 Fábrica
+                </a>
+                <a href="?estado=<?= $filtro_estado ?>&modalidad=Delivery&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
+                   class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
+                    🛵 Delivery
                 </a>
             </div>
             
