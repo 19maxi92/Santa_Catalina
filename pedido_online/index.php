@@ -255,13 +255,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 producto, cantidad, precio,
                 modalidad, forma_pago, ubicacion,
                 estado, observaciones, fecha_entrega,
-                created_at, fecha_display
+                created_at, fecha_display, turno_entrega
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, 'Local 1',
                 'Pendiente', ?, ?,
-                NOW(), ?
+                NOW(), ?, ?
             )
         ");
 
@@ -270,7 +270,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nombre_producto, $cantidad_sandwiches, $precio,
             $modalidad, $forma_pago,
             $obs_interna, $fecha_entrega,
-            $fecha_display
+            $fecha_display, $turno
         ]);
 
         $pedido_id = $pdo->lastInsertId();
@@ -1057,8 +1057,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         estado.fechaPedido = fechaISO;
         document.getElementById('campo_fecha_pedido').value = fechaISO;
         generarFechas();
-        renderTurnos(fechaISO);
+        // Cargar cupos reales para esta fecha y luego renderizar turnos
+        cargarCuposYRenderizar(fechaISO);
         actualizarDisplayResumen();
+    }
+
+    function cargarCuposYRenderizar(fechaISO) {
+        fetch(`get_cupos.php?fecha=${fechaISO}`)
+            .then(r => r.json())
+            .then(data => {
+                if (Array.isArray(data)) {
+                    data.forEach(c => {
+                        const cfg = turnosConfig.find(t => t.turno === c.turno);
+                        if (cfg) cfg.stock_actual = c.stock_actual;
+                    });
+                }
+                renderTurnos(fechaISO);
+            })
+            .catch(() => renderTurnos(fechaISO));
     }
 
     // ============================================================
@@ -1070,13 +1086,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
         }
-        renderTurnos(estado.fechaPedido);
         if (estado.modalidad === 'Delivery') {
             document.getElementById('bloque-fecha').classList.remove('hidden');
             generarFechas();
         } else {
             document.getElementById('bloque-fecha').classList.add('hidden');
         }
+        // Cargar cupos reales para la fecha seleccionada
+        cargarCuposYRenderizar(estado.fechaPedido);
     }
 
     // ============================================================

@@ -20,7 +20,7 @@ $stmt = $pdo->query("
         SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados_hoy,
         SUM(CASE WHEN impreso = 0 AND estado != 'Entregado' AND estado != 'Cancelado' THEN 1 ELSE 0 END) as sin_imprimir
     FROM pedidos
-    WHERE DATE(COALESCE(fecha_entrega, created_at)) = CURDATE()
+    WHERE DATE(created_at) = CURDATE()
     AND estado != 'Cancelado'
 ");
 $hoy = $stmt->fetch();
@@ -31,7 +31,7 @@ $stmt = $pdo->query("
         COUNT(*) as total_ayer,
         COALESCE(SUM(precio), 0) as ventas_ayer
     FROM pedidos
-    WHERE DATE(COALESCE(fecha_entrega, created_at)) = CURDATE() - INTERVAL 1 DAY
+    WHERE DATE(created_at) = CURDATE() - INTERVAL 1 DAY
     AND estado != 'Cancelado'
 ");
 $ayer = $stmt->fetch();
