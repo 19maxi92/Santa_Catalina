@@ -826,12 +826,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <i class="fas fa-truck text-orange-500 mr-2"></i>Entrega y pago
                         </h2>
 
-                        <!-- 1. Modalidad: solo Retiro por ahora -->
-                        <div class="bg-orange-50 border-2 border-orange-200 rounded-xl p-4 flex items-center gap-3">
-                            <i class="fas fa-shopping-bag text-3xl text-orange-500"></i>
-                            <div>
-                                <div class="font-bold text-gray-900">Retiro en local</div>
-                                <div class="text-xs text-gray-500">Pasás a buscarlo</div>
+                        <!-- 1. Modalidad -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-map-marker-alt text-blue-500 mr-1"></i>¿Cómo lo recibís?
+                            </label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="modalidad-card p-4 text-center seleccionado" onclick="seleccionarModalidad('Retiro')">
+                                    <i class="fas fa-shopping-bag text-3xl text-orange-500 mb-2"></i>
+                                    <div class="font-bold text-gray-900">Retiro</div>
+                                    <div class="text-xs text-gray-500 mt-1">Pasás a buscarlo</div>
+                                </div>
+                                <div class="modalidad-card p-4 text-center" onclick="seleccionarModalidad('Delivery')">
+                                    <i class="fas fa-motorcycle text-3xl text-blue-500 mb-2"></i>
+                                    <div class="font-bold text-gray-900">Delivery</div>
+                                    <div class="text-xs text-gray-500 mt-1">Te lo llevamos</div>
+                                </div>
                             </div>
                         </div>
 
