@@ -15,6 +15,20 @@ $stmt = $pdo->query("
 ");
 $turnos_disponibles = $stmt->fetchAll();
 
+// Calcular cupos reales por turno para HOY contando pedidos online confirmados
+foreach ($turnos_disponibles as &$t) {
+    $cnt = $pdo->prepare("
+        SELECT COUNT(*) FROM pedidos
+        WHERE observaciones LIKE ?
+          AND DATE(fecha_entrega) = CURDATE()
+          AND estado != 'Cancelado'
+    ");
+    $cnt->execute(['%PEDIDO ONLINE%Turno: ' . $t['turno'] . '%']);
+    $ocupados = (int)$cnt->fetchColumn();
+    $t['stock_actual'] = max(0, $t['max_pedidos'] - $ocupados);
+}
+unset($t);
+
 // JSON de config de turnos para JS (incluye minutos de corte)
 $turnos_config_json = json_encode(array_values(array_map(fn($t) => [
     'turno'              => $t['turno'],
@@ -255,13 +269,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 producto, cantidad, precio,
                 modalidad, forma_pago, ubicacion,
                 estado, observaciones, fecha_entrega,
-                created_at, fecha_display, turno_entrega
+                created_at, fecha_display
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, 'Local 1',
                 'Pendiente', ?, ?,
-                NOW(), ?, ?
+                NOW(), ?
             )
         ");
 
@@ -270,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nombre_producto, $cantidad_sandwiches, $precio,
             $modalidad, $forma_pago,
             $obs_interna, $fecha_entrega,
-            $fecha_display, $turno
+            $fecha_display
         ]);
 
         $pedido_id = $pdo->lastInsertId();
@@ -1047,24 +1061,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         estado.fechaPedido = fechaISO;
         document.getElementById('campo_fecha_pedido').value = fechaISO;
         generarFechas();
-        // Cargar cupos reales para esta fecha y luego renderizar turnos
-        cargarCuposYRenderizar(fechaISO);
+        renderTurnos(fechaISO);
         actualizarDisplayResumen();
-    }
-
-    function cargarCuposYRenderizar(fechaISO) {
-        fetch(`get_cupos.php?fecha=${fechaISO}`)
-            .then(r => r.json())
-            .then(data => {
-                if (Array.isArray(data)) {
-                    data.forEach(c => {
-                        const cfg = turnosConfig.find(t => t.turno === c.turno);
-                        if (cfg) cfg.stock_actual = c.stock_actual;
-                    });
-                }
-                renderTurnos(fechaISO);
-            })
-            .catch(() => renderTurnos(fechaISO));
     }
 
     // ============================================================
@@ -1076,14 +1074,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
         }
+        renderTurnos(estado.fechaPedido);
         if (estado.modalidad === 'Delivery') {
             document.getElementById('bloque-fecha').classList.remove('hidden');
             generarFechas();
         } else {
             document.getElementById('bloque-fecha').classList.add('hidden');
         }
-        // Cargar cupos reales para la fecha seleccionada
-        cargarCuposYRenderizar(estado.fechaPedido);
     }
 
     // ============================================================
