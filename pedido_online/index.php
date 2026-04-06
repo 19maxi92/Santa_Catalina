@@ -7,36 +7,34 @@ require_once '../admin/config.php';
 
 $pdo = getConnection();
 
-// Obtener configuración de turnos activos
+// Config estática de turnos (solo hora/corte, sin stock — stock se consulta por AJAX)
 $stmt = $pdo->query("
-    SELECT * FROM config_pedidos_online
-    WHERE activo = 1
+    SELECT turno, hora_inicio, hora_fin, minutos_antes_corte
+    FROM config_pedidos_online
     ORDER BY FIELD(turno, 'Mañana', 'Siesta', 'Tarde')
 ");
-$turnos_disponibles = $stmt->fetchAll();
-
-// Calcular cupos reales por turno para HOY contando pedidos online confirmados
-foreach ($turnos_disponibles as &$t) {
-    $cnt = $pdo->prepare("
-        SELECT COUNT(*) FROM pedidos
-        WHERE observaciones LIKE ?
-          AND DATE(fecha_entrega) = CURDATE()
-          AND estado != 'Cancelado'
-    ");
-    $cnt->execute(['%PEDIDO ONLINE%Turno: ' . $t['turno'] . '%']);
-    $ocupados = (int)$cnt->fetchColumn();
-    $t['stock_actual'] = max(0, $t['max_pedidos'] - $ocupados);
-}
-unset($t);
-
-// JSON de config de turnos para JS (incluye minutos de corte)
 $turnos_config_json = json_encode(array_values(array_map(fn($t) => [
-    'turno'              => $t['turno'],
-    'hora_inicio'        => substr($t['hora_inicio'], 0, 5),
-    'minutos_antes_corte'=> (int)($t['minutos_antes_corte'] ?? 30),
-    'stock_actual'       => (int)$t['stock_actual'],
-    'activo'             => (bool)$t['activo'],
-], $turnos_disponibles)));
+    'turno'               => $t['turno'],
+    'hora_inicio'         => substr($t['hora_inicio'], 0, 5),
+    'hora_fin'            => substr($t['hora_fin'], 0, 5),
+    'minutos_antes_corte' => (int)($t['minutos_antes_corte'] ?? 30),
+], $stmt->fetchAll())));
+
+// Precios de planchas elegidos
+$precios_elegidos_json = json_encode(['comun' => ['ef' => 4200, 'tr' => 4200], 'premium' => ['ef' => 5500, 'tr' => 5500]]);
+try {
+    $pe = $pdo->query("SELECT tipo, precio_efectivo, precio_transferencia FROM config_precios_elegidos")->fetchAll();
+    $tmp = [];
+    foreach ($pe as $r) { $tmp[$r['tipo']] = ['ef' => (float)$r['precio_efectivo'], 'tr' => (float)$r['precio_transferencia']]; }
+    if (!empty($tmp)) $precios_elegidos_json = json_encode($tmp);
+} catch (PDOException $e) {}
+
+// Localidades habilitadas para delivery
+$localidades_activas_json = json_encode([]);
+try {
+    $locs = $pdo->query("SELECT nombre FROM localidades_delivery WHERE activo = 1 ORDER BY orden, nombre")->fetchAll(PDO::FETCH_COLUMN);
+    $localidades_activas_json = json_encode(array_values($locs));
+} catch (PDOException $e) {}
 
 // Obtener productos activos
 $stmt = $pdo->query("SELECT * FROM productos WHERE activo = 1 ORDER BY nombre ASC");
@@ -100,7 +98,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $nombre       = trim($_POST['nombre'] ?? '');
         $apellido     = trim($_POST['apellido'] ?? '');
         $telefono     = trim($_POST['telefono'] ?? '');
-        $email        = trim($_POST['email'] ?? '');
         $turno        = trim($_POST['turno'] ?? '');
         $tipo_pedido  = trim($_POST['tipo_pedido'] ?? 'simple');
         $producto_id  = (int)($_POST['producto_id'] ?? 0);
@@ -117,12 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if (strlen($telefono) < 8) {
             throw new Exception('Ingresá un teléfono válido');
-        }
-        if (empty($email)) {
-            throw new Exception('Por favor ingresá tu email');
-        }
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new Exception('Ingresá un email válido (ej: juan@gmail.com)');
         }
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
@@ -151,24 +142,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Verificar stock del turno
-        $stmt = $pdo->prepare("SELECT * FROM config_pedidos_online WHERE turno = ? AND activo = 1");
+        // Verificar stock del turno para la fecha concreta
+        $fecha_entrega = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
+        $dia_semana    = (int)date('w', strtotime($fecha_entrega));
+
+        $stmt = $pdo->prepare("SELECT * FROM config_pedidos_online WHERE turno = ?");
         $stmt->execute([$turno]);
         $config_turno = $stmt->fetch();
-
         if (!$config_turno) {
             throw new Exception('El turno seleccionado no está disponible');
         }
-        if ($config_turno['stock_actual'] <= 0) {
-            throw new Exception('¡Lo sentimos! No hay cupos disponibles para el turno seleccionado. Elegí otro turno.');
+
+        // Config por día de semana
+        $stmtDia = $pdo->prepare("SELECT max_pedidos, activo FROM config_pedidos_online_dias WHERE turno = ? AND dia_semana = ?");
+        $stmtDia->execute([$turno, $dia_semana]);
+        $dayConfig = $stmtDia->fetch();
+        $maxPedidos = $dayConfig ? (int)$dayConfig['max_pedidos'] : (int)$config_turno['max_pedidos'];
+        $turnoActivo = $dayConfig ? (bool)$dayConfig['activo'] : true;
+        if (!$turnoActivo) {
+            throw new Exception('El turno no está disponible ese día');
+        }
+
+        // Contar ocupados para esa fecha
+        $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE observaciones LIKE ? AND DATE(fecha_entrega) = ? AND estado != 'Cancelado'");
+        $cntStmt->execute(['%PEDIDO ONLINE%Turno: ' . $turno . '%', $fecha_entrega]);
+        $ocupados = (int)$cntStmt->fetchColumn();
+        if ($ocupados >= $maxPedidos) {
+            throw new Exception('¡Lo sentimos! No hay cupos disponibles para ese turno y fecha. Elegí otro.');
         }
 
         // Validar corte de horario server-side solo para Delivery (Retiro no tiene corte)
         if ($modalidad === 'Delivery') {
             $tz_ar = new DateTimeZone('America/Argentina/Buenos_Aires');
-            $fecha_para_turno = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
             $minutos_corte = (int)($config_turno['minutos_antes_corte'] ?? 30);
-            $turno_start = new DateTime($fecha_para_turno . ' ' . $config_turno['hora_inicio'], $tz_ar);
+            $turno_start = new DateTime($fecha_entrega . ' ' . $config_turno['hora_inicio'], $tz_ar);
             $cutoff = clone $turno_start;
             $cutoff->modify("-{$minutos_corte} minutes");
             $now_ar = new DateTime('now', $tz_ar);
@@ -180,8 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $precio = 0;
         $nombre_producto = '';
         $cantidad_sandwiches = 0;
-        $fecha_entrega = !empty($fecha_pedido) ? $fecha_pedido : date('Y-m-d');
-        $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}\nEmail: {$email}";
+        $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}";
         if ($modalidad === 'Delivery' && !empty($fecha_pedido)) {
             $obs_interna .= "\nFecha entrega: " . date('d/m/Y', strtotime($fecha_pedido));
         }
@@ -189,42 +195,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($tipo_pedido === 'personalizado') {
             // Pedido de elegidos con sabores
             $elegidos_cantidad = (int)($_POST['elegidos_cantidad'] ?? 0);
-            $elegidos_prod_id  = (int)($_POST['elegidos_prod_id'] ?? 0);
             $sabores_json      = $_POST['sabores_json'] ?? '{}';
-
-            if ($elegidos_prod_id === 0) {
-                throw new Exception('Seleccioná la cantidad de elegidos');
-            }
-
-            $stmt = $pdo->prepare("SELECT * FROM productos WHERE id = ? AND activo = 1");
-            $stmt->execute([$elegidos_prod_id]);
-            $prod_elegido = $stmt->fetch();
-
-            if (!$prod_elegido) {
-                throw new Exception('Producto no válido');
-            }
-
-            $precio = ($forma_pago === 'Efectivo')
-                ? (float)$prod_elegido['precio_efectivo']
-                : (float)$prod_elegido['precio_transferencia'];
-
-            $nombre_producto = $prod_elegido['nombre'];
-            $cantidad_sandwiches = $elegidos_cantidad;
 
             // Decodificar sabores
             $sabores = json_decode($sabores_json, true) ?? [];
             $total_sabores = array_sum($sabores);
 
+            if ($elegidos_cantidad === 0) {
+                throw new Exception('Seleccioná la cantidad de sándwiches');
+            }
             if ($total_sabores === 0) {
                 throw new Exception('Elegí al menos un sabor para tu pedido personalizado');
             }
+
+            // Precio dinámico por plancha (común vs premium)
+            $sabores_premium_ids = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
+            $precio_comun   = 4200;
+            $precio_premium = 5500;
+            try {
+                $pc = $pdo->query("SELECT tipo, precio_efectivo, precio_transferencia FROM config_precios_elegidos")->fetchAll();
+                foreach ($pc as $r) {
+                    if ($r['tipo'] === 'comun')   $precio_comun   = $forma_pago === 'Efectivo' ? (float)$r['precio_efectivo'] : (float)$r['precio_transferencia'];
+                    if ($r['tipo'] === 'premium')  $precio_premium = $forma_pago === 'Efectivo' ? (float)$r['precio_efectivo'] : (float)$r['precio_transferencia'];
+                }
+            } catch (PDOException $ex) {}
+
+            $planchas_comun    = 0;
+            $planchas_premium  = 0;
+            foreach ($sabores as $sabor_id => $cant) {
+                if ($cant > 0) {
+                    $planchas = $cant / 8;
+                    if (in_array($sabor_id, $sabores_premium_ids)) $planchas_premium += $planchas;
+                    else                                             $planchas_comun   += $planchas;
+                }
+            }
+            $precio = ($planchas_comun * $precio_comun) + ($planchas_premium * $precio_premium);
+
+            $nombre_producto     = $elegidos_cantidad . ' Surtidos Elegidos';
+            $cantidad_sandwiches = $elegidos_cantidad;
 
             // Construir lista de sabores
             $lista_sabores = [];
             foreach ($sabores as $sabor_id => $cant_sabor) {
                 if ($cant_sabor > 0) {
-                    $sabor_info = array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id);
-                    $sabor_info = array_values($sabor_info);
+                    $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
                     if (!empty($sabor_info)) {
                         $lista_sabores[] = "{$cant_sabor}x {$sabor_info[0]['nombre']}";
                     }
@@ -288,10 +302,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $pedido_id = $pdo->lastInsertId();
-
-        // Descontar del stock del turno
-        $pdo->prepare("UPDATE config_pedidos_online SET stock_actual = stock_actual - 1 WHERE turno = ?")
-            ->execute([$turno]);
+        // Stock se calcula dinámicamente desde la tabla pedidos (no hay columna stock que decrementar)
 
         $pedido_confirmado = [
             'id'          => $pedido_id,
@@ -592,7 +603,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
                 <input type="hidden" name="direccion" id="campo_direccion" value="">
                 <input type="hidden" name="fecha_pedido" id="campo_fecha_pedido" value="">
-                <input type="hidden" name="elegidos_prod_id" id="campo_elegidos_prod_id" value="">
+                <input type="hidden" name="elegidos_prod_id" id="campo_elegidos_prod_id" value="0">
                 <input type="hidden" name="elegidos_cantidad" id="campo_elegidos_cantidad" value="">
                 <input type="hidden" name="sabores_json" id="campo_sabores_json" value="{}">
 
@@ -624,14 +635,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    placeholder="Ej: 2604123456"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
                         </div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">
-                                Email * <span class="text-gray-400 font-normal">(te avisamos cuando tu pedido esté listo)</span>
-                            </label>
-                            <input type="email" id="campo_email" name="email" required
-                                   value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
-                                   placeholder="Ej: juan@gmail.com"
-                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
+                        <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800 flex items-start gap-2">
+                            <i class="fab fa-whatsapp text-green-600 text-lg mt-0.5"></i>
+                            <span>Te confirmamos el pedido y coordinamos por <strong>WhatsApp</strong></span>
                         </div>
                         <button type="button" onclick="irAPaso(2)"
                                 class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-4 rounded-xl font-black text-lg shadow transition-all mt-2">
@@ -744,11 +750,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ?>
                                     <button type="button"
                                             class="elegido-qty-btn border-2 border-gray-300 rounded-xl p-3 text-center hover:border-orange-500 hover:bg-orange-50 transition-all"
-                                            onclick="seleccionarElegidos(<?= $cant ?>, <?= $prod_e['id'] ?>, <?= $prod_e['precio_efectivo'] ?>, <?= $prod_e['precio_transferencia'] ?>, '<?= htmlspecialchars(addslashes($prod_e['nombre'])) ?>')">
+                                            onclick="seleccionarElegidos(<?= $cant ?>)">
                                         <div class="text-2xl font-black text-gray-900"><?= $cant ?></div>
                                         <div class="text-xs text-gray-500"><?= $planchas ?> plancha<?= $planchas > 1 ? 's' : '' ?></div>
-                                        <div class="text-xs font-bold text-green-600 mt-1">$<?= number_format($prod_e['precio_efectivo'], 0, ',', '.') ?></div>
-                                        <div class="text-xs text-blue-400">Trans: $<?= number_format($prod_e['precio_transferencia'], 0, ',', '.') ?></div>
                                     </button>
                                 <?php endif; endforeach; ?>
                             </div>
@@ -806,6 +810,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </div>
                                 <?php endforeach; ?>
                             </div>
+                        </div>
+
+                        <!-- Precio dinámico elegidos -->
+                        <div id="precio-elegidos-preview" class="hidden bg-orange-50 border-2 border-orange-200 rounded-xl p-3 text-center">
+                            <div class="text-xs text-gray-500 mb-1">Precio estimado (según sabores)</div>
+                            <div class="font-black text-green-700 text-xl" id="precio-elegidos-display">—</div>
+                            <div class="text-xs text-blue-500 mt-0.5" id="precio-elegidos-trans">—</div>
+                            <div class="text-xs text-gray-400 mt-1">El precio final se confirma al elegir forma de pago</div>
                         </div>
 
                         <div class="flex gap-3 mt-2">
@@ -870,6 +882,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <!-- 4. Dirección delivery -->
                         <div id="bloque-direccion" class="hidden space-y-2">
                             <label class="block text-sm font-bold text-gray-700">Dirección de entrega *</label>
+
+                            <!-- Localidades habilitadas -->
+                            <?php
+                            $locs_html = [];
+                            try {
+                                $locs_html = $pdo->query("SELECT nombre FROM localidades_delivery WHERE activo = 1 ORDER BY orden, nombre")->fetchAll(PDO::FETCH_COLUMN);
+                            } catch (PDOException $e) {}
+                            if (!empty($locs_html)):
+                            ?>
+                            <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">
+                                <div class="font-bold mb-1"><i class="fas fa-map-marker-alt mr-1"></i>Localidades con delivery habilitado:</div>
+                                <div class="flex flex-wrap gap-1">
+                                    <?php foreach ($locs_html as $loc): ?>
+                                        <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full"><?= htmlspecialchars($loc) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
                             <div class="grid grid-cols-3 gap-2">
                                 <input type="text" id="dir_calle" placeholder="Calle *"
                                        class="col-span-2 px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
@@ -877,7 +908,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                        class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                             </div>
                             <input type="text" id="dir_localidad" placeholder="Localidad *"
+                                   oninput="validarLocalidad(this.value)"
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
+                            <div id="localidad-error" class="hidden text-xs text-red-600 font-semibold px-1">
+                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                Esa localidad no está en nuestra zona de delivery. Consultanos por WhatsApp.
+                            </div>
                             <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
@@ -965,9 +1001,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
     // ============================================================
-    // CONFIG DE TURNOS (desde PHP)
+    // CONFIG ESTÁTICA DE TURNOS (hora/corte — sin stock)
     // ============================================================
     const turnosConfig = <?= $turnos_config_json ?>;
+    const preciosElegidos = <?= $precios_elegidos_json ?>;
+    const localidadesActivas = <?= $localidades_activas_json ?>;
 
     // ============================================================
     // UTILIDADES ZONA HORARIA ARGENTINA (UTC-3, sin DST)
@@ -991,23 +1029,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ============================================================
-    // DISPONIBILIDAD DE TURNOS POR FECHA
+    // DISPONIBILIDAD POR FECHA (AJAX)
     // ============================================================
-    function turnoDisponible(cfg, fechaISO) {
-        if (!cfg.activo || cfg.stock_actual <= 0) return false;
-        // Retiro en persona: sin corte horario, siempre disponible si hay stock
+    // Estado de disponibilidad: { "Mañana": {disponible, max, activo, ...}, ... }
+    // Se llena con cargarDisponibilidad()
+
+    async function cargarDisponibilidad(fechaISO) {
+        const grid = document.getElementById('grid-turnos');
+        grid.innerHTML = `<div class="col-span-3 text-center text-gray-400 py-4">
+            <i class="fas fa-spinner fa-spin mr-2"></i>Verificando disponibilidad...</div>`;
+        try {
+            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fechaISO}`);
+            if (!res.ok) throw new Error('Error');
+            const data = await res.json();
+            estado.disponibilidad = data;
+            renderTurnos(fechaISO);
+        } catch (e) {
+            grid.innerHTML = `<div class="col-span-3 bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-600">
+                <p class="font-bold">No se pudo verificar disponibilidad</p>
+                <p class="text-sm">Intentá de nuevo o consultanos por WhatsApp</p></div>`;
+        }
+    }
+
+    function turnoDisponibleDeDisp(turno, fechaISO) {
+        const disp = estado.disponibilidad?.[turno];
+        if (!disp || !disp.activo || disp.disponible <= 0) return false;
         if (estado.modalidad === 'Retiro') return true;
+        // Validar corte de horario (cliente)
+        const cfg = turnosConfig.find(t => t.turno === turno);
+        if (!cfg) return false;
         const [h, min] = cfg.hora_inicio.split(':').map(Number);
         const [y, mo, d] = fechaISO.split('-').map(Number);
-        // AR = UTC-3 → AR h:min = UTC (h+3):min
-        const turnoUTC = Date.UTC(y, mo - 1, d, h + 3, min);
+        const turnoUTC  = Date.UTC(y, mo - 1, d, h + 3, min);
         const cutoffUTC = turnoUTC - cfg.minutos_antes_corte * 60000;
         return Date.now() < cutoffUTC;
     }
 
-    function turnoMotivoBloqueo(cfg, fechaISO) {
-        if (!cfg.activo) return 'No disponible';
-        if (cfg.stock_actual <= 0) return 'Sin cupos';
+    function turnoMotivoBloqueo(turno, fechaISO) {
+        const disp = estado.disponibilidad?.[turno];
+        if (!disp || !disp.activo) return 'No disponible';
+        if (disp.disponible <= 0) return 'Sin cupos';
         return 'Fuera de horario';
     }
 
@@ -1024,15 +1085,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p class="text-sm">Consultanos por WhatsApp</p></div>`;
             return;
         }
+        if (!estado.disponibilidad) {
+            grid.innerHTML = `<div class="col-span-3 text-center text-gray-400 py-4">Cargando disponibilidad...</div>`;
+            return;
+        }
         grid.innerHTML = turnosConfig.map(cfg => {
-            const ok = turnoDisponible(cfg, fechaISO);
+            const ok  = turnoDisponibleDeDisp(cfg.turno, fechaISO);
             const sel = estado.turno === cfg.turno;
+            const disp = estado.disponibilidad?.[cfg.turno];
             return `<div class="turno-card p-4 text-center ${!ok ? 'sin-stock' : ''} ${sel ? 'seleccionado' : ''}"
                          onclick="${ok ? `seleccionarTurno('${cfg.turno}','${fechaISO}')` : ''}">
                 <div class="text-2xl font-black text-gray-900">${cfg.turno}</div>
                 <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}</div>
                 <div class="mt-2 text-xs font-bold ${ok ? 'text-green-600' : 'text-red-500'}">
-                    ${ok ? `✅ ${cfg.stock_actual} cupos` : `❌ ${turnoMotivoBloqueo(cfg, fechaISO)}`}
+                    ${ok ? `✅ ${disp?.disponible ?? '—'} cupos` : `❌ ${turnoMotivoBloqueo(cfg.turno, fechaISO)}`}
                 </div>
             </div>`;
         }).join('');
@@ -1063,15 +1129,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function seleccionarFecha(fechaISO) {
-        // Si cambió la fecha, resetear el turno seleccionado
         if (estado.fechaPedido !== fechaISO) {
             estado.turno = '';
             document.getElementById('campo_turno').value = '';
+            estado.disponibilidad = null;
         }
         estado.fechaPedido = fechaISO;
         document.getElementById('campo_fecha_pedido').value = fechaISO;
         generarFechas();
-        renderTurnos(fechaISO);
+        cargarDisponibilidad(fechaISO);
         actualizarDisplayResumen();
     }
 
@@ -1084,13 +1150,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
         }
-        renderTurnos(estado.fechaPedido);
         if (estado.modalidad === 'Delivery') {
             document.getElementById('bloque-fecha').classList.remove('hidden');
             generarFechas();
         } else {
             document.getElementById('bloque-fecha').classList.add('hidden');
         }
+        estado.disponibilidad = null;
+        cargarDisponibilidad(estado.fechaPedido);
     }
 
     // ============================================================
@@ -1103,17 +1170,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         cantidad: 1,
         precioEfectivo: 0,
         precioTransferencia: 0,
-        elegidosId: null,
-        elegidosNombre: '',
         elegidosCantidad: 0,
-        elegidosPrecioEfectivo: 0,
-        elegidosPrecioTransferencia: 0,
         sabores: {},
+        precioCalculadoEf: 0,
+        precioCalculadoTr: 0,
         turno: '',
         modalidad: 'Retiro',
         formaPago: '',
         fechaPedido: '',
         pasoActual: 1,
+        disponibilidad: null,
     };
 
     // ============================================================
@@ -1157,8 +1223,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function irAPasoDesdeElegidos() {
-        if (!estado.elegidosId) {
-            alert('Por favor seleccioná la cantidad de elegidos');
+        if (!estado.elegidosCantidad) {
+            alert('Por favor seleccioná la cantidad de sándwiches');
             return;
         }
         const totalSabores = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
@@ -1172,7 +1238,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             alert(`Tenés ${planchasActuales} plancha${planchasActuales !== 1 ? 's' : ''} elegida${planchasActuales !== 1 ? 's' : ''} pero necesitás ${planchasNecesarias}. Ajustá los sabores.`);
             return;
         }
-        document.getElementById('campo_elegidos_prod_id').value = estado.elegidosId;
         document.getElementById('campo_elegidos_cantidad').value = estado.elegidosCantidad;
         document.getElementById('campo_sabores_json').value = JSON.stringify(estado.sabores);
         actualizarDisplayResumen();
@@ -1188,26 +1253,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     function irAPaso(num) {
         if (num === 2) {
-            // Validar paso 1
             const nombre   = document.getElementById('campo_nombre').value.trim();
             const apellido = document.getElementById('campo_apellido').value.trim();
             const telefono = document.getElementById('campo_telefono').value.trim();
-            const email    = document.getElementById('campo_email').value.trim();
             if (!nombre || !apellido || !telefono) {
-                alert('Por favor completá todos tus datos');
+                alert('Por favor completá nombre, apellido y teléfono');
                 return;
             }
             if (telefono.length < 8) {
-                alert('Ingresá un teléfono válido');
-                return;
-            }
-            if (!email) {
-                alert('Por favor ingresá tu email');
-                return;
-            }
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                alert('Ingresá un email válido (ej: juan@gmail.com)');
+                alert('Ingresá un teléfono válido (mínimo 8 dígitos)');
                 return;
             }
         }
@@ -1257,15 +1311,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // ELEGIDOS / PERSONALIZADO
     // ============================================================
-    function seleccionarElegidos(cantidad, prodId, precioEf, precioTrans, nombre) {
-        estado.elegidosId = prodId;
-        estado.elegidosCantidad = cantidad;
-        estado.elegidosPrecioEfectivo = precioEf;
-        estado.elegidosPrecioTransferencia = precioTrans;
-        estado.elegidosNombre = nombre;
-        estado.sabores = {};
+    const SABORES_PREMIUM = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
 
-        // Actualizar UI botones
+    function calcularPrecioElegidos() {
+        let planchasComun = 0, planchasPremium = 0;
+        for (const [id, cant] of Object.entries(estado.sabores)) {
+            if (cant > 0) {
+                const p = cant / 8;
+                if (SABORES_PREMIUM.includes(id)) planchasPremium += p;
+                else                              planchasComun    += p;
+            }
+        }
+        const pef = preciosElegidos.comun?.ef ?? 4200;
+        const ptr = preciosElegidos.comun?.tr ?? 4200;
+        const pefP = preciosElegidos.premium?.ef ?? 5500;
+        const ptrP = preciosElegidos.premium?.tr ?? 5500;
+        estado.precioCalculadoEf = planchasComun * pef + planchasPremium * pefP;
+        estado.precioCalculadoTr = planchasComun * ptr + planchasPremium * ptrP;
+
+        // Mostrar preview de precio
+        const preview = document.getElementById('precio-elegidos-preview');
+        if (estado.elegidosCantidad > 0 && (planchasComun + planchasPremium) > 0) {
+            preview.classList.remove('hidden');
+            document.getElementById('precio-elegidos-display').textContent = '💵 ' + formatPrecio(estado.precioCalculadoEf);
+            document.getElementById('precio-elegidos-trans').textContent   = '🏦 Trans: ' + formatPrecio(estado.precioCalculadoTr);
+        } else {
+            preview.classList.add('hidden');
+        }
+        actualizarDisplayResumen();
+    }
+
+    function seleccionarElegidos(cantidad) {
+        estado.elegidosCantidad = cantidad;
+        estado.sabores = {};
+        estado.precioCalculadoEf = 0;
+        estado.precioCalculadoTr = 0;
+
         document.querySelectorAll('.elegido-qty-btn').forEach(b => {
             b.classList.remove('border-orange-500', 'bg-orange-50');
             b.classList.add('border-gray-300');
@@ -1273,13 +1354,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         event.currentTarget.classList.add('border-orange-500', 'bg-orange-50');
         event.currentTarget.classList.remove('border-gray-300');
 
-        // Resetear sabores
         document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
         document.querySelectorAll('.sabor-btn').forEach(el => el.classList.remove('activo'));
 
-        // Actualizar contador de planchas
         document.getElementById('max-planchas').textContent = cantidad / 8;
         document.getElementById('contador-planchas').textContent = 0;
+        document.getElementById('precio-elegidos-preview')?.classList.add('hidden');
+        document.getElementById('campo_elegidos_cantidad').value = cantidad;
 
         document.getElementById('bloque-sabores').classList.remove('hidden');
         actualizarDisplayResumen();
@@ -1309,7 +1390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         const total = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
         document.getElementById('contador-planchas').textContent = total / 8;
-        actualizarDisplayResumen();
+        calcularPrecioElegidos();
     }
 
     // ============================================================
@@ -1340,7 +1421,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
             }
             generarFechas();
-            renderTurnos(estado.fechaPedido);
+            estado.disponibilidad = null;
+            cargarDisponibilidad(estado.fechaPedido);
         } else {
             bloqueDir.classList.add('hidden');
             bloqueFecha.classList.add('hidden');
@@ -1349,10 +1431,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
-            // Retiro: siempre hoy
+            document.getElementById('localidad-error')?.classList.add('hidden');
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
-            renderTurnos(estado.fechaPedido);
+            estado.disponibilidad = null;
+            cargarDisponibilidad(estado.fechaPedido);
         }
     }
 
@@ -1372,7 +1455,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function actualizarDisplayResumen() {
-        const nombre = estado.tipoPedido === 'personalizado' ? estado.elegidosNombre : estado.productoNombre;
+        const nombre = estado.tipoPedido === 'personalizado'
+            ? (estado.elegidosCantidad ? `${estado.elegidosCantidad} Surtidos Elegidos` : '')
+            : estado.productoNombre;
         const resumen = document.getElementById('resumen-pedido');
         if (nombre && estado.turno && estado.formaPago) {
             resumen.classList.remove('hidden');
@@ -1381,7 +1466,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-pago').textContent      = estado.formaPago;
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
 
-            // Fecha de entrega (solo delivery)
             const filaFecha = document.getElementById('resumen-fila-fecha');
             if (estado.modalidad === 'Delivery' && estado.fechaPedido) {
                 const [y, m, d] = estado.fechaPedido.split('-');
@@ -1391,12 +1475,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 filaFecha?.classList.add('hidden');
             }
 
-            // Precio según forma de pago y tipo de pedido
             let precio = 0;
             if (estado.tipoPedido === 'personalizado') {
                 precio = estado.formaPago === 'Efectivo'
-                    ? estado.elegidosPrecioEfectivo
-                    : estado.elegidosPrecioTransferencia;
+                    ? estado.precioCalculadoEf
+                    : estado.precioCalculadoTr;
+                // Recalcular si cambia la forma de pago
+                if (precio === 0 && estado.elegidosCantidad > 0) calcularPrecioElegidos();
             } else {
                 precio = estado.formaPago === 'Efectivo'
                     ? estado.precioEfectivo * estado.cantidad
@@ -1410,10 +1495,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ============================================================
+    // VALIDACIÓN DE LOCALIDAD
+    // ============================================================
+    function validarLocalidad(valor) {
+        if (!localidadesActivas || localidadesActivas.length === 0) return true;
+        const err = document.getElementById('localidad-error');
+        if (!valor.trim()) { err?.classList.add('hidden'); return true; }
+        const ok = localidadesActivas.some(l => l.toLowerCase() === valor.trim().toLowerCase());
+        if (ok) { err?.classList.add('hidden'); }
+        else    { err?.classList.remove('hidden'); }
+        return ok;
+    }
+
+    // ============================================================
     // ENVÍO DEL FORMULARIO
     // ============================================================
     function enviarFormulario(e) {
-        // Validaciones finales
         if (!document.getElementById('campo_turno').value) {
             alert('Por favor seleccioná un turno');
             e.preventDefault();
@@ -1436,6 +1533,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const entrecalles = document.getElementById('dir_entre_calles')?.value.trim();
             if (!calle || !numero || !localidad) {
                 alert('Ingresá calle, número y localidad para el delivery');
+                e.preventDefault();
+                return false;
+            }
+            if (!validarLocalidad(localidad)) {
+                alert(`"${localidad}" no está en nuestra zona de delivery.\n\nLocalidades disponibles: ${localidadesActivas.join(', ')}`);
                 e.preventDefault();
                 return false;
             }
