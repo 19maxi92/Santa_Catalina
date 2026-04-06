@@ -614,7 +614,7 @@ arsort($productos_unicos); // más pedidos primero
             </div>
             
             <!-- FILTROS AVANZADOS (COLAPSABLES) -->
-            <details class="text-sm">
+            <details class="text-sm" open>
                 <summary class="cursor-pointer text-gray-600 hover:text-gray-800 font-semibold mb-3 inline-flex items-center gap-2">
                     <i class="fas fa-sliders-h"></i>
                     Filtros Avanzados
