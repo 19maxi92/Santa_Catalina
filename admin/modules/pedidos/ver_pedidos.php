@@ -182,14 +182,14 @@ if ($filtro_ubicacion) {
     $params[] = $filtro_ubicacion;
 }
 
-if ($fecha_desde) {
-    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) >= ?";
-    $params[] = $fecha_desde;
-}
-
-if ($fecha_hasta) {
-    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) <= ?";
-    $params[] = $fecha_hasta;
+if ($fecha_desde || $fecha_hasta) {
+    $desde = $fecha_desde ?: '2000-01-01';
+    $hasta = $fecha_hasta ?: '2099-12-31';
+    $sql .= " AND (DATE(p.created_at) BETWEEN ? AND ? OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) BETWEEN ? AND ?))";
+    $params[] = $desde;
+    $params[] = $hasta;
+    $params[] = $desde;
+    $params[] = $hasta;
 }
 
 if ($busqueda) {
