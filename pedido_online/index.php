@@ -100,8 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $telefono     = trim($_POST['telefono'] ?? '');
         $turno        = trim($_POST['turno'] ?? '');
         $tipo_pedido  = trim($_POST['tipo_pedido'] ?? 'simple');
-        $producto_id  = (int)($_POST['producto_id'] ?? 0);
-        $cantidad     = (int)($_POST['cantidad'] ?? 1);
+        $combos_json  = $_POST['combos_json'] ?? '[]';
         $forma_pago    = trim($_POST['forma_pago'] ?? '');
         $modalidad     = trim($_POST['modalidad'] ?? 'Retiro');
         $direccion     = trim($_POST['direccion'] ?? '');
@@ -249,25 +248,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $obs_interna .= "\n[Datos sabores: " . $sabores_json . "]";
 
         } else {
-            // Pedido simple
-            if ($producto_id === 0) {
-                throw new Exception('Seleccioná un producto');
+            // Pedido con carrito de combos clásicos
+            $combos = json_decode($combos_json, true) ?? [];
+            if (empty($combos)) {
+                throw new Exception('Seleccioná al menos un combo');
             }
 
-            $stmt = $pdo->prepare("SELECT * FROM productos WHERE id = ? AND activo = 1");
-            $stmt->execute([$producto_id]);
-            $producto = $stmt->fetch();
+            $precio = 0;
+            $partes_nombre = [];
+            $cantidad_sandwiches = 0;
 
-            if (!$producto) {
-                throw new Exception('Producto no válido');
+            foreach ($combos as $combo) {
+                $combo_id  = (int)($combo['id'] ?? 0);
+                $combo_qty = (int)($combo['cantidad'] ?? 0);
+                if ($combo_id <= 0 || $combo_qty <= 0) continue;
+
+                $stmt = $pdo->prepare("SELECT * FROM productos WHERE id = ? AND activo = 1");
+                $stmt->execute([$combo_id]);
+                $prod = $stmt->fetch();
+                if (!$prod) continue;
+
+                $precio_unit = ($forma_pago === 'Efectivo')
+                    ? (float)$prod['precio_efectivo']
+                    : (float)$prod['precio_transferencia'];
+
+                $precio             += $precio_unit * $combo_qty;
+                $cantidad_sandwiches += $combo_qty;
+                $partes_nombre[]     = "{$combo_qty}x {$prod['nombre']}";
             }
 
-            $precio = ($forma_pago === 'Efectivo')
-                ? (float)$producto['precio_efectivo'] * $cantidad
-                : (float)$producto['precio_transferencia'] * $cantidad;
+            if ($cantidad_sandwiches === 0) {
+                throw new Exception('Seleccioná al menos un combo');
+            }
 
-            $nombre_producto = $producto['nombre'];
-            $cantidad_sandwiches = $cantidad;
+            $nombre_producto = implode(' + ', $partes_nombre);
         }
 
         if (!empty($observaciones)) {
@@ -577,7 +591,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="bg-gradient-to-r from-orange-500 to-red-500 text-white p-5">
                 <div class="flex items-center justify-center space-x-2">
                     <?php
-                    $pasos = ['Datos', 'Tipo', 'Producto', 'Entrega'];
+                    $pasos = ['Datos', 'Producto', 'Entrega'];
                     foreach ($pasos as $i => $nombre_paso):
                         $num = $i + 1;
                     ?>
@@ -596,8 +610,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <form id="formPedido" method="POST" onsubmit="return enviarFormulario(event)">
                 <input type="hidden" name="tipo_pedido" id="campo_tipo_pedido" value="simple">
-                <input type="hidden" name="producto_id" id="campo_producto_id" value="">
-                <input type="hidden" name="cantidad" id="campo_cantidad" value="1">
+                <input type="hidden" name="combos_json" id="campo_combos_json" value="[]">
                 <input type="hidden" name="turno" id="campo_turno" value="">
                 <input type="hidden" name="forma_pago" id="campo_forma_pago" value="">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
@@ -639,81 +652,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <i class="fab fa-whatsapp text-green-600 text-lg mt-0.5"></i>
                             <span>Te confirmamos el pedido y coordinamos por <strong>WhatsApp</strong></span>
                         </div>
-                        <button type="button" onclick="irAPaso(2)"
+                        <button type="button" onclick="irAPaso(3)"
                                 class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-4 rounded-xl font-black text-lg shadow transition-all mt-2">
                             Continuar <i class="fas fa-arrow-right ml-2"></i>
                         </button>
                     </div>
 
-                    <!-- ===== PASO 2: TIPO DE PEDIDO ===== -->
-                    <div id="paso-2" class="paso space-y-4">
-                        <h2 class="text-xl font-black text-gray-900 mb-4">
-                            <i class="fas fa-hamburger text-orange-500 mr-2"></i>¿Qué tipo de pedido?
-                        </h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div class="tipo-card" onclick="seleccionarTipo('simple')">
-                                <div class="text-5xl mb-3">🥪</div>
-                                <h3 class="text-xl font-black text-gray-900 mb-2">Clásico</h3>
-                                <p class="text-gray-500 text-sm">Elegí de nuestros combos armados (JyQ, Surtidos, etc.)</p>
-                            </div>
-                            <div class="tipo-card" onclick="seleccionarTipo('personalizado')">
-                                <div class="text-5xl mb-3">🎨</div>
-                                <h3 class="text-xl font-black text-gray-900 mb-2">A mi gusto</h3>
-                                <p class="text-gray-500 text-sm">Elegí la cantidad y armá tu combinación de sabores</p>
-                            </div>
-                        </div>
-                        <button type="button" onclick="irAPaso(1)"
-                                class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
-                            <i class="fas fa-arrow-left mr-2"></i>Volver
-                        </button>
-                    </div>
-
-                    <!-- ===== PASO 3A: PRODUCTO SIMPLE ===== -->
+                    <!-- ===== PASO 3: PRODUCTO (CARRITO) ===== -->
                     <div id="paso-3-simple" class="paso space-y-4">
-                        <h2 class="text-xl font-black text-gray-900 mb-4">
+                        <h2 class="text-xl font-black text-gray-900 mb-1">
                             <i class="fas fa-list text-orange-500 mr-2"></i>Elegí tu combo
                         </h2>
+                        <p class="text-sm text-gray-500 mb-3">Podés combinar varios tipos. Usá + y − para ajustar cantidades.</p>
                         <div class="space-y-3" id="lista-productos-simples">
                             <?php foreach ($productos_simples as $prod): ?>
-                                <div class="producto-card p-4" onclick="seleccionarProducto(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>)">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex-1">
+                                <div class="bg-white border-2 border-gray-200 rounded-xl p-4 transition-all" id="card-prod-<?= $prod['id'] ?>">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div class="flex-1 min-w-0">
                                             <h3 class="font-bold text-gray-900"><?= htmlspecialchars($prod['nombre']) ?></h3>
                                             <?php if (!empty($prod['descripcion'])): ?>
-                                                <p class="text-sm text-gray-500"><?= htmlspecialchars($prod['descripcion']) ?></p>
+                                                <p class="text-xs text-gray-500 mt-0.5"><?= htmlspecialchars($prod['descripcion']) ?></p>
                                             <?php endif; ?>
                                             <div class="flex gap-3 mt-1">
                                                 <span class="text-sm font-bold text-green-600">💵 $<?= number_format($prod['precio_efectivo'], 0, ',', '.') ?></span>
                                                 <span class="text-xs text-blue-500 self-center">🏦 $<?= number_format($prod['precio_transferencia'], 0, ',', '.') ?></span>
                                             </div>
                                         </div>
-                                        <div class="ml-3 flex-shrink-0 w-8 h-8 border-2 border-gray-300 rounded-full flex items-center justify-center check-icon">
-                                            <i class="fas fa-check text-orange-500 hidden"></i>
+                                        <div class="flex items-center gap-2 flex-shrink-0">
+                                            <button type="button"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, -1)"
+                                                    class="w-9 h-9 border-2 border-gray-300 rounded-lg text-gray-500 font-black text-lg hover:border-orange-400 hover:text-orange-500 transition-all">−</button>
+                                            <span id="cant-carrito-<?= $prod['id'] ?>" class="text-xl font-black text-gray-900 w-6 text-center">0</span>
+                                            <button type="button"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, 1)"
+                                                    class="w-9 h-9 border-2 border-orange-500 rounded-lg text-orange-600 font-black text-lg hover:bg-orange-500 hover:text-white transition-all">+</button>
                                         </div>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
 
-                        <!-- Cantidad -->
-                        <div id="bloque-cantidad-simple" class="hidden mt-4">
-                            <label class="block text-sm font-bold text-gray-700 mb-2">Cantidad de combos</label>
-                            <div class="flex items-center space-x-4">
-                                <button type="button" onclick="cambiarCantidad(-1)"
-                                        class="w-10 h-10 border-2 border-orange-500 rounded-lg text-orange-600 font-black text-xl hover:bg-orange-500 hover:text-white transition-all">
-                                    −
-                                </button>
-                                <span id="display-cantidad" class="text-2xl font-black text-gray-900 w-8 text-center">1</span>
-                                <button type="button" onclick="cambiarCantidad(1)"
-                                        class="w-10 h-10 border-2 border-orange-500 rounded-lg text-orange-600 font-black text-xl hover:bg-orange-500 hover:text-white transition-all">
-                                    +
-                                </button>
-                                <span class="text-gray-500 text-sm">combo(s)</span>
-                            </div>
+                        <!-- Resumen del carrito -->
+                        <div id="resumen-carrito" class="hidden bg-orange-50 border border-orange-200 rounded-xl p-4">
+                            <p class="text-sm font-bold text-orange-800 mb-2"><i class="fas fa-shopping-cart mr-1"></i>Tu pedido:</p>
+                            <ul id="lista-carrito" class="text-sm text-gray-800 space-y-1"></ul>
                         </div>
 
                         <div class="flex gap-3 mt-2">
-                            <button type="button" onclick="irAPaso(2)"
+                            <button type="button" onclick="irAPaso(1)"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
                                 <i class="fas fa-arrow-left mr-2"></i>Volver
                             </button>
@@ -1165,11 +1151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     let estado = {
         tipoPedido: 'simple',
-        productoId: null,
-        productoNombre: '',
-        cantidad: 1,
-        precioEfectivo: 0,
-        precioTransferencia: 0,
+        carrito: {},   // { productoId: {nombre, cantidad, precioEf, precioTr} }
         elegidosCantidad: 0,
         sabores: {},
         precioCalculadoEf: 0,
@@ -1189,17 +1171,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
 
         let pasoId = 'paso-' + num;
-        if (num === 3) {
-            pasoId = estado.tipoPedido === 'personalizado' ? 'paso-3-personalizado' : 'paso-3-simple';
-        }
+        if (num === 3) pasoId = 'paso-3-simple';
         document.getElementById(pasoId)?.classList.add('activo');
 
-        // Actualizar indicadores (paso 3 y 3-personalizado = indicador 3)
+        // Mapeo paso→indicador: 1→1, 3→2, 4→3
+        const indicadorActivo = num === 1 ? 1 : num === 3 ? 2 : 3;
         document.querySelectorAll('[id^="indicador-paso-"]').forEach((el, i) => {
             const indicadorNum = i + 1;
             el.classList.remove('activo', 'completado');
-            if (indicadorNum < num) el.classList.add('completado');
-            if (indicadorNum === num) el.classList.add('activo');
+            if (indicadorNum < indicadorActivo) el.classList.add('completado');
+            if (indicadorNum === indicadorActivo) el.classList.add('activo');
         });
 
         estado.pasoActual = num;
@@ -1212,12 +1193,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function irAPasoDesdeProducto() {
-        if (!estado.productoId) {
-            alert('Por favor seleccioná un producto');
+        const totalUnidades = Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
+        if (totalUnidades === 0) {
+            alert('Por favor seleccioná al menos un combo');
             return;
         }
-        document.getElementById('campo_producto_id').value = estado.productoId;
-        document.getElementById('campo_cantidad').value = estado.cantidad;
+        const combos = Object.entries(estado.carrito).map(([id, c]) => ({
+            id: parseInt(id), nombre: c.nombre, cantidad: c.cantidad,
+            precioEf: c.precioEf, precioTr: c.precioTr
+        }));
+        document.getElementById('campo_combos_json').value = JSON.stringify(combos);
         actualizarDisplayResumen();
         mostrarPaso(4);
     }
@@ -1269,42 +1254,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // ============================================================
-    // SELECCIÓN DE TIPO
     // ============================================================
-    function seleccionarTipo(tipo) {
-        estado.tipoPedido = tipo;
-        document.getElementById('campo_tipo_pedido').value = tipo;
-        // Reset estado del producto
-        estado.productoId = null;
-        estado.elegidosId = null;
-        estado.sabores = {};
-        document.querySelectorAll('.tipo-card').forEach(c => c.classList.remove('seleccionado'));
-        event.currentTarget.classList.add('seleccionado');
-        setTimeout(() => mostrarPaso(3), 200);
-    }
-
+    // CARRITO DE COMBOS CLÁSICOS
     // ============================================================
-    // PRODUCTOS SIMPLES
-    // ============================================================
-    function seleccionarProducto(id, nombre, precioEf, precioTrans) {
-        estado.productoId = id;
-        estado.productoNombre = nombre;
-        estado.precioEfectivo = precioEf;
-        estado.precioTransferencia = precioTrans;
-        estado.cantidad = 1;
-        document.getElementById('display-cantidad').textContent = 1;
+    function cambiarCantidadCarrito(id, nombre, precioEf, precioTr, delta) {
+        const actual = estado.carrito[id]?.cantidad ?? 0;
+        const nueva  = Math.max(0, Math.min(10, actual + delta));
 
-        document.querySelectorAll('.producto-card').forEach(c => c.classList.remove('seleccionado'));
-        event.currentTarget.closest('.producto-card').classList.add('seleccionado');
+        if (nueva === 0) {
+            delete estado.carrito[id];
+        } else {
+            estado.carrito[id] = { nombre, cantidad: nueva, precioEf, precioTr };
+        }
 
-        document.getElementById('bloque-cantidad-simple').classList.remove('hidden');
-        actualizarDisplayResumen();
-    }
+        // Actualizar contador en la card
+        document.getElementById('cant-carrito-' + id).textContent = nueva;
+        const card = document.getElementById('card-prod-' + id);
+        if (nueva > 0) {
+            card.classList.add('border-orange-400', 'bg-orange-50');
+            card.classList.remove('border-gray-200');
+        } else {
+            card.classList.remove('border-orange-400', 'bg-orange-50');
+            card.classList.add('border-gray-200');
+        }
 
-    function cambiarCantidad(delta) {
-        estado.cantidad = Math.max(1, Math.min(10, estado.cantidad + delta));
-        document.getElementById('display-cantidad').textContent = estado.cantidad;
-        document.getElementById('campo_cantidad').value = estado.cantidad;
+        // Actualizar resumen del carrito
+        const items = Object.values(estado.carrito);
+        const resumenDiv = document.getElementById('resumen-carrito');
+        const listaEl   = document.getElementById('lista-carrito');
+        if (items.length > 0) {
+            resumenDiv.classList.remove('hidden');
+            listaEl.innerHTML = items.map(c =>
+                `<li>• ${c.cantidad}x ${c.nombre}</li>`
+            ).join('');
+        } else {
+            resumenDiv.classList.add('hidden');
+        }
+
         actualizarDisplayResumen();
     }
 
@@ -1455,9 +1441,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function actualizarDisplayResumen() {
-        const nombre = estado.tipoPedido === 'personalizado'
-            ? (estado.elegidosCantidad ? `${estado.elegidosCantidad} Surtidos Elegidos` : '')
-            : estado.productoNombre;
+        let nombre = '';
+        let precio = 0;
+
+        if (estado.tipoPedido === 'personalizado') {
+            nombre = estado.elegidosCantidad ? `${estado.elegidosCantidad} Surtidos Elegidos` : '';
+            precio = estado.formaPago === 'Efectivo' ? estado.precioCalculadoEf : estado.precioCalculadoTr;
+            if (precio === 0 && estado.elegidosCantidad > 0) calcularPrecioElegidos();
+        } else {
+            const items = Object.values(estado.carrito);
+            if (items.length > 0) {
+                nombre = items.map(c => `${c.cantidad}x ${c.nombre}`).join(' + ');
+                precio = items.reduce((s, c) => s + c.cantidad * (estado.formaPago === 'Efectivo' ? c.precioEf : c.precioTr), 0);
+            }
+        }
+
         const resumen = document.getElementById('resumen-pedido');
         if (nombre && estado.turno && estado.formaPago) {
             resumen.classList.remove('hidden');
@@ -1475,18 +1473,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 filaFecha?.classList.add('hidden');
             }
 
-            let precio = 0;
-            if (estado.tipoPedido === 'personalizado') {
-                precio = estado.formaPago === 'Efectivo'
-                    ? estado.precioCalculadoEf
-                    : estado.precioCalculadoTr;
-                // Recalcular si cambia la forma de pago
-                if (precio === 0 && estado.elegidosCantidad > 0) calcularPrecioElegidos();
-            } else {
-                precio = estado.formaPago === 'Efectivo'
-                    ? estado.precioEfectivo * estado.cantidad
-                    : estado.precioTransferencia * estado.cantidad;
-            }
             if (precio > 0) {
                 document.getElementById('resumen-fila-precio').classList.remove('hidden');
                 document.getElementById('resumen-precio').textContent = formatPrecio(precio);
