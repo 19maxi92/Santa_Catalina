@@ -183,12 +183,12 @@ if ($filtro_ubicacion) {
 }
 
 if ($fecha_desde) {
-    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) >= ?";
+    $sql .= " AND DATE(p.created_at) >= ?";
     $params[] = $fecha_desde;
 }
 
 if ($fecha_hasta) {
-    $sql .= " AND DATE(COALESCE(p.fecha_entrega, p.created_at)) <= ?";
+    $sql .= " AND DATE(p.created_at) <= ?";
     $params[] = $fecha_hasta;
 }
 
