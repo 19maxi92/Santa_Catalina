@@ -61,6 +61,7 @@ try {
     $cantidad = (int)($data['cantidad'] ?? 1);
     $estado = $data['estado'] ?? 'Pendiente';
     $cliente_fijo_id = isset($data['cliente_fijo_id']) && $data['cliente_fijo_id'] ? (int)$data['cliente_fijo_id'] : null;
+    $pagado = isset($data['pagado']) && $data['pagado'] ? 1 : 0;
 
     // Validaciones específicas
     if (empty($nombre)) {
@@ -145,11 +146,11 @@ try {
         INSERT INTO pedidos (
             nombre, apellido, telefono, direccion, producto, cantidad, precio,
             modalidad, forma_pago, ubicacion, estado, observaciones,
-            fecha_entrega, fecha_pedido, created_at, fecha_display, cliente_fijo_id
+            fecha_entrega, fecha_pedido, created_at, fecha_display, cliente_fijo_id, pagado
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, NOW(), NOW(), ?, ?
+            ?, NOW(), NOW(), ?, ?, ?
         )
     ");
 
@@ -168,7 +169,8 @@ try {
         $observaciones,
         $fecha_entrega,
         $fecha_display,
-        $cliente_fijo_id
+        $cliente_fijo_id,
+        $pagado
     ]);
 
     if (!$result) {

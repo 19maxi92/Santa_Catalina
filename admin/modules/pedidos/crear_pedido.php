@@ -1247,7 +1247,8 @@ function finalizarYCrearPedidos() {
             fecha_entrega: datosCliente.fecha_entrega,
             estado: 'Pendiente',
             observaciones: observacionesCompletas,
-            cliente_fijo_id: clienteFijoId
+            cliente_fijo_id: clienteFijoId,
+            pagado: datosCliente.yaPagado ? 1 : 0
         };
 
         if (item.sabores_personalizados_json) {
