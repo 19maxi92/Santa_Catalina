@@ -111,8 +111,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($nombre) || empty($apellido) || empty($telefono)) {
             throw new Exception('Por favor completá nombre, apellido y teléfono');
         }
-        if (strlen($telefono) < 8) {
-            throw new Exception('Ingresá un teléfono válido');
+        $tel_digits = preg_replace('/\D/', '', $telefono);
+        if (strlen($tel_digits) < 8 || strlen($tel_digits) > 13) {
+            throw new Exception('Ingresá un teléfono válido (ej: 221 123-4567 o 11 5981-3546)');
+        }
+        if (preg_match('/^(.)\1+$/', $tel_digits)) {
+            throw new Exception('Ingresá un número de teléfono real');
+        }
+        if (in_array($tel_digits, ['12345678','123456789','1234567890','0987654321','87654321'])) {
+            throw new Exception('Ingresá un número de teléfono real');
         }
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
@@ -645,7 +652,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="block text-sm font-bold text-gray-700 mb-2">Teléfono *</label>
                             <input type="tel" id="campo_telefono" name="telefono" required
                                    value="<?= htmlspecialchars($_POST['telefono'] ?? '') ?>"
-                                   placeholder="Ej: 2604123456"
+                                   placeholder="Ej: 221 123-4567 o 11 5981-3546"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
                         </div>
                         <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800 flex items-start gap-2">
@@ -1236,8 +1243,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // VALIDACIONES DE PASOS
     // ============================================================
+    function validarTelefono(raw) {
+        const digits = raw.replace(/\D/g, '');
+        if (digits.length < 8 || digits.length > 13) {
+            return 'Ingresá un teléfono válido (ej: 221 123-4567 o 11 5981-3546)';
+        }
+        // Todos los dígitos iguales: 11111111, 00000000, etc.
+        if (/^(.)\1+$/.test(digits)) {
+            return 'Ingresá un número de teléfono real';
+        }
+        // Secuencias obvias
+        if (['12345678','123456789','1234567890','0987654321','87654321'].includes(digits)) {
+            return 'Ingresá un número de teléfono real';
+        }
+        return null;
+    }
+
     function irAPaso(num) {
-        if (num === 2) {
+        if (num === 3) {
             const nombre   = document.getElementById('campo_nombre').value.trim();
             const apellido = document.getElementById('campo_apellido').value.trim();
             const telefono = document.getElementById('campo_telefono').value.trim();
@@ -1245,10 +1268,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 alert('Por favor completá nombre, apellido y teléfono');
                 return;
             }
-            if (telefono.length < 8) {
-                alert('Ingresá un teléfono válido (mínimo 8 dígitos)');
-                return;
-            }
+            const errTel = validarTelefono(telefono);
+            if (errTel) { alert(errTel); return; }
         }
         mostrarPaso(num);
     }
