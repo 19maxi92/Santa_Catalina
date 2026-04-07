@@ -900,13 +900,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <input type="text" id="dir_numero" placeholder="Número *"
                                        class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                             </div>
-                            <input type="text" id="dir_localidad" placeholder="Localidad *"
-                                   oninput="validarLocalidad(this.value)"
-                                   class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
-                            <div id="localidad-error" class="hidden text-xs text-red-600 font-semibold px-1">
-                                <i class="fas fa-exclamation-circle mr-1"></i>
-                                Esa localidad no está en nuestra zona de delivery. Consultanos por WhatsApp.
-                            </div>
+                            <select id="dir_localidad"
+                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white">
+                                <option value="">— Seleccioná tu localidad *</option>
+                                <?php foreach ($locs_html as $loc): ?>
+                                    <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
+                                <?php endforeach; ?>
+                            </select>
                             <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
@@ -1434,7 +1434,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
-            document.getElementById('localidad-error')?.classList.add('hidden');
             document.getElementById('hint-fecha').innerHTML =
                 '<i class="fas fa-info-circle mr-1"></i>Los turnos disponibles se actualizan según el día seleccionado';
         }
@@ -1500,18 +1499,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // ============================================================
-    // VALIDACIÓN DE LOCALIDAD
-    // ============================================================
-    function validarLocalidad(valor) {
-        if (!localidadesActivas || localidadesActivas.length === 0) return true;
-        const err = document.getElementById('localidad-error');
-        if (!valor.trim()) { err?.classList.add('hidden'); return true; }
-        const ok = localidadesActivas.some(l => l.toLowerCase() === valor.trim().toLowerCase());
-        if (ok) { err?.classList.add('hidden'); }
-        else    { err?.classList.remove('hidden'); }
-        return ok;
-    }
 
     // ============================================================
     // ENVÍO DEL FORMULARIO
@@ -1542,11 +1529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 e.preventDefault();
                 return false;
             }
-            if (!validarLocalidad(localidad)) {
-                alert(`"${localidad}" no está en nuestra zona de delivery.\n\nLocalidades disponibles: ${localidadesActivas.join(', ')}`);
-                e.preventDefault();
-                return false;
-            }
+
             let dirCompuesta = `${calle} ${numero}, ${localidad}`;
             if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
