@@ -850,15 +850,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                         </div>
 
-                        <!-- 2. Fecha de entrega (solo delivery) -->
+                        <!-- 2. Fecha de entrega (retiro y delivery) -->
                         <div id="bloque-fecha" class="hidden">
                             <label class="block text-sm font-bold text-gray-700 mb-3">
                                 <i class="fas fa-calendar text-purple-500 mr-1"></i>¿Para qué día?
                             </label>
                             <div id="opciones-fecha" class="flex gap-2 flex-wrap"></div>
-                            <p class="text-xs text-gray-500 mt-2">
+                            <p class="text-xs text-gray-500 mt-2" id="hint-fecha">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Los turnos disponibles se actualizan según el día y la hora de corte de pedidos
+                                Los turnos disponibles se actualizan según el día seleccionado
                             </p>
                         </div>
 
@@ -1138,17 +1138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // INICIALIZAR PASO 4
     // ============================================================
     function initializarPaso4() {
-        // Para retiro: siempre hoy
-        if (estado.modalidad !== 'Delivery' || !estado.fechaPedido) {
+        if (!estado.fechaPedido) {
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
         }
-        if (estado.modalidad === 'Delivery') {
-            document.getElementById('bloque-fecha').classList.remove('hidden');
-            generarFechas();
-        } else {
-            document.getElementById('bloque-fecha').classList.add('hidden');
-        }
+        document.getElementById('bloque-fecha').classList.remove('hidden');
+        generarFechas();
         estado.disponibilidad = null;
         cargarDisponibilidad(estado.fechaPedido);
     }
@@ -1420,30 +1415,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const bloqueDir   = document.getElementById('bloque-direccion');
         const bloqueFecha = document.getElementById('bloque-fecha');
 
+        // Siempre mostrar selector de fecha
+        bloqueFecha.classList.remove('hidden');
+        if (!estado.fechaPedido) {
+            estado.fechaPedido = getArgentinaDate(0);
+            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+        }
+        generarFechas();
+
         if (modalidad === 'Delivery') {
             bloqueDir.classList.remove('hidden');
-            bloqueFecha.classList.remove('hidden');
-            if (!estado.fechaPedido) {
-                estado.fechaPedido = getArgentinaDate(0);
-                document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
-            }
-            generarFechas();
-            estado.disponibilidad = null;
-            cargarDisponibilidad(estado.fechaPedido);
+            document.getElementById('hint-fecha').innerHTML =
+                '<i class="fas fa-info-circle mr-1"></i>Los turnos se actualizan según el día y la hora de corte de pedidos';
         } else {
             bloqueDir.classList.add('hidden');
-            bloqueFecha.classList.add('hidden');
             ['dir_calle', 'dir_numero', 'dir_localidad', 'dir_entre_calles'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
             document.getElementById('localidad-error')?.classList.add('hidden');
-            estado.fechaPedido = getArgentinaDate(0);
-            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
-            estado.disponibilidad = null;
-            cargarDisponibilidad(estado.fechaPedido);
+            document.getElementById('hint-fecha').innerHTML =
+                '<i class="fas fa-info-circle mr-1"></i>Los turnos disponibles se actualizan según el día seleccionado';
         }
+
+        estado.turno = '';
+        document.getElementById('campo_turno').value = '';
+        estado.disponibilidad = null;
+        cargarDisponibilidad(estado.fechaPedido);
     }
 
     function seleccionarPago(tipo) {
@@ -1486,7 +1485,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
 
             const filaFecha = document.getElementById('resumen-fila-fecha');
-            if (estado.modalidad === 'Delivery' && estado.fechaPedido) {
+            if (estado.fechaPedido) {
                 const [y, m, d] = estado.fechaPedido.split('-');
                 document.getElementById('resumen-fecha').textContent = `${d}/${m}/${y}`;
                 filaFecha?.classList.remove('hidden');
