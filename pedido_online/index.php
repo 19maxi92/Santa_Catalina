@@ -705,6 +705,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <ul id="lista-carrito" class="text-sm text-gray-800 space-y-1"></ul>
                         </div>
 
+                        <!-- Pedido personalizado por WhatsApp -->
+                        <a href="https://wa.me/541159813546?text=Hola%21+Quisiera+hacer+un+pedido+personalizado+%F0%9F%A5%AA"
+                           target="_blank"
+                           class="flex items-center justify-center gap-2 bg-green-50 border border-green-300 hover:bg-green-100 text-green-800 py-3 px-4 rounded-xl font-semibold text-sm transition-all">
+                            <i class="fab fa-whatsapp text-green-600 text-lg"></i>
+                            ¿Querés un pedido personalizado? Escribinos por WhatsApp
+                        </a>
+
                         <div class="flex gap-3 mt-2">
                             <button type="button" onclick="irAPaso(1)"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
@@ -1047,8 +1055,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     function turnoDisponibleDeDisp(turno, fechaISO) {
         const disp = estado.disponibilidad?.[turno];
         if (!disp || !disp.activo || disp.disponible <= 0) return false;
-        if (estado.modalidad === 'Retiro') return true;
-        // Validar corte de horario (cliente)
+        // Validar corte de horario (aplica a todas las modalidades)
         const cfg = turnosConfig.find(t => t.turno === turno);
         if (!cfg) return false;
         const [h, min] = cfg.hora_inicio.split(':').map(Number);
