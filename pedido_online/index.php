@@ -111,8 +111,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($nombre) || empty($apellido) || empty($telefono)) {
             throw new Exception('Por favor completá nombre, apellido y teléfono');
         }
-        if (strlen($telefono) < 8) {
-            throw new Exception('Ingresá un teléfono válido');
+        $tel_digits = preg_replace('/\D/', '', $telefono);
+        if (strlen($tel_digits) < 8 || strlen($tel_digits) > 13) {
+            throw new Exception('Ingresá un teléfono válido (ej: 221 123-4567 o 11 5981-3546)');
+        }
+        if (preg_match('/^(.)\1+$/', $tel_digits)) {
+            throw new Exception('Ingresá un número de teléfono real');
+        }
+        if (in_array($tel_digits, ['12345678','123456789','1234567890','0987654321','87654321'])) {
+            throw new Exception('Ingresá un número de teléfono real');
         }
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
@@ -645,7 +652,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label class="block text-sm font-bold text-gray-700 mb-2">Teléfono *</label>
                             <input type="tel" id="campo_telefono" name="telefono" required
                                    value="<?= htmlspecialchars($_POST['telefono'] ?? '') ?>"
-                                   placeholder="Ej: 2604123456"
+                                   placeholder="Ej: 221 123-4567 o 11 5981-3546"
                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-lg">
                         </div>
                         <div class="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-800 flex items-start gap-2">
@@ -697,6 +704,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <p class="text-sm font-bold text-orange-800 mb-2"><i class="fas fa-shopping-cart mr-1"></i>Tu pedido:</p>
                             <ul id="lista-carrito" class="text-sm text-gray-800 space-y-1"></ul>
                         </div>
+
+                        <!-- Pedido personalizado por WhatsApp -->
+                        <a href="https://wa.me/541159813546?text=Hola%21+Quisiera+hacer+un+pedido+personalizado+%F0%9F%A5%AA"
+                           target="_blank"
+                           class="flex items-center justify-center gap-2 bg-green-50 border border-green-300 hover:bg-green-100 text-green-800 py-3 px-4 rounded-xl font-semibold text-sm transition-all">
+                            <i class="fab fa-whatsapp text-green-600 text-lg"></i>
+                            ¿Querés un pedido personalizado? Escribinos por WhatsApp
+                        </a>
 
                         <div class="flex gap-3 mt-2">
                             <button type="button" onclick="irAPaso(1)"
@@ -843,15 +858,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                         </div>
 
-                        <!-- 2. Fecha de entrega (solo delivery) -->
+                        <!-- 2. Fecha de entrega (retiro y delivery) -->
                         <div id="bloque-fecha" class="hidden">
                             <label class="block text-sm font-bold text-gray-700 mb-3">
                                 <i class="fas fa-calendar text-purple-500 mr-1"></i>¿Para qué día?
                             </label>
                             <div id="opciones-fecha" class="flex gap-2 flex-wrap"></div>
-                            <p class="text-xs text-gray-500 mt-2">
+                            <p class="text-xs text-gray-500 mt-2" id="hint-fecha">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Los turnos disponibles se actualizan según el día y la hora de corte de pedidos
+                                Los turnos disponibles se actualizan según el día seleccionado
                             </p>
                         </div>
 
@@ -893,13 +908,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <input type="text" id="dir_numero" placeholder="Número *"
                                        class="px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                             </div>
-                            <input type="text" id="dir_localidad" placeholder="Localidad *"
-                                   oninput="validarLocalidad(this.value)"
-                                   class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
-                            <div id="localidad-error" class="hidden text-xs text-red-600 font-semibold px-1">
-                                <i class="fas fa-exclamation-circle mr-1"></i>
-                                Esa localidad no está en nuestra zona de delivery. Consultanos por WhatsApp.
-                            </div>
+                            <select id="dir_localidad"
+                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm bg-white">
+                                <option value="">— Seleccioná tu localidad *</option>
+                                <?php foreach ($locs_html as $loc): ?>
+                                    <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
+                                <?php endforeach; ?>
+                            </select>
                             <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
@@ -1040,8 +1055,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     function turnoDisponibleDeDisp(turno, fechaISO) {
         const disp = estado.disponibilidad?.[turno];
         if (!disp || !disp.activo || disp.disponible <= 0) return false;
-        if (estado.modalidad === 'Retiro') return true;
-        // Validar corte de horario (cliente)
+        // Validar corte de horario (aplica a todas las modalidades)
         const cfg = turnosConfig.find(t => t.turno === turno);
         if (!cfg) return false;
         const [h, min] = cfg.hora_inicio.split(':').map(Number);
@@ -1131,17 +1145,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // INICIALIZAR PASO 4
     // ============================================================
     function initializarPaso4() {
-        // Para retiro: siempre hoy
-        if (estado.modalidad !== 'Delivery' || !estado.fechaPedido) {
+        if (!estado.fechaPedido) {
             estado.fechaPedido = getArgentinaDate(0);
             document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
         }
-        if (estado.modalidad === 'Delivery') {
-            document.getElementById('bloque-fecha').classList.remove('hidden');
-            generarFechas();
-        } else {
-            document.getElementById('bloque-fecha').classList.add('hidden');
-        }
+        document.getElementById('bloque-fecha').classList.remove('hidden');
+        generarFechas();
         estado.disponibilidad = null;
         cargarDisponibilidad(estado.fechaPedido);
     }
@@ -1236,8 +1245,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // VALIDACIONES DE PASOS
     // ============================================================
+    function validarTelefono(raw) {
+        const digits = raw.replace(/\D/g, '');
+        if (digits.length < 8 || digits.length > 13) {
+            return 'Ingresá un teléfono válido (ej: 221 123-4567 o 11 5981-3546)';
+        }
+        // Todos los dígitos iguales: 11111111, 00000000, etc.
+        if (/^(.)\1+$/.test(digits)) {
+            return 'Ingresá un número de teléfono real';
+        }
+        // Secuencias obvias
+        if (['12345678','123456789','1234567890','0987654321','87654321'].includes(digits)) {
+            return 'Ingresá un número de teléfono real';
+        }
+        return null;
+    }
+
     function irAPaso(num) {
-        if (num === 2) {
+        if (num === 3) {
             const nombre   = document.getElementById('campo_nombre').value.trim();
             const apellido = document.getElementById('campo_apellido').value.trim();
             const telefono = document.getElementById('campo_telefono').value.trim();
@@ -1245,10 +1270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 alert('Por favor completá nombre, apellido y teléfono');
                 return;
             }
-            if (telefono.length < 8) {
-                alert('Ingresá un teléfono válido (mínimo 8 dígitos)');
-                return;
-            }
+            const errTel = validarTelefono(telefono);
+            if (errTel) { alert(errTel); return; }
         }
         mostrarPaso(num);
     }
@@ -1399,30 +1422,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const bloqueDir   = document.getElementById('bloque-direccion');
         const bloqueFecha = document.getElementById('bloque-fecha');
 
+        // Siempre mostrar selector de fecha
+        bloqueFecha.classList.remove('hidden');
+        if (!estado.fechaPedido) {
+            estado.fechaPedido = getArgentinaDate(0);
+            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
+        }
+        generarFechas();
+
         if (modalidad === 'Delivery') {
             bloqueDir.classList.remove('hidden');
-            bloqueFecha.classList.remove('hidden');
-            if (!estado.fechaPedido) {
-                estado.fechaPedido = getArgentinaDate(0);
-                document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
-            }
-            generarFechas();
-            estado.disponibilidad = null;
-            cargarDisponibilidad(estado.fechaPedido);
+            document.getElementById('hint-fecha').innerHTML =
+                '<i class="fas fa-info-circle mr-1"></i>Los turnos se actualizan según el día y la hora de corte de pedidos';
         } else {
             bloqueDir.classList.add('hidden');
-            bloqueFecha.classList.add('hidden');
             ['dir_calle', 'dir_numero', 'dir_localidad', 'dir_entre_calles'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
-            document.getElementById('localidad-error')?.classList.add('hidden');
-            estado.fechaPedido = getArgentinaDate(0);
-            document.getElementById('campo_fecha_pedido').value = estado.fechaPedido;
-            estado.disponibilidad = null;
-            cargarDisponibilidad(estado.fechaPedido);
+            document.getElementById('hint-fecha').innerHTML =
+                '<i class="fas fa-info-circle mr-1"></i>Los turnos disponibles se actualizan según el día seleccionado';
         }
+
+        estado.turno = '';
+        document.getElementById('campo_turno').value = '';
+        estado.disponibilidad = null;
+        cargarDisponibilidad(estado.fechaPedido);
     }
 
     function seleccionarPago(tipo) {
@@ -1465,7 +1491,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
 
             const filaFecha = document.getElementById('resumen-fila-fecha');
-            if (estado.modalidad === 'Delivery' && estado.fechaPedido) {
+            if (estado.fechaPedido) {
                 const [y, m, d] = estado.fechaPedido.split('-');
                 document.getElementById('resumen-fecha').textContent = `${d}/${m}/${y}`;
                 filaFecha?.classList.remove('hidden');
@@ -1480,18 +1506,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // ============================================================
-    // VALIDACIÓN DE LOCALIDAD
-    // ============================================================
-    function validarLocalidad(valor) {
-        if (!localidadesActivas || localidadesActivas.length === 0) return true;
-        const err = document.getElementById('localidad-error');
-        if (!valor.trim()) { err?.classList.add('hidden'); return true; }
-        const ok = localidadesActivas.some(l => l.toLowerCase() === valor.trim().toLowerCase());
-        if (ok) { err?.classList.add('hidden'); }
-        else    { err?.classList.remove('hidden'); }
-        return ok;
-    }
 
     // ============================================================
     // ENVÍO DEL FORMULARIO
@@ -1522,11 +1536,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 e.preventDefault();
                 return false;
             }
-            if (!validarLocalidad(localidad)) {
-                alert(`"${localidad}" no está en nuestra zona de delivery.\n\nLocalidades disponibles: ${localidadesActivas.join(', ')}`);
-                e.preventDefault();
-                return false;
-            }
+
             let dirCompuesta = `${calle} ${numero}, ${localidad}`;
             if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
