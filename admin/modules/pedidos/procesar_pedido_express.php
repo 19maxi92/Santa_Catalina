@@ -179,6 +179,23 @@ try {
 
     $pedido_id = $pdo->lastInsertId();
 
+    // Enviar a Google Sheets (pedidos_comunes)
+    require_once '../../google_sheets_helper.php';
+    enviarPedidoASheets($pedido_id, [
+        'nombre'       => $nombre,
+        'apellido'     => $apellido,
+        'telefono'     => $telefono,
+        'producto'     => $producto,
+        'cantidad'     => $cantidad,
+        'precio'       => $precio,
+        'forma_pago'   => $forma_pago,
+        'modalidad'    => $modalidad,
+        'ubicacion'    => $ubicacion,
+        'estado'       => $estado,
+        'direccion'    => $direccion,
+        'observaciones'=> $observaciones,
+    ], 'comun');
+
     // Log detallado del pedido express
     $log_msg = "PEDIDO EXPRESS ADMIN CREADO: ID #$pedido_id";
     $log_msg .= " | Cliente: $nombre" . ($apellido ? " $apellido" : "");

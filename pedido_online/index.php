@@ -325,6 +325,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pedido_id = $pdo->lastInsertId();
         // Stock se calcula dinámicamente desde la tabla pedidos (no hay columna stock que decrementar)
 
+        // Enviar a Google Sheets (pedidos_online)
+        require_once '../google_sheets_helper.php';
+        enviarPedidoASheets($pedido_id, [
+            'nombre'       => $nombre,
+            'apellido'     => $apellido,
+            'telefono'     => $telefono,
+            'producto'     => $nombre_producto,
+            'cantidad'     => $cantidad_sandwiches,
+            'precio'       => $precio,
+            'forma_pago'   => $forma_pago,
+            'modalidad'    => $modalidad,
+            'ubicacion'    => 'Local 1',
+            'estado'       => 'Pendiente',
+            'direccion'    => $direccion,
+            'observaciones'=> $obs_interna,
+        ], 'online');
+
         $pedido_confirmado = [
             'id'          => $pedido_id,
             'nombre'      => $nombre,
