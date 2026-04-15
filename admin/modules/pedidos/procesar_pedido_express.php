@@ -180,7 +180,7 @@ try {
     $pedido_id = $pdo->lastInsertId();
 
     // Enviar a Google Sheets (pedidos_comunes)
-    require_once '../../google_sheets_helper.php';
+    require_once '../../../google_sheets_helper.php';
     enviarPedidoASheets($pedido_id, [
         'nombre'       => $nombre,
         'apellido'     => $apellido,
