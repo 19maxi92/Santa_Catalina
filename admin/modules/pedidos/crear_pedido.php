@@ -54,6 +54,12 @@ try {
     error_log("Error al cargar precios: " . $e->getMessage());
     // Usar precios por defecto si falla
 }
+
+// CARGAR LOCALIDADES DE DELIVERY
+$localidades_delivery = [];
+try {
+    $localidades_delivery = $pdo->query("SELECT nombre FROM localidades_delivery WHERE activo = 1 ORDER BY orden, nombre")->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -277,13 +283,38 @@ try {
                         </div>
 
                         <!-- Dirección (solo si es delivery) -->
-                        <div id="direccion-container" class="mb-6 hidden">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Dirección de Entrega *
-                            </label>
-                            <textarea id="direccion" rows="2"
-                                      class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                                      placeholder="Calle, número, barrio"></textarea>
+                        <div id="direccion-container" class="mb-6 hidden space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">Dirección de Entrega *</label>
+
+                            <?php if (!empty($localidades_delivery)): ?>
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                                <span class="font-bold"><i class="fas fa-map-marker-alt mr-1"></i>Localidades con delivery habilitado:</span>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    <?php foreach ($localidades_delivery as $loc): ?>
+                                        <span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full"><?= htmlspecialchars($loc) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <div class="grid grid-cols-3 gap-2">
+                                <input type="text" id="dir_calle" placeholder="Calle *"
+                                       class="col-span-2 px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-sm">
+                                <input type="text" id="dir_numero" placeholder="Número *"
+                                       class="px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-sm">
+                            </div>
+                            <select id="dir_localidad"
+                                    class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-sm bg-white">
+                                <option value="">— Seleccioná la localidad *</option>
+                                <?php foreach ($localidades_delivery as $loc): ?>
+                                    <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <input type="text" id="dir_entre_calles" placeholder="Entre calles (opcional)"
+                                   class="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-sm">
+
+                            <!-- Campo oculto que guarda la dirección compuesta -->
+                            <input type="hidden" id="direccion">
                         </div>
 
                         <!-- Ubicación (ADMIN selecciona ubicación) -->
@@ -849,12 +880,19 @@ function validarPaso1() {
         return false;
     }
 
-    // Validar dirección si es delivery
+    // Validar y armar dirección si es delivery
     if (modalidad.value === 'Delivery') {
-        const direccion = document.getElementById('direccion').value.trim();
-        if (!direccion) {
+        const calle      = document.getElementById('dir_calle')?.value.trim();
+        const numero     = document.getElementById('dir_numero')?.value.trim();
+        const localidad  = document.getElementById('dir_localidad')?.value.trim();
+        const entrecalles = document.getElementById('dir_entre_calles')?.value.trim();
+        if (!calle || !numero || !localidad) {
+            alert('Completá calle, número y localidad para el delivery');
             return false;
         }
+        let dirCompuesta = `${calle} ${numero}, ${localidad}`;
+        if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
+        document.getElementById('direccion').value = dirCompuesta;
     }
 
     if (!ubicacion) {
@@ -907,10 +945,14 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('change', function() {
             if (this.value === 'Delivery') {
                 direccionContainer.classList.remove('hidden');
-                document.getElementById('direccion').required = true;
             } else {
                 direccionContainer.classList.add('hidden');
-                document.getElementById('direccion').required = false;
+                // Limpiar campos al cambiar a Retiro
+                ['dir_calle','dir_numero','dir_localidad','dir_entre_calles'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+                document.getElementById('direccion').value = '';
             }
         });
     });
@@ -921,14 +963,32 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('apellido').value = <?= json_encode($clientePreCargado['apellido']) ?>;
     document.getElementById('telefono').value = <?= json_encode($clientePreCargado['telefono']) ?>;
     <?php if (!empty($clientePreCargado['direccion'])): ?>
-    document.getElementById('direccion').value = <?= json_encode($clientePreCargado['direccion']) ?>;
-    // Si tiene dirección, seleccionar Delivery por defecto
-    const deliveryInput = document.querySelector('input[name="modalidad"][value="Delivery"]');
-    if (deliveryInput) {
-        deliveryInput.checked = true;
-        direccionContainer.classList.remove('hidden');
-        document.getElementById('direccion').required = true;
-    }
+    // Pre-llenar campos de dirección estructurada desde dirección guardada
+    (function() {
+        const rawDir = <?= json_encode($clientePreCargado['direccion']) ?>;
+        document.getElementById('direccion').value = rawDir;
+        // Intentar rellenar los campos separados (formato: "Calle 123, Localidad")
+        const partes = rawDir.split(',');
+        if (partes.length >= 2) {
+            const calleNum = partes[0].trim().split(' ');
+            const numero   = calleNum.pop();
+            document.getElementById('dir_calle').value    = calleNum.join(' ');
+            document.getElementById('dir_numero').value   = numero;
+            const locPart = partes[1].replace(/\(.*\)/, '').trim();
+            const selLoc  = document.getElementById('dir_localidad');
+            if (selLoc) {
+                for (const opt of selLoc.options) {
+                    if (opt.value.toLowerCase() === locPart.toLowerCase()) { opt.selected = true; break; }
+                }
+            }
+        }
+        // Seleccionar Delivery y mostrar el container
+        const deliveryInput = document.querySelector('input[name="modalidad"][value="Delivery"]');
+        if (deliveryInput) {
+            deliveryInput.checked = true;
+            direccionContainer.classList.remove('hidden');
+        }
+    })();
     <?php endif; ?>
     console.log('✅ Cliente frecuente cargado: <?= htmlspecialchars($clientePreCargado['nombre'] . ' ' . $clientePreCargado['apellido']) ?>');
     <?php endif; ?>
