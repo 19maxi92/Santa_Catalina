@@ -34,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'eliminar':
                 if ($id) {
                     $pdo->prepare("DELETE FROM pedidos WHERE id = ?")->execute([$id]);
+                    require_once '../../../google_sheets_helper.php';
+                    marcarEliminadoEnSheets($id);
                     $_SESSION['mensaje'] = "✅ Pedido eliminado";
                 }
                 break;
