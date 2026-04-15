@@ -374,11 +374,11 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
     // ============================================================
     function imprimirYCerrar() {
         document.querySelector('.controles').style.display = 'none';
-        setTimeout(() => {
-            window.print();
+        window.onafterprint = function() {
             marcarComoImpreso(<?= $pedido_id ?>);
-            setTimeout(() => window.close(), 500);
-        }, 200);
+            window.close();
+        };
+        setTimeout(() => window.print(), 200);
     }
 
     function marcarComoImpreso(pedidoId) {
