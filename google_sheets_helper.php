@@ -2,7 +2,7 @@
 // google_sheets_helper.php
 // Envía pedidos a Google Sheets automáticamente (sin bloquear el flujo principal)
 
-define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbzODlAm8gHfJa7h3gvhvAGiDrggbZKR7o-M1YUhw_hL07LoewApQoMwAdPjZr5nxbmiuQ/exec');
+define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxJvCApuEzxrbAxHpMuY_l8mw0FQwQGb-p5FlEtnXtDVPdnJL5wti63zXeaCqAKbFwXCg/exec');
 
 /**
  * Envía los datos de un pedido a la hoja de Google Sheets correspondiente.
