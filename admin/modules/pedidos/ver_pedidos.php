@@ -225,6 +225,18 @@ $impresos = count(array_filter($pedidos, fn($p) => $p['impreso'] == 1));
 $total_ventas = array_sum(array_column($pedidos, 'precio'));
 $urgentes = count(array_filter($pedidos, fn($p) => $p['prioridad'] === 'urgente' && $p['estado'] !== 'Entregado'));
 
+// Agrupar pedidos por cliente para vista "Por Cliente"
+$pedidos_por_cliente = [];
+foreach ($pedidos as $p) {
+    $nombre_key = $p['cliente_fijo_nombre']
+        ? trim($p['cliente_fijo_nombre'] . ' ' . $p['cliente_fijo_apellido'])
+        : trim($p['nombre'] . ' ' . $p['apellido']);
+    if (!$nombre_key) $nombre_key = 'Sin nombre';
+    $pedidos_por_cliente[$nombre_key][] = $p;
+}
+// Ordenar por cantidad de pedidos DESC
+uasort($pedidos_por_cliente, fn($a, $b) => count($b) - count($a));
+
 // Productos únicos (excluye personalizados) para chips de filtro
 $productos_unicos = [];
 foreach ($pedidos as $p) {
@@ -611,6 +623,10 @@ arsort($productos_unicos); // más pedidos primero
                    class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
                     🛵 Delivery
                 </a>
+                <button type="button" id="btn-vista-clientes" onclick="toggleVistaClientes()"
+                        class="filter-tab bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-2 border-transparent transition-all">
+                    👥 Por Cliente <span class="ml-1 bg-indigo-600 text-white text-xs rounded-full px-1.5"><?= count($pedidos_por_cliente) ?></span>
+                </button>
             </div>
             
             <!-- FILTROS AVANZADOS (COLAPSABLES) -->
@@ -776,7 +792,97 @@ arsort($productos_unicos); // más pedidos primero
                 </div>
             </div>
         <?php else: ?>
-            <div class="tabla-container">
+
+            <!-- ===== VISTA POR CLIENTE ===== -->
+            <div id="vista-clientes" class="hidden space-y-3 mb-4">
+                <div class="text-sm text-gray-500 mb-2">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    <?= count($pedidos_por_cliente) ?> cliente(s) · <?= $total ?> pedido(s) total
+                </div>
+                <?php foreach ($pedidos_por_cliente as $nombre_cliente => $grupo_pedidos): ?>
+                <?php
+                    $cnt = count($grupo_pedidos);
+                    $estados_grupo = array_count_values(array_column($grupo_pedidos, 'estado'));
+                    $total_grupo   = array_sum(array_column($grupo_pedidos, 'precio'));
+                    $tel_grupo     = $grupo_pedidos[0]['telefono'] ?? '';
+                    // Badges de estado
+                    $badge_parts = [];
+                    foreach (['Pendiente'=>'bg-yellow-100 text-yellow-800','Preparando'=>'bg-blue-100 text-blue-800','Listo'=>'bg-green-100 text-green-800','Entregado'=>'bg-gray-100 text-gray-600'] as $est => $cls) {
+                        if (!empty($estados_grupo[$est])) $badge_parts[] = "<span class='text-xs font-bold px-2 py-0.5 rounded-full {$cls}'>{$estados_grupo[$est]} {$est}</span>";
+                    }
+                ?>
+                <details class="bg-white rounded-xl shadow-md overflow-hidden" <?= $cnt > 1 ? '' : '' ?>>
+                    <summary class="flex items-center justify-between gap-3 p-4 cursor-pointer hover:bg-gray-50 select-none list-none">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm flex-shrink-0">
+                                <?= mb_strtoupper(mb_substr($nombre_cliente, 0, 2)) ?>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-bold text-gray-900 truncate"><?= htmlspecialchars($nombre_cliente) ?></div>
+                                <div class="flex flex-wrap gap-1 mt-0.5">
+                                    <?= implode(' ', $badge_parts) ?>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 flex-shrink-0 text-right">
+                            <?php if ($tel_grupo): ?>
+                                <a href="https://wa.me/54<?= preg_replace('/\D/', '', $tel_grupo) ?>" target="_blank"
+                                   onclick="event.stopPropagation()"
+                                   class="text-green-600 hover:text-green-700 text-xl" title="WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                            <?php endif; ?>
+                            <div>
+                                <div class="font-black text-indigo-700"><?= $cnt ?> pedido<?= $cnt > 1 ? 's' : '' ?></div>
+                                <div class="text-xs text-gray-500">$<?= number_format($total_grupo, 0, ',', '.') ?></div>
+                            </div>
+                            <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform"></i>
+                        </div>
+                    </summary>
+                    <div class="border-t border-gray-100 divide-y divide-gray-100">
+                        <?php foreach ($grupo_pedidos as $gp): ?>
+                        <?php
+                            $gp_estado_cls = match($gp['estado']) {
+                                'Pendiente'  => 'bg-yellow-50 border-l-4 border-l-yellow-400',
+                                'Preparando' => 'bg-blue-50 border-l-4 border-l-blue-400',
+                                'Listo'      => 'bg-green-50 border-l-4 border-l-green-400',
+                                default      => 'bg-gray-50 border-l-4 border-l-gray-300',
+                            };
+                        ?>
+                        <div class="flex items-center justify-between gap-3 px-4 py-3 text-sm <?= $gp_estado_cls ?>">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="font-bold text-blue-600">#<?= $gp['id'] ?></span>
+                                <span class="text-gray-400 text-xs"><?= $gp['minutos_transcurridos'] ?>'</span>
+                                <span class="truncate text-gray-800 font-medium"><?= htmlspecialchars($gp['producto']) ?></span>
+                                <span class="text-xs <?= $gp['modalidad'] === 'Delivery' ? 'text-blue-500' : 'text-gray-500' ?>">
+                                    <?= $gp['modalidad'] === 'Delivery' ? '🏍️' : '📦' ?>
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <span class="font-bold text-green-700">$<?= number_format($gp['precio'], 0, ',', '.') ?></span>
+                                <form method="POST" class="inline">
+                                    <input type="hidden" name="accion" value="cambiar_estado">
+                                    <input type="hidden" name="id" value="<?= $gp['id'] ?>">
+                                    <select name="estado" onchange="if(confirm('¿Cambiar estado?')) this.form.submit()"
+                                            class="text-xs border rounded px-1 py-0.5 <?= match($gp['estado']) {
+                                                'Pendiente'=>'bg-yellow-100','Preparando'=>'bg-blue-100','Listo'=>'bg-green-100',default=>'bg-gray-100'
+                                            } ?>">
+                                        <option value="Pendiente"  <?= $gp['estado']==='Pendiente'  ? 'selected':'' ?>>⏱️ Pendiente</option>
+                                        <option value="Preparando" <?= $gp['estado']==='Preparando' ? 'selected':'' ?>>🔥 Preparando</option>
+                                        <option value="Listo"      <?= $gp['estado']==='Listo'      ? 'selected':'' ?>>✅ Listo</option>
+                                        <option value="Entregado"  <?= $gp['estado']==='Entregado'  ? 'selected':'' ?>>📦 Entregado</option>
+                                    </select>
+                                </form>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </details>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- ===== VISTA NORMAL (CARDS) ===== -->
+            <div id="vista-normal" class="tabla-container">
                 <div class="grid grid-cols-1 gap-4">
                     <?php foreach ($pedidos as $pedido): ?>
                         <?php
@@ -994,8 +1100,8 @@ arsort($productos_unicos); // más pedidos primero
                         </div>
                     <?php endforeach; ?>
                 </div>
-            </div>
-            
+            </div><!-- /vista-normal -->
+
             <!-- MODAL BEBIDAS -->
             <div id="modalBebidas" class="modal-overlay hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
                  onclick="if(event.target===this) cerrarModalBebidas()">
@@ -1658,6 +1764,37 @@ arsort($productos_unicos); // más pedidos primero
 
         ventana.focus();
         return true;
+    }
+
+    // ============================================
+    // VISTA POR CLIENTE
+    // ============================================
+    let vistaClientesActiva = false;
+
+    function toggleVistaClientes() {
+        vistaClientesActiva = !vistaClientesActiva;
+        const vNormal   = document.getElementById('vista-normal');
+        const vClientes = document.getElementById('vista-clientes');
+        const btn       = document.getElementById('btn-vista-clientes');
+
+        if (vistaClientesActiva) {
+            vNormal.classList.add('hidden');
+            vClientes.classList.remove('hidden');
+            btn.classList.add('border-indigo-500', 'bg-indigo-200');
+        } else {
+            vNormal.classList.remove('hidden');
+            vClientes.classList.add('hidden');
+            btn.classList.remove('border-indigo-500', 'bg-indigo-200');
+        }
+        localStorage.setItem('vistaClientes', vistaClientesActiva ? '1' : '0');
+    }
+
+    // Restaurar estado al cargar
+    if (localStorage.getItem('vistaClientes') === '1') {
+        vistaClientesActiva = true;
+        document.getElementById('vista-normal')?.classList.add('hidden');
+        document.getElementById('vista-clientes')?.classList.remove('hidden');
+        document.getElementById('btn-vista-clientes')?.classList.add('border-indigo-500', 'bg-indigo-200');
     }
 
     // ============================================
