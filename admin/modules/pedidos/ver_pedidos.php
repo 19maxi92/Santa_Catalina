@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id) {
                     $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id = ?");
                     $stmt->execute([$id]);
+                    require_once '../../../google_sheets_helper.php';
+                    marcarEliminadoEnSheets($id);
                     $_SESSION['mensaje'] = "✅ Pedido eliminado";
                 }
                 break;
@@ -73,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         case 'eliminar':
                             $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id IN ($placeholders)");
                             $stmt->execute($pedidos);
+                            require_once '../../../google_sheets_helper.php';
+                            marcarEliminadoEnSheets($pedidos);
                             $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) eliminado(s)";
                             break;
                             
