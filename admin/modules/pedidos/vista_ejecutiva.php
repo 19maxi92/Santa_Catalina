@@ -100,6 +100,34 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $pedidos = $stmt->fetchAll();
 
+// Exportar CSV / Excel
+if (isset($_GET['exportar']) && $_GET['exportar'] === '1') {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="pedidos_' . date('Y-m-d') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF)); // BOM para Excel UTF-8
+    fputcsv($out, ['ID','Fecha Pedido','Cliente','Teléfono','Producto','Cantidad','Precio','Forma Pago','Modalidad','Ubicación','Estado','Fecha Entrega','Observaciones'], ';');
+    foreach ($pedidos as $p) {
+        fputcsv($out, [
+            $p['id'],
+            $p['created_at'],
+            trim(($p['nombre'] ?? '') . ' ' . ($p['apellido'] ?? '')),
+            $p['telefono'] ?? '',
+            $p['producto'] ?? '',
+            $p['cantidad'] ?? '',
+            $p['precio'] ?? '',
+            $p['forma_pago'] ?? '',
+            $p['modalidad'] ?? '',
+            $p['ubicacion'] ?? '',
+            $p['estado'] ?? '',
+            $p['fecha_entrega'] ?? '',
+            strip_tags(str_replace(["\n","\r"], ' ', $p['observaciones'] ?? '')),
+        ], ';');
+    }
+    fclose($out);
+    exit;
+}
+
 $mensaje = $_SESSION['mensaje'] ?? '';
 $error = $_SESSION['error'] ?? '';
 unset($_SESSION['mensaje'], $_SESSION['error']);
@@ -335,6 +363,7 @@ unset($_SESSION['mensaje'], $_SESSION['error']);
             
             <button type="submit" class="btn">Filtrar</button>
             <a href="vista_ejecutiva.php" class="btn">Limpiar</a>
+            <a href="?<?= http_build_query(array_merge($_GET, ['exportar' => '1'])) ?>" class="btn" style="background:#1a7a1a;color:white;border-color:#1a7a1a;">📊 Exportar Excel</a>
             
             <div class="separator"></div>
             

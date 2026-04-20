@@ -60,6 +60,7 @@ try {
     $producto = $data['producto'] ?? '';
     $cantidad = (int)($data['cantidad'] ?? 1);
     $estado = $data['estado'] ?? 'Pendiente';
+    $turno_entrega = isset($data['turno']) && $data['turno'] ? trim($data['turno']) : null;
     $cliente_fijo_id = isset($data['cliente_fijo_id']) && $data['cliente_fijo_id'] ? (int)$data['cliente_fijo_id'] : null;
     $pagado = isset($data['pagado']) && $data['pagado'] ? 1 : 0;
 
@@ -146,11 +147,11 @@ try {
         INSERT INTO pedidos (
             nombre, apellido, telefono, direccion, producto, cantidad, precio,
             modalidad, forma_pago, ubicacion, estado, observaciones,
-            fecha_entrega, fecha_pedido, created_at, fecha_display, cliente_fijo_id, pagado
+            fecha_entrega, turno_entrega, fecha_pedido, created_at, fecha_display, cliente_fijo_id, pagado
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
-            ?, NOW(), NOW(), ?, ?, ?
+            ?, ?, NOW(), NOW(), ?, ?, ?
         )
     ");
 
@@ -168,6 +169,7 @@ try {
         $estado,
         $observaciones,
         $fecha_entrega,
+        $turno_entrega,
         $fecha_display,
         $cliente_fijo_id,
         $pagado

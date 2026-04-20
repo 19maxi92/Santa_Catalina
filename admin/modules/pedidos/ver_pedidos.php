@@ -167,7 +167,7 @@ $sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, p.bebidas_json, COALESCE(p.
                END as prioridad
         FROM pedidos p
         LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
-        WHERE NOT (p.observaciones LIKE '%PEDIDO ONLINE%' AND p.estado = 'Pendiente')";
+        WHERE 1=1";
 
 $params = [];
 
@@ -805,6 +805,21 @@ arsort($productos_unicos); // más pedidos primero
                         // Clases dinámicas según prioridad
                         $clase_prioridad = '';
                         $es_online = strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false;
+
+                        // Abreviar sabores para pedidos personalizados admin
+                        $sabores_admin_abrev = [];
+                        if (strpos($pedido['producto'] ?? '', 'Personalizado') !== false) {
+                            // Online: JSON embebido
+                            if (preg_match('/\[Datos sabores:\s*(\{[^\]]+\})\]/', $pedido['observaciones'] ?? '', $_mj)) {
+                                $_sd = json_decode($_mj[1], true) ?? [];
+                                $_ab = ['jamon_queso'=>'JyQ','lechuga'=>'Lec','tomate'=>'Tom','huevo'=>'Hue','choclo'=>'Cho','aceitunas'=>'Ace','zanahoria_queso'=>'ZyQ','zanahoria_huevo'=>'ZyH','anana'=>'Ana','atun'=>'Atu','berenjena'=>'Ber','jamon_crudo'=>'JCr','morron'=>'Mor','palmito'=>'Pal','panceta'=>'Pan','pollo'=>'Pol','roquefort'=>'Roq','salame'=>'Sal'];
+                                foreach ($_sd as $_si => $_sq) { if ($_sq > 0) $sabores_admin_abrev[] = ($_ab[$_si] ?? $_si) . '×' . $_sq; }
+                            // Admin: líneas "• Sabor: N planchas"
+                            } elseif (preg_match_all('/•\s*([^:]+):\s*(\d+)\s*plancha/', $pedido['observaciones'] ?? '', $_mp)) {
+                                $_abN = ['Jamón y Queso'=>'JyQ','Lechuga'=>'Lec','Tomate'=>'Tom','Huevo'=>'Hue','Choclo'=>'Cho','Aceitunas'=>'Ace','Zanahoria y Queso'=>'ZyQ','Zanahoria y Huevo'=>'ZyH','Ananá'=>'Ana','Atún'=>'Atu','Berenjena'=>'Ber','Jamón Crudo'=>'JCr','Morrón'=>'Mor','Palmito'=>'Pal','Panceta'=>'Pan','Pollo'=>'Pol','Roquefort'=>'Roq','Salame'=>'Sal'];
+                                foreach ($_mp[1] as $_i => $_sn) { $_sn = trim($_sn); $sabores_admin_abrev[] = ($_abN[$_sn] ?? $_sn) . '×' . $_mp[2][$_i] . 'pl'; }
+                            }
+                        }
                         if ($pedido['prioridad'] === 'urgente' && $pedido['estado'] !== 'Entregado') {
                             $clase_prioridad = 'urgente';
                         } elseif ($pedido['prioridad'] === 'atencion' && $pedido['estado'] !== 'Entregado') {
@@ -905,6 +920,13 @@ arsort($productos_unicos); // más pedidos primero
                                     <div class="flex-1 min-w-[180px] flex items-center gap-2">
                                         <div class="flex-1">
                                             <div class="font-medium text-sm text-gray-800 truncate"><?= htmlspecialchars($pedido['producto']) ?></div>
+                                            <?php if (!empty($sabores_admin_abrev)): ?>
+                                            <div class="flex flex-wrap gap-0.5 mt-0.5">
+                                                <?php foreach ($sabores_admin_abrev as $_s): ?>
+                                                    <span class="bg-orange-100 text-orange-700 text-xs px-1 rounded font-semibold"><?= htmlspecialchars($_s) ?></span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <?php endif; ?>
                                             <div class="flex items-center gap-1 text-xs mt-0.5">
                                                 <span title="<?= $pedido['modalidad'] ?>">
                                                     <?= $pedido['modalidad'] === 'Retiro' ? '📦' : '🏍️' ?>
@@ -2132,6 +2154,23 @@ arsort($productos_unicos); // más pedidos primero
                         </div>
 
                         <form id="formEditarPedido" class="p-6">
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Nombre *</label>
+                                    <input type="text" id="editNombre" value="${pedidoEditando.nombre || ''}"
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Apellido</label>
+                                    <input type="text" id="editApellido" value="${pedidoEditando.apellido || ''}"
+                                           class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Teléfono</label>
+                                <input type="text" id="editTelefono" value="${pedidoEditando.telefono || ''}"
+                                       class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-purple-500">
+                            </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Producto *</label>
                                 <input type="text" id="editProducto" value="${pedidoEditando.producto || ''}" required
@@ -2192,9 +2231,12 @@ arsort($productos_unicos); // más pedidos primero
     async function guardarEdicionPedido() {
         if (!pedidoEditando) return;
 
-        const producto = document.getElementById('editProducto').value.trim();
-        const cantidad = parseInt(document.getElementById('editCantidad').value);
-        const precio = parseFloat(document.getElementById('editPrecio').value);
+        const nombre       = document.getElementById('editNombre').value.trim();
+        const apellido     = document.getElementById('editApellido').value.trim();
+        const telefono     = document.getElementById('editTelefono').value.trim();
+        const producto     = document.getElementById('editProducto').value.trim();
+        const cantidad     = parseInt(document.getElementById('editCantidad').value);
+        const precio       = parseFloat(document.getElementById('editPrecio').value);
         const observaciones = document.getElementById('editObservaciones').value.trim();
 
         if (!producto || !cantidad || !precio) {
@@ -2212,10 +2254,8 @@ arsort($productos_unicos); // más pedidos primero
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: pedidoEditando.id,
-                    producto: producto,
-                    cantidad: cantidad,
-                    precio: precio,
-                    observaciones: observaciones
+                    nombre, apellido, telefono,
+                    producto, cantidad, precio, observaciones
                 })
             });
 

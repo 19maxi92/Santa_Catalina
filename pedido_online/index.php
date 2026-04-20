@@ -303,13 +303,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 nombre, apellido, telefono, direccion,
                 producto, cantidad, precio,
                 modalidad, forma_pago, ubicacion,
-                estado, observaciones, fecha_entrega,
+                estado, observaciones, fecha_entrega, turno_entrega,
                 created_at, fecha_display
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, 'Local 1',
-                'Pendiente', ?, ?,
+                'Pendiente', ?, ?, ?,
                 NOW(), ?
             )
         ");
@@ -318,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nombre, $apellido, $telefono, $direccion,
             $nombre_producto, $cantidad_sandwiches, $precio,
             $modalidad, $forma_pago,
-            $obs_interna, $fecha_entrega,
+            $obs_interna, $fecha_entrega, $turno,
             $fecha_display
         ]);
 
@@ -1113,7 +1113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return `<div class="turno-card p-4 text-center ${!ok ? 'sin-stock' : ''} ${sel ? 'seleccionado' : ''}"
                          onclick="${ok ? `seleccionarTurno('${cfg.turno}','${fechaISO}')` : ''}">
                 <div class="text-2xl font-black text-gray-900">${cfg.turno}</div>
-                <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}</div>
+                <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}${cfg.hora_fin ? ' – ' + cfg.hora_fin : ''}</div>
                 <div class="mt-2 text-xs font-bold ${ok ? 'text-green-600' : 'text-red-500'}">
                     ${ok ? `✅ ${disp?.disponible ?? '—'} cupos` : `❌ ${turnoMotivoBloqueo(cfg.turno, fechaISO)}`}
                 </div>
