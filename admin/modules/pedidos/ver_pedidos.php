@@ -1740,6 +1740,10 @@ arsort($productos_unicos); // más pedidos primero
         }
         const sorted = Object.entries(grupos).sort((a, b) => b[1].length - a[1].length);
 
+        // Actualizar badge del botón con el conteo real filtrado
+        const badgeClientes = document.querySelector('#btn-vista-clientes span');
+        if (badgeClientes) badgeClientes.textContent = sorted.length;
+
         const cont = document.getElementById('vista-clientes');
         if (sorted.length === 0) {
             cont.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-users-slash text-3xl mb-2"></i><p>No hay pedidos con estos filtros</p></div>';
