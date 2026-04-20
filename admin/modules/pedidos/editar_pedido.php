@@ -35,15 +35,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    $pedido_id = (int)$data['id'];
-    $producto = htmlspecialchars(strip_tags(trim($data['producto'])));
-    $cantidad = (int)$data['cantidad'];
-    $precio = (float)$data['precio'];
-    $observaciones = htmlspecialchars(strip_tags(trim($data['observaciones'])));
+    $pedido_id     = (int)$data['id'];
+    $nombre        = htmlspecialchars(strip_tags(trim($data['nombre']        ?? '')));
+    $apellido      = htmlspecialchars(strip_tags(trim($data['apellido']      ?? '')));
+    $telefono      = htmlspecialchars(strip_tags(trim($data['telefono']      ?? '')));
+    $producto      = htmlspecialchars(strip_tags(trim($data['producto']      ?? '')));
+    $cantidad      = (int)$data['cantidad'];
+    $precio        = (float)$data['precio'];
+    $observaciones = htmlspecialchars(strip_tags(trim($data['observaciones'] ?? '')));
 
     try {
-        $stmt = $pdo->prepare("UPDATE pedidos SET producto = ?, cantidad = ?, precio = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
-        $result = $stmt->execute([$producto, $cantidad, $precio, $observaciones, $pedido_id]);
+        $stmt = $pdo->prepare("UPDATE pedidos SET nombre = ?, apellido = ?, telefono = ?, producto = ?, cantidad = ?, precio = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
+        $result = $stmt->execute([$nombre, $apellido, $telefono, $producto, $cantidad, $precio, $observaciones, $pedido_id]);
 
         echo json_encode(['success' => $result]);
     } catch (Exception $e) {

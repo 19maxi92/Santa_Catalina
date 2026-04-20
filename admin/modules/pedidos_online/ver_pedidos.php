@@ -34,6 +34,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'eliminar':
                 if ($id) {
                     $pdo->prepare("DELETE FROM pedidos WHERE id = ?")->execute([$id]);
+                    require_once '../../../google_sheets_helper.php';
+                    marcarEliminadoEnSheets($id);
                     $_SESSION['mensaje'] = "✅ Pedido eliminado";
                 }
                 break;
@@ -205,6 +207,22 @@ $stmt_stats->execute([$fecha]);
                     preg_match('/Sabores:\s*([^\[]+)/', $pedido['observaciones'] ?? '', $m_sabores);
                     $sabores_texto = trim($m_sabores[1] ?? '');
 
+                    // Abreviar sabores desde JSON embebido en observaciones
+                    $sabores_abrev = [];
+                    if (preg_match('/\[Datos sabores:\s*(\{[^\]]+\})\]/', $pedido['observaciones'] ?? '', $m_json)) {
+                        $sabores_data = json_decode($m_json[1], true) ?? [];
+                        $ABREV = [
+                            'jamon_queso'=>'JyQ','lechuga'=>'Lec','tomate'=>'Tom','huevo'=>'Hue',
+                            'choclo'=>'Cho','aceitunas'=>'Ace','zanahoria_queso'=>'ZyQ','zanahoria_huevo'=>'ZyH',
+                            'anana'=>'Ana','atun'=>'Atu','berenjena'=>'Ber','jamon_crudo'=>'JCr',
+                            'morron'=>'Mor','palmito'=>'Pal','panceta'=>'Pan','pollo'=>'Pol',
+                            'roquefort'=>'Roq','salame'=>'Sal',
+                        ];
+                        foreach ($sabores_data as $sid => $qty) {
+                            if ($qty > 0) $sabores_abrev[] = ($ABREV[$sid] ?? $sid) . '×' . $qty;
+                        }
+                    }
+
                     // Preparar número WhatsApp limpio
                     $tel_limpio = preg_replace('/[^0-9]/', '', $pedido['telefono']);
                     if (strlen($tel_limpio) === 10) $tel_limpio = '54' . $tel_limpio;
@@ -250,6 +268,12 @@ $stmt_stats->execute([$fecha]);
                                         <span class="text-gray-500">Turno:</span>
                                         <span class="font-semibold text-purple-700 ml-1"><?= htmlspecialchars($turno_pedido) ?></span>
                                     </div>
+                                    <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] !== '0000-00-00'): ?>
+                                    <div>
+                                        <span class="text-gray-500">Fecha entrega:</span>
+                                        <span class="font-bold text-blue-700 ml-1"><?= date('d/m/Y', strtotime($pedido['fecha_entrega'])) ?></span>
+                                    </div>
+                                    <?php endif; ?>
                                     <div>
                                         <span class="text-gray-500">Tel:</span>
                                         <span class="font-mono text-gray-800 ml-1"><?= htmlspecialchars($pedido['telefono']) ?></span>
@@ -274,7 +298,14 @@ $stmt_stats->execute([$fecha]);
 
                                 <div class="mt-2 p-2 bg-gray-50 rounded-lg text-sm">
                                     <span class="font-bold text-gray-900"><?= htmlspecialchars($pedido['producto']) ?></span>
-                                    <?php if ($es_personalizado && $sabores_texto): ?>
+                                    <?php if ($es_personalizado && !empty($sabores_abrev)): ?>
+                                        <div class="text-xs text-gray-500 mt-1 flex flex-wrap gap-1">
+                                            <i class="fas fa-palette text-orange-400 mr-1"></i>
+                                            <?php foreach ($sabores_abrev as $s): ?>
+                                                <span class="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-semibold"><?= htmlspecialchars($s) ?></span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php elseif ($es_personalizado && $sabores_texto): ?>
                                         <div class="text-xs text-gray-500 mt-1">
                                             <i class="fas fa-palette text-orange-400 mr-1"></i><?= htmlspecialchars($sabores_texto) ?>
                                         </div>

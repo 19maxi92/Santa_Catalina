@@ -2,7 +2,7 @@
 // google_sheets_helper.php
 // Envía pedidos a Google Sheets automáticamente (sin bloquear el flujo principal)
 
-define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbzODlAm8gHfJa7h3gvhvAGiDrggbZKR7o-M1YUhw_hL07LoewApQoMwAdPjZr5nxbmiuQ/exec');
+define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxJvCApuEzxrbAxHpMuY_l8mw0FQwQGb-p5FlEtnXtDVPdnJL5wti63zXeaCqAKbFwXCg/exec');
 
 /**
  * Envía los datos de un pedido a la hoja de Google Sheets correspondiente.
@@ -40,5 +40,30 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
     curl_exec($ch);
     curl_close($ch);
     // Silencioso: si falla, el pedido sigue guardado en la base de datos
+}
+
+/**
+ * Pinta de rojo la fila del pedido en Google Sheets cuando se elimina de la DB.
+ * Busca el ID en ambas hojas (pedidos_comunes y pedidos_online).
+ *
+ * @param int|array $pedido_ids  ID o array de IDs a marcar como eliminados
+ */
+function marcarEliminadoEnSheets($pedido_ids) {
+    $ids = is_array($pedido_ids) ? array_values($pedido_ids) : [$pedido_ids];
+
+    $payload = json_encode([
+        'action' => 'marcar_eliminado',
+        'ids'    => $ids,
+    ]);
+
+    $ch = curl_init(GOOGLE_SHEETS_URL);
+    curl_setopt($ch, CURLOPT_POST,           true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS,     $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT,        5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_exec($ch);
+    curl_close($ch);
 }
 ?>

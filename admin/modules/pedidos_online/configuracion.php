@@ -65,8 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     if ($_POST['accion'] === 'actualizar_turno_global') {
         $turno         = $_POST['turno'];
         $minutos_corte = max(0, (int)$_POST['minutos_antes_corte']);
-        $pdo->prepare("UPDATE config_pedidos_online SET minutos_antes_corte = ? WHERE turno = ?")
-            ->execute([$minutos_corte, $turno]);
+        $hora_inicio   = $_POST['hora_inicio'] ?? '';
+        $hora_fin      = $_POST['hora_fin']    ?? '';
+        $pdo->prepare("UPDATE config_pedidos_online SET hora_inicio = ?, hora_fin = ?, minutos_antes_corte = ? WHERE turno = ?")
+            ->execute([$hora_inicio, $hora_fin, $minutos_corte, $turno]);
         $mensaje_exito = "Configuración de {$turno} actualizada";
     }
 
@@ -253,7 +255,18 @@ $dia_hoy     = (int)date('w'); // 0=Dom
                     <input type="hidden" name="turno" value="<?= $turno ?>">
                     <div class="border-2 border-gray-200 rounded-xl p-4">
                         <div class="font-black text-gray-900 mb-1"><?= $turno ?></div>
-                        <div class="text-xs text-gray-500 mb-3"><?= substr($g['hora_inicio']??'', 0, 5) ?> – <?= substr($g['hora_fin']??'', 0, 5) ?></div>
+                        <div class="grid grid-cols-2 gap-2 mb-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Hora inicio</label>
+                                <input type="time" name="hora_inicio" value="<?= substr($g['hora_inicio']??'09:00', 0, 5) ?>"
+                                       class="w-full border-2 border-gray-300 rounded-lg px-2 py-2 text-sm font-semibold">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1">Hora fin</label>
+                                <input type="time" name="hora_fin" value="<?= substr($g['hora_fin']??'13:00', 0, 5) ?>"
+                                       class="w-full border-2 border-gray-300 rounded-lg px-2 py-2 text-sm font-semibold">
+                            </div>
+                        </div>
                         <label class="block text-xs font-bold text-gray-600 mb-1">Minutos de corte</label>
                         <input type="number" name="minutos_antes_corte" value="<?= $g['minutos_antes_corte'] ?? 30 ?>" min="0" max="1440"
                                class="w-full border-2 border-gray-300 rounded-lg px-3 py-2 font-semibold text-center text-lg mb-1">

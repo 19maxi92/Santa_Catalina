@@ -1305,6 +1305,7 @@ function finalizarYCrearPedidos() {
             cantidad: item.cantidad,
             ubicacion: datosCliente.ubicacion,
             fecha_entrega: datosCliente.fecha_entrega,
+            turno: datosCliente.turno,
             estado: 'Pendiente',
             observaciones: observacionesCompletas,
             cliente_fijo_id: clienteFijoId,

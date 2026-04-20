@@ -72,13 +72,17 @@ foreach (['Mañana', 'Siesta', 'Tarde'] as $turno) {
     $activo     = $dayConfig ? (bool)$dayConfig['activo'] : false;
 
     // Contar pedidos confirmados para esa fecha y turno
+    // Incluye tanto pedidos online (turno_entrega o LIKE) como pedidos admin (turno_entrega)
     $cnt = $pdo->prepare("
         SELECT COUNT(*) FROM pedidos
-        WHERE observaciones LIKE ?
-          AND DATE(fecha_entrega) = ?
+        WHERE DATE(fecha_entrega) = ?
           AND estado != 'Cancelado'
+          AND (
+            turno_entrega = ?
+            OR (turno_entrega IS NULL AND observaciones LIKE ?)
+          )
     ");
-    $cnt->execute(['%PEDIDO ONLINE%Turno: ' . $turno . '%', $fecha]);
+    $cnt->execute([$fecha, $turno, '%PEDIDO ONLINE%Turno: ' . $turno . '%']);
     $ocupados = (int)$cnt->fetchColumn();
 
     $disponible = $activo ? max(0, $maxPedidos - $ocupados) : 0;
