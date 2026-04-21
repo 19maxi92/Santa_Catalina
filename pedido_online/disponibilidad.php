@@ -50,6 +50,11 @@ try {
     }
 } catch (PDOException $e) { /* ya existe */ }
 
+// Agregar columna turno_entrega si no existe
+try {
+    $pdo->exec("ALTER TABLE pedidos ADD COLUMN turno_entrega VARCHAR(20) DEFAULT NULL");
+} catch (PDOException $e) { /* ya existe */ }
+
 // Día de semana de la fecha pedida (0=Dom, 1=Lun ... 6=Sab)
 $diaSemana = (int)date('w', strtotime($fecha));
 

@@ -23,6 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     $pdo = getConnection();
 
+    // Agregar columna turno_entrega si no existe aún
+    try { $pdo->exec("ALTER TABLE pedidos ADD COLUMN turno_entrega VARCHAR(20) DEFAULT NULL"); } catch (PDOException $e) {}
+
     // Obtener datos JSON
     $input = file_get_contents('php://input');
     error_log("DEBUG: Input recibido: " . substr($input, 0, 500)); // Log primeros 500 caracteres
