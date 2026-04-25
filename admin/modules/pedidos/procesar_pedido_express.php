@@ -184,23 +184,6 @@ try {
 
     $pedido_id = $pdo->lastInsertId();
 
-    // Enviar a Google Sheets (pedidos_comunes)
-    require_once '../../../google_sheets_helper.php';
-    enviarPedidoASheets($pedido_id, [
-        'nombre'       => $nombre,
-        'apellido'     => $apellido,
-        'telefono'     => $telefono,
-        'producto'     => $producto,
-        'cantidad'     => $cantidad,
-        'precio'       => $precio,
-        'forma_pago'   => $forma_pago,
-        'modalidad'    => $modalidad,
-        'ubicacion'    => $ubicacion,
-        'estado'       => $estado,
-        'direccion'    => $direccion,
-        'observaciones'=> $observaciones,
-    ], 'comun');
-
     // Log detallado del pedido express
     $log_msg = "PEDIDO EXPRESS ADMIN CREADO: ID #$pedido_id";
     $log_msg .= " | Cliente: $nombre" . ($apellido ? " $apellido" : "");
@@ -220,7 +203,7 @@ try {
 
     error_log($log_msg);
 
-    // Respuesta exitosa
+    // Respuesta exitosa — enviar inmediatamente al cliente
     echo json_encode([
         'success' => true,
         'pedido_id' => $pedido_id,
@@ -238,6 +221,28 @@ try {
             'created_at' => date('Y-m-d H:i:s')
         ]
     ]);
+
+    // Cerrar conexión con el cliente — el pedido ya está confirmado
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+
+    // Enviar a Google Sheets en background (sin bloquear al usuario)
+    require_once '../../../google_sheets_helper.php';
+    enviarPedidoASheets($pedido_id, [
+        'nombre'        => $nombre,
+        'apellido'      => $apellido,
+        'telefono'      => $telefono,
+        'producto'      => $producto,
+        'cantidad'      => $cantidad,
+        'precio'        => $precio,
+        'forma_pago'    => $forma_pago,
+        'modalidad'     => $modalidad,
+        'ubicacion'     => $ubicacion,
+        'estado'        => $estado,
+        'direccion'     => $direccion,
+        'observaciones' => $observaciones,
+    ], 'comun');
 
 } catch (Exception $e) {
     error_log("ERROR PEDIDO EXPRESS ADMIN: " . $e->getMessage());
