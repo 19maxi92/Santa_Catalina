@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id && $estado) {
                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
                     $stmt->execute([$estado, $id]);
+                    require_once '../../../google_sheets_helper.php';
+                    actualizarEstadoEnSheets($id, $estado);
                     $_SESSION['mensaje'] = "✅ Estado actualizado";
                 }
                 break;
@@ -85,6 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($nuevo_estado) {
                                 $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
                                 $stmt->execute(array_merge([$nuevo_estado], $pedidos));
+                                require_once '../../../google_sheets_helper.php';
+                                foreach ($pedidos as $_pid) { actualizarEstadoEnSheets($_pid, $nuevo_estado); }
                                 $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
                             }
                             break;
@@ -189,9 +193,7 @@ if ($filtro_ubicacion) {
 if ($fecha_desde || $fecha_hasta) {
     $desde = $fecha_desde ?: '2000-01-01';
     $hasta = $fecha_hasta ?: '2099-12-31';
-    $sql .= " AND (DATE(p.created_at) BETWEEN ? AND ? OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) BETWEEN ? AND ?))";
-    $params[] = $desde;
-    $params[] = $hasta;
+    $sql .= " AND DATE(COALESCE(p.fecha_entrega, DATE(p.created_at))) BETWEEN ? AND ?";
     $params[] = $desde;
     $params[] = $hasta;
 }
