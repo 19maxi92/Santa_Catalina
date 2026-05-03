@@ -1,7 +1,7 @@
 <?php
 // google_sheets_helper.php
 
-define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbw6CRhUOcSnV0OvwcEOCn5cz3tuGHvlTcu8PZ3m2GRQF89Kp09kS5eImtXEAqdxfvne6Q/exec');
+define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxU7ghYMIwbnGee5ekhc_wzertH_vy3Gz8F7ZnjrmjAv4XeWEXsmjRXo1CSShDGNYMsww/exec');
 
 /**
  * Para pedidos personalizados extrae el detalle legible de observaciones
