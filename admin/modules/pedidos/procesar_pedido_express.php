@@ -241,7 +241,8 @@ try {
         'ubicacion'     => $ubicacion,
         'estado'        => $estado,
         'direccion'     => $direccion,
-        'observaciones' => $observaciones,
+        'observaciones'  => $observaciones,
+        'fecha_entrega'  => $fecha_entrega,
     ], 'comun');
 
 } catch (Exception $e) {

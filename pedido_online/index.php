@@ -340,6 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'estado'        => 'Pendiente',
             'direccion'     => $direccion,
             'observaciones' => $obs_interna,
+            'fecha_entrega' => $fecha_entrega,
         ];
 
         $pedido_confirmado = [
