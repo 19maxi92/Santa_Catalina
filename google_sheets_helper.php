@@ -99,4 +99,3 @@ function marcarEliminadoEnSheets($pedido_ids) {
     ]);
     _sheets_curl($payload);
 }
-?>

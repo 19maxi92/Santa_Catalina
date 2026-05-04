@@ -1,5 +1,6 @@
 <?php
 // admin/modules/pedidos/ver_pedidos.php - VERSIÓN COMPLETA MEJORADA
+ob_start();
 require_once '../../config.php';
 requireLogin();
 
