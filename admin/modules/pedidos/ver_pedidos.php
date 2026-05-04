@@ -19,9 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id && $estado) {
                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
                     $stmt->execute([$estado, $id]);
-                    require_once '../../../google_sheets_helper.php';
-                    actualizarEstadoEnSheets($id, $estado);
                     $_SESSION['mensaje'] = "✅ Estado actualizado";
+                    try { require_once '../../../google_sheets_helper.php'; actualizarEstadoEnSheets($id, $estado); } catch (\Exception $_e) {}
                 }
                 break;
                 
@@ -87,8 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($nuevo_estado) {
                                 $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
                                 $stmt->execute(array_merge([$nuevo_estado], $pedidos));
-                                require_once '../../../google_sheets_helper.php';
-                                foreach ($pedidos as $_pid) { actualizarEstadoEnSheets($_pid, $nuevo_estado); }
+                                try { require_once '../../../google_sheets_helper.php'; foreach ($pedidos as $_pid) { actualizarEstadoEnSheets($_pid, $nuevo_estado); } } catch (\Exception $_e) {}
                                 $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
                             }
                             break;
@@ -108,6 +106,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
     } catch (Exception $e) {
         $_SESSION['error'] = "❌ Error: " . $e->getMessage();
+        header('Location: ' . $_SERVER['REQUEST_URI']);
+        exit;
     }
 }
 
