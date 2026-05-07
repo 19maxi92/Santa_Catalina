@@ -4,22 +4,54 @@
 define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxU7ghYMIwbnGee5ekhc_wzertH_vy3Gz8F7ZnjrmjAv4XeWEXsmjRXo1CSShDGNYMsww/exec');
 
 /**
- * Para pedidos personalizados extrae el detalle legible de observaciones
- * en lugar de "Personalizado x48 (6 planchas)".
+ * Devuelve el texto para la columna Producto en Sheets.
+ * - Admin personalizado ("Personalizado x48"): extrae el detalle de sabores de observaciones.
+ * - Online elegidos ("N Surtidos Elegidos"): extrae la línea "Sabores: ..." de observaciones.
+ * - Cualquier otro pedido: devuelve el nombre del producto tal cual.
  */
 function _sheets_producto($producto, $observaciones) {
-    if (stripos($producto, 'personalizado') === false) {
-        return $producto;
+    // Admin personalizado
+    if (stripos($producto, 'personalizado') !== false) {
+        $detalle = $observaciones;
+        foreach (['--- Info del Sistema ---', '[Datos sabores:'] as $corte) {
+            $pos = strpos($detalle, $corte);
+            if ($pos !== false) $detalle = substr($detalle, 0, $pos);
+        }
+        $detalle = trim($detalle);
+        return $detalle ?: $producto;
     }
-    $detalle = $observaciones;
-    foreach (['--- Info del Sistema ---', '[Datos sabores:'] as $corte) {
-        $pos = strpos($detalle, $corte);
-        if ($pos !== false) {
-            $detalle = substr($detalle, 0, $pos);
+
+    // Online elegidos: observaciones contiene "Sabores: 8x Jamón, 16x Surtido..."
+    if (stripos($producto, 'elegidos') !== false || stripos($producto, 'personalizado') !== false) {
+        if (preg_match('/Sabores:\s*(.+?)(?:\n|\[|$)/s', $observaciones, $m)) {
+            return $producto . ' | Sabores: ' . trim($m[1]);
         }
     }
-    $detalle = trim($detalle);
-    return $detalle ?: $producto;
+
+    return $producto;
+}
+
+/**
+ * Limpia las observaciones antes de enviar a Sheets:
+ * elimina el bloque JSON de sabores [Datos sabores: ...] que no es legible.
+ */
+function _sheets_observaciones($observaciones) {
+    // Quitar "[Datos sabores: {...}]" — es JSON crudo, ya están listados arriba
+    $obs = preg_replace('/\[Datos sabores:.*?\]/s', '', $observaciones);
+    return trim($obs);
+}
+
+/**
+ * Formatea fecha_entrega (Y-m-d o d/m/Y) a d/m/Y para que Sheets no la auto-convierta.
+ */
+function _sheets_fecha_entrega($fecha) {
+    if (empty($fecha)) return '';
+    // Si viene como Y-m-d convertimos a d/m/Y
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
+        $dt = DateTime::createFromFormat('Y-m-d', $fecha);
+        return $dt ? $dt->format('d/m/Y') : $fecha;
+    }
+    return $fecha;
 }
 
 function _sheets_curl($payload) {
@@ -36,9 +68,9 @@ function _sheets_curl($payload) {
 
 /**
  * Envía los datos de un pedido a Google Sheets.
- * Columnas: ID | Fecha | Hora | Nombre | Apellido | Teléfono | Producto |
- *           Cantidad | Precio | Pago | Modalidad | Ubicación | Estado |
- *           Fecha Entrega | Dirección | Observaciones
+ * Columnas: ID | Fecha | Hora | Nombre | Apellido | Teléfono | Dirección |
+ *           Producto | Cantidad | Precio | Pago | Modalidad | Ubicación |
+ *           Estado | Fecha Entrega | Observaciones
  *
  * @param int    $pedido_id
  * @param array  $datos
@@ -48,24 +80,26 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
     $tz = new DateTimeZone('America/Argentina/Buenos_Aires');
     $dt = new DateTime('now', $tz);
 
+    $obs = $datos['observaciones'] ?? '';
+
     $payload = json_encode([
         'tipo'          => $tipo,
         'id'            => $pedido_id,
         'fecha'         => $dt->format('d/m/Y'),
         'hora'          => $dt->format('H:i'),
-        'nombre'        => $datos['nombre']        ?? '',
-        'apellido'      => $datos['apellido']       ?? '',
-        'telefono'      => $datos['telefono']       ?? '',
-        'producto'      => _sheets_producto($datos['producto'] ?? '', $datos['observaciones'] ?? ''),
-        'cantidad'      => $datos['cantidad']       ?? '',
-        'precio'        => $datos['precio']         ?? '',
-        'forma_pago'    => $datos['forma_pago']     ?? '',
-        'modalidad'     => $datos['modalidad']      ?? '',
-        'ubicacion'     => $datos['ubicacion']      ?? '',
-        'estado'        => $datos['estado']         ?? 'Pendiente',
-        'fecha_entrega' => $datos['fecha_entrega']  ?? '',
-        'direccion'     => $datos['direccion']      ?? '',
-        'observaciones' => $datos['observaciones']  ?? '',
+        'nombre'        => $datos['nombre']      ?? '',
+        'apellido'      => $datos['apellido']    ?? '',
+        'telefono'      => $datos['telefono']    ?? '',
+        'direccion'     => $datos['direccion']   ?? '',
+        'producto'      => _sheets_producto($datos['producto'] ?? '', $obs),
+        'cantidad'      => $datos['cantidad']    ?? '',
+        'precio'        => $datos['precio']      ?? '',
+        'forma_pago'    => $datos['forma_pago']  ?? '',
+        'modalidad'     => $datos['modalidad']   ?? '',
+        'ubicacion'     => $datos['ubicacion']   ?? '',
+        'estado'        => $datos['estado']      ?? 'Pendiente',
+        'fecha_entrega' => _sheets_fecha_entrega($datos['fecha_entrega'] ?? ''),
+        'observaciones' => _sheets_observaciones($obs),
     ]);
 
     _sheets_curl($payload);
@@ -73,9 +107,6 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
 
 /**
  * Actualiza el estado de un pedido en Sheets (busca por ID en ambas hojas).
- *
- * @param int    $pedido_id
- * @param string $estado
  */
 function actualizarEstadoEnSheets($pedido_id, $estado) {
     $payload = json_encode([
@@ -99,4 +130,3 @@ function marcarEliminadoEnSheets($pedido_ids) {
     ]);
     _sheets_curl($payload);
 }
-?>
