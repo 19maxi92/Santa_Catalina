@@ -1,7 +1,7 @@
 <?php
 // google_sheets_helper.php
 
-define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxU7ghYMIwbnGee5ekhc_wzertH_vy3Gz8F7ZnjrmjAv4XeWEXsmjRXo1CSShDGNYMsww/exec');
+define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxn7PoXF5PywYI_lUgUyBwzi76YXKVQPyy8GXm6lz8nu7_wFyNuI2yFw7xNfSyRZQ1qtg/exec');
 
 /**
  * Devuelve el texto para la columna Producto en Sheets.
