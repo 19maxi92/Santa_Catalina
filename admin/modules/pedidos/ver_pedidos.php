@@ -2284,5 +2284,13 @@ arsort($productos_unicos); // más pedidos primero
 
     </script>
 
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>

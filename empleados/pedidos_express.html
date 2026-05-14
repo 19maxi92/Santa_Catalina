@@ -698,5 +698,13 @@ document.addEventListener('keydown', function(e) {
 console.log('🚀 Pedido Express - Sistema de Planchas cargado correctamente (IGUAL AL ADMIN)');
 </script>
 
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>

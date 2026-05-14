@@ -1084,5 +1084,13 @@ $auto_impresion_activa = isset($_SESSION['auto_impresion']) && $_SESSION['auto_i
         });
     </script>
 
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>
