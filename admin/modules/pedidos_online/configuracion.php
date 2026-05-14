@@ -343,5 +343,14 @@ $dia_hoy     = (int)date('w'); // 0=Dom
     </div>
 
 </main>
+
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>
