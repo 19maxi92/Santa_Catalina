@@ -1439,5 +1439,13 @@ console.log('🚀 Sistema Express Admin cargado');
 cargarPreciosActualizados();
     </script>
 
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>
