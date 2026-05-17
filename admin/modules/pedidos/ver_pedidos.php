@@ -637,7 +637,7 @@ arsort($productos_unicos); // más pedidos primero
                     Filtros Avanzados
                 </summary>
                 <form method="GET" class="grid grid-cols-1 md:grid-cols-6 gap-3 mt-2">
-                    <input type="text" name="buscar" value="<?= htmlspecialchars($busqueda) ?>"
+                    <input type="text" name="buscar" id="inputBusqueda" value="<?= htmlspecialchars($busqueda) ?>"
                            placeholder="🔍 Buscar por nombre, tel, producto..."
                            class="col-span-2 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
 
@@ -845,7 +845,8 @@ arsort($productos_unicos); // más pedidos primero
                              data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>"
                              data-producto="<?= htmlspecialchars($pedido['producto'] ?? '', ENT_QUOTES) ?>"
                              data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>"
-                             data-tiene-bebidas="<?= $tiene_bebidas_card ? '1' : '0' ?>">
+                             data-tiene-bebidas="<?= $tiene_bebidas_card ? '1' : '0' ?>"
+                             data-busqueda="<?= htmlspecialchars(strtolower($nombre_completo . ' ' . $pedido['telefono'] . ' ' . $pedido['id'] . ' ' . ($pedido['producto'] ?? '')), ENT_QUOTES) ?>">
                             <div class="flex items-center gap-3">
 
                                 <!-- CHECKBOX -->
@@ -2290,6 +2291,44 @@ document.addEventListener('wheel', function() {
         document.activeElement.blur();
     }
 }, { passive: true });
+
+// Filtrado en vivo del buscador
+(function() {
+    const input = document.getElementById('inputBusqueda');
+    if (!input) return;
+
+    function normalizar(str) {
+        return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    }
+
+    input.addEventListener('input', function() {
+        const terminos = normalizar(this.value.trim()).split(/\s+/).filter(Boolean);
+        const cards = document.querySelectorAll('.pedido-card');
+        let visibles = 0;
+
+        cards.forEach(function(card) {
+            const texto = normalizar(card.dataset.busqueda || '');
+            const coincide = terminos.every(function(t) { return texto.includes(t); });
+            card.style.display = coincide ? '' : 'none';
+            if (coincide) visibles++;
+        });
+
+        // Mostrar/ocultar mensaje "No hay pedidos" si corresponde
+        let msgVacio = document.getElementById('msg-sin-resultados-live');
+        const contenedor = document.getElementById('vista-normal');
+        if (terminos.length > 0 && visibles === 0) {
+            if (!msgVacio && contenedor) {
+                msgVacio = document.createElement('div');
+                msgVacio.id = 'msg-sin-resultados-live';
+                msgVacio.className = 'text-center py-8 text-gray-400';
+                msgVacio.innerHTML = '<p class="text-lg">No hay pedidos que coincidan con "<strong>' + input.value + '</strong>"</p>';
+                contenedor.appendChild(msgVacio);
+            }
+        } else if (msgVacio) {
+            msgVacio.remove();
+        }
+    });
+})();
 </script>
 
 </body>

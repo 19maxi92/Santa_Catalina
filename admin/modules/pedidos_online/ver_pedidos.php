@@ -422,5 +422,13 @@ $stmt_stats->execute([$fecha]);
     <?php endif; ?>
     </script>
 
+<script>
+document.addEventListener('wheel', function() {
+    if (document.activeElement.type === 'number') {
+        document.activeElement.blur();
+    }
+}, { passive: true });
+</script>
+
 </body>
 </html>
