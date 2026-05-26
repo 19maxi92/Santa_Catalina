@@ -1,7 +1,7 @@
 <?php
 // google_sheets_helper.php
 
-define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbxU7ghYMIwbnGee5ekhc_wzertH_vy3Gz8F7ZnjrmjAv4XeWEXsmjRXo1CSShDGNYMsww/exec');
+define('GOOGLE_SHEETS_URL', 'https://script.google.com/macros/s/AKfycbyydEGaOItGjHr47sRt0DLW3o3_TERXR_Ro1HRNG6YJ8tWyG0kUGCyIKeG3T47bRsvqEQ/exec');
 
 /**
  * Devuelve el texto para la columna Producto en Sheets.
@@ -68,7 +68,7 @@ function _sheets_curl($payload) {
 
 /**
  * Envía los datos de un pedido a Google Sheets.
- * Columnas: ID | Fecha | Hora | Nombre | Apellido | Teléfono | Dirección |
+ * Columnas: ID | Fecha/Hora | Nombre | Apellido | Teléfono | Dirección |
  *           Producto | Cantidad | Precio | Pago | Modalidad | Ubicación |
  *           Estado | Fecha Entrega | Observaciones
  *
@@ -85,8 +85,7 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
     $payload = json_encode([
         'tipo'          => $tipo,
         'id'            => $pedido_id,
-        'fecha'         => $dt->format('d/m/Y'),
-        'hora'          => $dt->format('H:i'),
+        'fecha_hora'    => $dt->format('d/m/Y H:i'),
         'nombre'        => $datos['nombre']      ?? '',
         'apellido'      => $datos['apellido']    ?? '',
         'telefono'      => $datos['telefono']    ?? '',
