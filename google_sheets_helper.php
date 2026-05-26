@@ -68,7 +68,7 @@ function _sheets_curl($payload) {
 
 /**
  * Envía los datos de un pedido a Google Sheets.
- * Columnas: ID | Fecha | Hora | Nombre | Apellido | Teléfono | Dirección |
+ * Columnas: ID | Fecha/Hora | Nombre | Apellido | Teléfono | Dirección |
  *           Producto | Cantidad | Precio | Pago | Modalidad | Ubicación |
  *           Estado | Fecha Entrega | Observaciones
  *
@@ -85,8 +85,7 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
     $payload = json_encode([
         'tipo'          => $tipo,
         'id'            => $pedido_id,
-        'fecha'         => $dt->format('d/m/Y'),
-        'hora'          => $dt->format('H:i'),
+        'fecha_hora'    => $dt->format('d/m/Y H:i'),
         'nombre'        => $datos['nombre']      ?? '',
         'apellido'      => $datos['apellido']    ?? '',
         'telefono'      => $datos['telefono']    ?? '',
