@@ -18,8 +18,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'cambiar_estado':
                 $estado = $_POST['estado'] ?? '';
                 if ($id && $estado) {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$estado, $id]);
+                    $forma_pago_nueva = $_POST['forma_pago'] ?? null;
+
+                    // Si se marca como Entregado y viene forma de pago, actualizar precio y forma_pago
+                    if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia'])) {
+                        // Obtener datos actuales del pedido
+                        $stmtP = $pdo->prepare("SELECT producto, precio FROM pedidos WHERE id = ?");
+                        $stmtP->execute([$id]);
+                        $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
+
+                        $nuevo_precio = null;
+
+                        if ($pedidoActual) {
+                            $nombreProducto = $pedidoActual['producto'];
+                            $precioActual   = (float)$pedidoActual['precio'];
+
+                            if ($forma_pago_nueva === 'Efectivo') {
+                                // ¿Es personalizado? Extraer planchas del nombre, ej: "Personalizado x48 (6 planchas)"
+                                if (preg_match('/personalizado/i', $nombreProducto)) {
+                                    preg_match('/\((\d+)\s+plancha/i', $nombreProducto, $m);
+                                    $planchas = isset($m[1]) ? (int)$m[1] : 0;
+                                    $descuento = floor($planchas / 3) * 1000;
+                                    $nuevo_precio = $precioActual - $descuento;
+                                } else {
+                                    // Predeterminado: buscar precio_efectivo en tabla productos por nombre similar
+                                    $stmtProd = $pdo->prepare("SELECT precio_efectivo FROM productos WHERE activo = 1 AND LOWER(TRIM(nombre)) = LOWER(TRIM(?)) LIMIT 1");
+                                    $stmtProd->execute([$nombreProducto]);
+                                    $prod = $stmtProd->fetch(PDO::FETCH_ASSOC);
+                                    if ($prod) {
+                                        $nuevo_precio = (float)$prod['precio_efectivo'];
+                                    }
+                                }
+                            }
+                        }
+
+                        if ($nuevo_precio !== null) {
+                            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, updated_at = NOW() WHERE id = ?");
+                            $stmt->execute([$estado, $forma_pago_nueva, $nuevo_precio, $id]);
+                        } else {
+                            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?");
+                            $stmt->execute([$estado, $forma_pago_nueva, $id]);
+                        }
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
+                        $stmt->execute([$estado, $id]);
+                    }
+
                     $_SESSION['mensaje'] = "✅ Estado actualizado";
                     try { require_once '../../../google_sheets_helper.php'; actualizarEstadoEnSheets($id, $estado); } catch (\Throwable $_e) {}
                 }
@@ -964,11 +1008,14 @@ arsort($productos_unicos); // más pedidos primero
                                     
                                     <!-- ESTADO COMPACTO -->
                                     <div class="min-w-[130px]">
-                                        <form method="POST" class="inline">
+                                        <form method="POST" class="inline" id="form-estado-<?= $pedido['id'] ?>">
                                             <input type="hidden" name="accion" value="cambiar_estado">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
-                                            <select name="estado" 
-                                                    onchange="if(confirm('¿Cambiar estado?')) this.form.submit()" 
+                                            <input type="hidden" name="forma_pago" id="fp-<?= $pedido['id'] ?>" value="">
+                                            <select name="estado"
+                                                    data-pedido-id="<?= $pedido['id'] ?>"
+                                                    data-prev="<?= htmlspecialchars($pedido['estado']) ?>"
+                                                    onchange="interceptarCambioEstado(this)"
                                                     class="w-full text-xs font-semibold border rounded-lg px-2 py-1 <?= $estado_color ?> cursor-pointer">
                                                 <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>⏱️ Pendiente</option>
                                                 <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>🔥 Preparando</option>
@@ -1822,12 +1869,18 @@ arsort($productos_unicos); // más pedidos primero
     }
 
     function cambiarEstadoCliente(pedidoId, nuevoEstado, sel) {
+        if (nuevoEstado === 'Entregado') {
+            // Guardar referencia para usar en el modal
+            _modalEntregaPedidoId = pedidoId;
+            _modalEntregaSel = sel;
+            _modalEntregaOrigen = 'cliente';
+            abrirModalPago();
+            return;
+        }
         if (!confirm('¿Cambiar estado?')) { sel.value = sel.dataset.prev || sel.value; return; }
         sel.dataset.prev = nuevoEstado;
-        // Update pedidosData local
         const p = pedidosData.find(x => x.id == pedidoId);
         if (p) p.estado = nuevoEstado;
-        // POST
         const form = document.createElement('form');
         form.method = 'POST';
         [['accion','cambiar_estado'],['id',pedidoId],['estado',nuevoEstado]].forEach(([n,v]) => {
@@ -2329,6 +2382,103 @@ document.addEventListener('wheel', function() {
         }
     });
 })();
+</script>
+
+<!-- ============================================
+     MODAL FORMA DE PAGO (al marcar Entregado)
+============================================ -->
+<div id="modal-forma-pago" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-1 text-center">💳 Forma de Pago</h2>
+        <p class="text-sm text-gray-500 text-center mb-6">¿Cómo está pagando el cliente?</p>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <button onclick="confirmarPago('Efectivo')"
+                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-green-400 bg-green-50 hover:bg-green-100 transition font-bold text-green-700 text-lg">
+                <span class="text-3xl">💵</span>
+                Efectivo
+            </button>
+            <button onclick="confirmarPago('Transferencia')"
+                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 transition font-bold text-blue-700 text-lg">
+                <span class="text-3xl">💳</span>
+                Transferencia
+            </button>
+        </div>
+        <button onclick="cancelarPago()"
+                class="w-full py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm transition">
+            Cancelar
+        </button>
+    </div>
+</div>
+
+<script>
+// Variables para el modal de pago al entregar
+let _modalEntregaPedidoId = null;
+let _modalEntregaSel = null;
+let _modalEntregaOrigen = null; // 'inline' | 'cliente'
+
+function interceptarCambioEstado(sel) {
+    const nuevoEstado = sel.value;
+    const pedidoId = sel.dataset.pedidoId;
+
+    if (nuevoEstado === 'Entregado') {
+        _modalEntregaPedidoId = pedidoId;
+        _modalEntregaSel = sel;
+        _modalEntregaOrigen = 'inline';
+        abrirModalPago();
+        return;
+    }
+
+    if (!confirm('¿Cambiar estado?')) {
+        sel.value = sel.dataset.prev || sel.value;
+        return;
+    }
+    sel.dataset.prev = nuevoEstado;
+    sel.closest('form').submit();
+}
+
+function abrirModalPago() {
+    document.getElementById('modal-forma-pago').classList.remove('hidden');
+}
+
+function cancelarPago() {
+    document.getElementById('modal-forma-pago').classList.add('hidden');
+    // Revertir el select al valor anterior
+    if (_modalEntregaSel) {
+        _modalEntregaSel.value = _modalEntregaSel.dataset.prev || 'Pendiente';
+    }
+    _modalEntregaPedidoId = null;
+    _modalEntregaSel = null;
+    _modalEntregaOrigen = null;
+}
+
+function confirmarPago(formaPago) {
+    document.getElementById('modal-forma-pago').classList.add('hidden');
+
+    if (_modalEntregaOrigen === 'inline') {
+        const id = _modalEntregaPedidoId;
+        const form = document.getElementById('form-estado-' + id);
+        document.getElementById('fp-' + id).value = formaPago;
+        form.submit();
+    } else if (_modalEntregaOrigen === 'cliente') {
+        const pedidoId = _modalEntregaPedidoId;
+        if (_modalEntregaSel) _modalEntregaSel.dataset.prev = 'Entregado';
+        const p = pedidosData ? pedidosData.find(x => x.id == pedidoId) : null;
+        if (p) p.estado = 'Entregado';
+        const form = document.createElement('form');
+        form.method = 'POST';
+        [['accion','cambiar_estado'],['id',pedidoId],['estado','Entregado'],['forma_pago',formaPago]].forEach(([n,v]) => {
+            const i = document.createElement('input');
+            i.type = 'hidden'; i.name = n; i.value = v;
+            form.appendChild(i);
+        });
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    _modalEntregaPedidoId = null;
+    _modalEntregaSel = null;
+    _modalEntregaOrigen = null;
+}
 </script>
 
 </body>
