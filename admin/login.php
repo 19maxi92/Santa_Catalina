@@ -20,8 +20,8 @@ if ($_POST) {
         $stmt->execute([$usuario]);
         $user = $stmt->fetch();
         
-        // Verificar password simple (cambiar por hash después)
-        if ($user && $password === 'Sangu2186') {
+        // Verificar password contra la DB
+        if ($user && $password === $user['password']) {
             $_SESSION['admin_logged'] = true;
             $_SESSION['admin_user'] = $user['usuario'];
             $_SESSION['admin_name'] = $user['nombre'];
