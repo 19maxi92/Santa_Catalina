@@ -1008,14 +1008,11 @@ arsort($productos_unicos); // más pedidos primero
                                     
                                     <!-- ESTADO COMPACTO -->
                                     <div class="min-w-[130px]">
-                                        <form method="POST" class="inline" id="form-estado-<?= $pedido['id'] ?>">
+                                        <form method="POST" class="inline">
                                             <input type="hidden" name="accion" value="cambiar_estado">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
-                                            <input type="hidden" name="forma_pago" id="fp-<?= $pedido['id'] ?>" value="">
                                             <select name="estado"
-                                                    data-pedido-id="<?= $pedido['id'] ?>"
-                                                    data-prev="<?= htmlspecialchars($pedido['estado']) ?>"
-                                                    onchange="interceptarCambioEstado(this)"
+                                                    onchange="if(confirm('¿Cambiar estado?')) this.form.submit()"
                                                     class="w-full text-xs font-semibold border rounded-lg px-2 py-1 <?= $estado_color ?> cursor-pointer">
                                                 <option value="Pendiente" <?= $pedido['estado'] === 'Pendiente' ? 'selected' : '' ?>>⏱️ Pendiente</option>
                                                 <option value="Preparando" <?= $pedido['estado'] === 'Preparando' ? 'selected' : '' ?>>🔥 Preparando</option>
@@ -1870,10 +1867,11 @@ arsort($productos_unicos); // más pedidos primero
 
     function cambiarEstadoCliente(pedidoId, nuevoEstado, sel) {
         if (nuevoEstado === 'Entregado') {
-            // Guardar referencia para usar en el modal
-            _modalEntregaPedidoId = pedidoId;
-            _modalEntregaSel = sel;
+            // Crear un objeto fake con data-pedido-id para reutilizar confirmarPago
+            const fakeSel = { dataset: { pedidoId: pedidoId, prev: sel.dataset.prev }, value: 'Entregado', closest: () => null };
+            _modalEntregaSel = fakeSel;
             _modalEntregaOrigen = 'cliente';
+            if (sel) sel.value = 'Entregado'; // mantener visual
             abrirModalPago();
             return;
         }
@@ -2412,29 +2410,32 @@ document.addEventListener('wheel', function() {
 
 <script>
 // Variables para el modal de pago al entregar
-let _modalEntregaPedidoId = null;
 let _modalEntregaSel = null;
 let _modalEntregaOrigen = null; // 'inline' | 'cliente'
 
-function interceptarCambioEstado(sel) {
-    const nuevoEstado = sel.value;
-    const pedidoId = sel.dataset.pedidoId;
-
-    if (nuevoEstado === 'Entregado') {
-        _modalEntregaPedidoId = pedidoId;
-        _modalEntregaSel = sel;
-        _modalEntregaOrigen = 'inline';
-        abrirModalPago();
-        return;
-    }
-
-    if (!confirm('¿Cambiar estado?')) {
-        sel.value = sel.dataset.prev || sel.value;
-        return;
-    }
-    sel.dataset.prev = nuevoEstado;
-    sel.closest('form').submit();
-}
+// Interceptar los selects de estado: cuando el DOM está listo, reemplazar el onchange
+// para mostrar el modal de forma de pago al seleccionar "Entregado"
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('select[name="estado"]').forEach(function(sel) {
+        sel.onchange = function() {
+            const nuevoEstado = this.value;
+            if (nuevoEstado === 'Entregado') {
+                _modalEntregaSel = this;
+                _modalEntregaOrigen = 'inline';
+                abrirModalPago();
+            } else {
+                if (!confirm('¿Cambiar estado?')) {
+                    this.value = this.dataset.prev || this.value;
+                    return;
+                }
+                this.dataset.prev = nuevoEstado;
+                this.closest('form').submit();
+            }
+        };
+        // Guardar estado actual como prev
+        sel.dataset.prev = sel.value;
+    });
+});
 
 function abrirModalPago() {
     document.getElementById('modal-forma-pago').classList.remove('hidden');
@@ -2442,11 +2443,9 @@ function abrirModalPago() {
 
 function cancelarPago() {
     document.getElementById('modal-forma-pago').classList.add('hidden');
-    // Revertir el select al valor anterior
     if (_modalEntregaSel) {
         _modalEntregaSel.value = _modalEntregaSel.dataset.prev || 'Pendiente';
     }
-    _modalEntregaPedidoId = null;
     _modalEntregaSel = null;
     _modalEntregaOrigen = null;
 }
@@ -2455,15 +2454,19 @@ function confirmarPago(formaPago) {
     document.getElementById('modal-forma-pago').classList.add('hidden');
 
     if (_modalEntregaOrigen === 'inline') {
-        const id = _modalEntregaPedidoId;
-        const form = document.getElementById('form-estado-' + id);
-        document.getElementById('fp-' + id).value = formaPago;
+        const form = _modalEntregaSel.closest('form');
+        // Agregar forma_pago dinámicamente al form
+        let fpInput = form.querySelector('input[name="forma_pago"]');
+        if (!fpInput) {
+            fpInput = document.createElement('input');
+            fpInput.type = 'hidden';
+            fpInput.name = 'forma_pago';
+            form.appendChild(fpInput);
+        }
+        fpInput.value = formaPago;
         form.submit();
     } else if (_modalEntregaOrigen === 'cliente') {
-        const pedidoId = _modalEntregaPedidoId;
-        if (_modalEntregaSel) _modalEntregaSel.dataset.prev = 'Entregado';
-        const p = pedidosData ? pedidosData.find(x => x.id == pedidoId) : null;
-        if (p) p.estado = 'Entregado';
+        const pedidoId = _modalEntregaSel ? _modalEntregaSel.dataset.pedidoId : null;
         const form = document.createElement('form');
         form.method = 'POST';
         [['accion','cambiar_estado'],['id',pedidoId],['estado','Entregado'],['forma_pago',formaPago]].forEach(([n,v]) => {
@@ -2475,7 +2478,6 @@ function confirmarPago(formaPago) {
         form.submit();
     }
 
-    _modalEntregaPedidoId = null;
     _modalEntregaSel = null;
     _modalEntregaOrigen = null;
 }

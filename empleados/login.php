@@ -22,8 +22,8 @@ if ($_POST) {
         $user = $stmt->fetch();
         
         if ($user) {
-            // Verificar password y que sea empleado
-            if ($password === 'Emple2186' && $user['usuario'] === 'empleado') {
+            // Verificar password contra la DB
+            if ($password === $user['password']) {
                 $_SESSION['empleado_logged'] = true;
                 $_SESSION['empleado_user'] = $user['usuario'];
                 $_SESSION['empleado_name'] = $user['nombre'];
