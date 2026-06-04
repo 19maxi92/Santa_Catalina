@@ -176,7 +176,45 @@ $stmt = $pdo->prepare("
 $stmt->execute([$fecha_inicio, $fecha_fin]);
 $por_pago = $stmt->fetchAll();
 
-// Cálculos de cambios
+// ============================================
+// INGRESOS REALES (solo Entregados) por ubicación + forma de pago
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT ubicacion, forma_pago, COUNT(*) as cantidad, SUM(precio) as total
+    FROM pedidos
+    WHERE DATE(created_at) BETWEEN ? AND ?
+    AND estado = 'Entregado'
+    GROUP BY ubicacion, forma_pago
+");
+$stmt->execute([$fecha_inicio, $fecha_fin]);
+$ingresos_reales_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// ============================================
+// PEDIDOS PENDIENTES por ubicación + forma de pago
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT ubicacion, forma_pago, COUNT(*) as cantidad, SUM(precio) as total
+    FROM pedidos
+    WHERE DATE(created_at) BETWEEN ? AND ?
+    AND estado = 'Pendiente'
+    GROUP BY ubicacion, forma_pago
+");
+$stmt->execute([$fecha_inicio, $fecha_fin]);
+$pendientes_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Organizar en estructura [ ubicacion ][ forma_pago ] => [cantidad, total]
+function organizarPorUbicacion(array $rows): array {
+    $result = [];
+    foreach ($rows as $r) {
+        $ub = $r['ubicacion'];
+        $fp = $r['forma_pago'];
+        if (!isset($result[$ub])) $result[$ub] = [];
+        $result[$ub][$fp] = ['cantidad' => (int)$r['cantidad'], 'total' => (float)$r['total']];
+    }
+    return $result;
+}
+$ingresos_reales  = organizarPorUbicacion($ingresos_reales_raw);
+$pendientes_mapa  = organizarPorUbicacion($pendientes_raw);
 $cambio_dia = $ayer['total_ayer'] > 0 ? (($hoy['total_hoy'] - $ayer['total_ayer']) / $ayer['total_ayer']) * 100 : 0;
 $cambio_semana = $semana_pasada['pedidos_semana_pasada'] > 0 ? (($esta_semana['pedidos_semana'] - $semana_pasada['pedidos_semana_pasada']) / $semana_pasada['pedidos_semana_pasada']) * 100 : 0;
 $cambio_mes = $mes_pasado['pedidos_mes_pasado'] > 0 ? (($este_mes['pedidos_mes'] - $mes_pasado['pedidos_mes_pasado']) / $mes_pasado['pedidos_mes_pasado']) * 100 : 0;
@@ -515,6 +553,90 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
 
         </div>
 
+        <!-- ============================================ -->
+        <!-- INGRESOS REALES Y PENDIENTES POR UBICACIÓN  -->
+        <!-- ============================================ -->
+        <?php
+        $ubicaciones = [
+            'Local 1' => ['icon' => '🏪', 'color_entregado' => '#10b981', 'color_pendiente' => '#f59e0b'],
+            'Fábrica'  => ['icon' => '🏭', 'color_entregado' => '#6366f1', 'color_pendiente' => '#f97316'],
+        ];
+        $formas = ['Transferencia', 'Efectivo'];
+        $colores_fp = ['Transferencia' => '#10b981', 'Efectivo' => '#3b82f6'];
+        ?>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <?php foreach ($ubicaciones as $ub => $cfg):
+            // --- datos entregados ---
+            $ent_tr  = $ingresos_reales[$ub]['Transferencia'] ?? ['cantidad'=>0,'total'=>0];
+            $ent_ef  = $ingresos_reales[$ub]['Efectivo']      ?? ['cantidad'=>0,'total'=>0];
+            $ent_tot = $ent_tr['total'] + $ent_ef['total'];
+            // --- datos pendientes ---
+            $pen_tr  = $pendientes_mapa[$ub]['Transferencia'] ?? ['cantidad'=>0,'total'=>0];
+            $pen_ef  = $pendientes_mapa[$ub]['Efectivo']      ?? ['cantidad'=>0,'total'=>0];
+            $pen_tot = $pen_tr['total'] + $pen_ef['total'];
+
+            $ub_slug = strtolower(str_replace([' ','á','é','í','ó','ú'],['_','a','e','i','o','u'], $ub));
+        ?>
+
+            <!-- ===== BLOQUE ENTREGADOS ===== -->
+            <div class="bg-white rounded-2xl shadow-md p-5">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl"><?= $cfg['icon'] ?></span>
+                    <div>
+                        <h3 class="font-bold text-gray-800 text-sm"><?= $ub ?> — Ingresos reales</h3>
+                        <p class="text-xs text-gray-400">Solo pedidos Entregados · período seleccionado</p>
+                    </div>
+                    <span class="ml-auto text-green-600 font-bold text-base">$<?= number_format($ent_tot, 0, ',', '.') ?></span>
+                </div>
+                <div class="flex gap-4 items-center">
+                    <canvas id="chart_ent_<?= $ub_slug ?>" width="110" height="110" style="max-width:110px;max-height:110px"></canvas>
+                    <div class="flex-1 space-y-2 text-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full" style="background:#10b981"></span>Transferencia</span>
+                            <span class="font-semibold text-gray-700"><?= $ent_tr['cantidad'] ?> · $<?= number_format($ent_tr['total'],0,',','.') ?></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full" style="background:#3b82f6"></span>Efectivo</span>
+                            <span class="font-semibold text-gray-700"><?= $ent_ef['cantidad'] ?> · $<?= number_format($ent_ef['total'],0,',','.') ?></span>
+                        </div>
+                        <div class="border-t pt-2 flex justify-between text-xs text-gray-400">
+                            <span><?= $ent_tr['cantidad'] + $ent_ef['cantidad'] ?> pedidos entregados</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== BLOQUE PENDIENTES ===== -->
+            <div class="bg-white rounded-2xl shadow-md p-5 border border-yellow-100">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-xl"><?= $cfg['icon'] ?></span>
+                    <div>
+                        <h3 class="font-bold text-gray-800 text-sm"><?= $ub ?> — Por cobrar</h3>
+                        <p class="text-xs text-gray-400">Pedidos en estado Pendiente · período seleccionado</p>
+                    </div>
+                    <span class="ml-auto text-yellow-600 font-bold text-base">$<?= number_format($pen_tot, 0, ',', '.') ?></span>
+                </div>
+                <div class="flex gap-4 items-center">
+                    <canvas id="chart_pen_<?= $ub_slug ?>" width="110" height="110" style="max-width:110px;max-height:110px"></canvas>
+                    <div class="flex-1 space-y-2 text-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full" style="background:#10b981"></span>Transferencia</span>
+                            <span class="font-semibold text-gray-700"><?= $pen_tr['cantidad'] ?> · $<?= number_format($pen_tr['total'],0,',','.') ?></span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full" style="background:#f97316"></span>Efectivo</span>
+                            <span class="font-semibold text-gray-700"><?= $pen_ef['cantidad'] ?> · $<?= number_format($pen_ef['total'],0,',','.') ?></span>
+                        </div>
+                        <div class="border-t pt-2 flex justify-between text-xs text-gray-400">
+                            <span><?= $pen_tr['cantidad'] + $pen_ef['cantidad'] ?> pedidos pendientes</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <?php endforeach; ?>
+        </div>
+
     </main>
 
     <script>
@@ -699,6 +821,38 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
             }
         }
     });
+
+    // ============================================
+    // GRÁFICOS: Ingresos reales y pendientes por ubicación
+    // ============================================
+    <?php
+    $ubicaciones_chart = ['Local 1', 'Fábrica'];
+    foreach ($ubicaciones_chart as $ub):
+        $ub_slug = strtolower(str_replace([' ','á','é','í','ó','ú'],['_','a','e','i','o','u'], $ub));
+        $ent_tr  = $ingresos_reales[$ub]['Transferencia']['total'] ?? 0;
+        $ent_ef  = $ingresos_reales[$ub]['Efectivo']['total']      ?? 0;
+        $pen_tr  = $pendientes_mapa[$ub]['Transferencia']['total'] ?? 0;
+        $pen_ef  = $pendientes_mapa[$ub]['Efectivo']['total']      ?? 0;
+    ?>
+    // <?= $ub ?> — entregados
+    new Chart(document.getElementById('chart_ent_<?= $ub_slug ?>'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Transferencia', 'Efectivo'],
+            datasets: [{ data: [<?= $ent_tr ?>, <?= $ent_ef ?>], backgroundColor: ['#10b981','#3b82f6'], borderWidth: 2 }]
+        },
+        options: { cutout: '65%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return ' $' + c.raw.toLocaleString('es-AR'); } } } } }
+    });
+    // <?= $ub ?> — pendientes
+    new Chart(document.getElementById('chart_pen_<?= $ub_slug ?>'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Transferencia', 'Efectivo'],
+            datasets: [{ data: [<?= $pen_tr ?>, <?= $pen_ef ?>], backgroundColor: ['#10b981','#f97316'], borderWidth: 2 }]
+        },
+        options: { cutout: '65%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c) { return ' $' + c.raw.toLocaleString('es-AR'); } } } } }
+    });
+    <?php endforeach; ?>
     </script>
 
 </body>
