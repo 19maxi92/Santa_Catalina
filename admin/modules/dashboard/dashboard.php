@@ -469,6 +469,24 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 <a href="?" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-bold">
                     <i class="fas fa-redo mr-2"></i>RESET
                 </a>
+                <!-- Accesos rápidos -->
+                <div class="flex gap-2 ml-1">
+                    <?php
+                    $atajos = [
+                        '24hs'   => [date('Y-m-d'), date('Y-m-d')],
+                        '48hs'   => [date('Y-m-d', strtotime('-1 day')), date('Y-m-d')],
+                        '7 días' => [date('Y-m-d', strtotime('-6 days')), date('Y-m-d')],
+                        '15 días'=> [date('Y-m-d', strtotime('-14 days')), date('Y-m-d')],
+                    ];
+                    foreach ($atajos as $label => [$desde, $hasta]):
+                        $activo = ($fecha_inicio === $desde && $fecha_fin === $hasta);
+                    ?>
+                    <a href="?fecha_inicio=<?= $desde ?>&fecha_fin=<?= $hasta ?>"
+                       class="px-3 py-2 rounded-lg text-xs font-bold border transition <?= $activo ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:border-purple-400 hover:text-purple-600' ?>">
+                        <?= $label ?>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
             </form>
         </div>
 
