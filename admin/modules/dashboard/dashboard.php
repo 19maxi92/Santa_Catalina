@@ -176,7 +176,45 @@ $stmt = $pdo->prepare("
 $stmt->execute([$fecha_inicio, $fecha_fin]);
 $por_pago = $stmt->fetchAll();
 
-// Cálculos de cambios
+// ============================================
+// INGRESOS REALES (solo Entregados) por ubicación + forma de pago
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT ubicacion, forma_pago, COUNT(*) as cantidad, SUM(precio) as total
+    FROM pedidos
+    WHERE DATE(created_at) BETWEEN ? AND ?
+    AND estado = 'Entregado'
+    GROUP BY ubicacion, forma_pago
+");
+$stmt->execute([$fecha_inicio, $fecha_fin]);
+$ingresos_reales_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// ============================================
+// PEDIDOS PENDIENTES por ubicación + forma de pago
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT ubicacion, forma_pago, COUNT(*) as cantidad, SUM(precio) as total
+    FROM pedidos
+    WHERE DATE(created_at) BETWEEN ? AND ?
+    AND estado = 'Pendiente'
+    GROUP BY ubicacion, forma_pago
+");
+$stmt->execute([$fecha_inicio, $fecha_fin]);
+$pendientes_raw = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Organizar en estructura [ ubicacion ][ forma_pago ] => [cantidad, total]
+function organizarPorUbicacion(array $rows): array {
+    $result = [];
+    foreach ($rows as $r) {
+        $ub = $r['ubicacion'];
+        $fp = $r['forma_pago'];
+        if (!isset($result[$ub])) $result[$ub] = [];
+        $result[$ub][$fp] = ['cantidad' => (int)$r['cantidad'], 'total' => (float)$r['total']];
+    }
+    return $result;
+}
+$ingresos_reales  = organizarPorUbicacion($ingresos_reales_raw);
+$pendientes_mapa  = organizarPorUbicacion($pendientes_raw);
 $cambio_dia = $ayer['total_ayer'] > 0 ? (($hoy['total_hoy'] - $ayer['total_ayer']) / $ayer['total_ayer']) * 100 : 0;
 $cambio_semana = $semana_pasada['pedidos_semana_pasada'] > 0 ? (($esta_semana['pedidos_semana'] - $semana_pasada['pedidos_semana_pasada']) / $semana_pasada['pedidos_semana_pasada']) * 100 : 0;
 $cambio_mes = $mes_pasado['pedidos_mes_pasado'] > 0 ? (($este_mes['pedidos_mes'] - $mes_pasado['pedidos_mes_pasado']) / $mes_pasado['pedidos_mes_pasado']) * 100 : 0;
@@ -515,6 +553,102 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
 
         </div>
 
+        <!-- ============================================ -->
+        <!-- INGRESOS POR UBICACIÓN (dinámico con toggle) -->
+        <!-- ============================================ -->
+        <?php
+        $ubs_data = [
+            'local_1' => [
+                'nombre' => 'Local 1', 'icon' => '🏪',
+                'ent_tr'  => (float)($ingresos_reales['Local 1']['Transferencia']['total']  ?? 0),
+                'ent_ef'  => (float)($ingresos_reales['Local 1']['Efectivo']['total']       ?? 0),
+                'ent_ctr' => (int)  ($ingresos_reales['Local 1']['Transferencia']['cantidad']?? 0),
+                'ent_cef' => (int)  ($ingresos_reales['Local 1']['Efectivo']['cantidad']    ?? 0),
+                'pen_tr'  => (float)($pendientes_mapa['Local 1']['Transferencia']['total']  ?? 0),
+                'pen_ef'  => (float)($pendientes_mapa['Local 1']['Efectivo']['total']       ?? 0),
+                'pen_ctr' => (int)  ($pendientes_mapa['Local 1']['Transferencia']['cantidad']?? 0),
+                'pen_cef' => (int)  ($pendientes_mapa['Local 1']['Efectivo']['cantidad']    ?? 0),
+            ],
+            'fabrica' => [
+                'nombre' => 'Fábrica', 'icon' => '🏭',
+                'ent_tr'  => (float)($ingresos_reales['Fábrica']['Transferencia']['total']  ?? 0),
+                'ent_ef'  => (float)($ingresos_reales['Fábrica']['Efectivo']['total']       ?? 0),
+                'ent_ctr' => (int)  ($ingresos_reales['Fábrica']['Transferencia']['cantidad']?? 0),
+                'ent_cef' => (int)  ($ingresos_reales['Fábrica']['Efectivo']['cantidad']    ?? 0),
+                'pen_tr'  => (float)($pendientes_mapa['Fábrica']['Transferencia']['total']  ?? 0),
+                'pen_ef'  => (float)($pendientes_mapa['Fábrica']['Efectivo']['total']       ?? 0),
+                'pen_ctr' => (int)  ($pendientes_mapa['Fábrica']['Transferencia']['cantidad']?? 0),
+                'pen_cef' => (int)  ($pendientes_mapa['Fábrica']['Efectivo']['cantidad']    ?? 0),
+            ],
+        ];
+        ?>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <?php foreach ($ubs_data as $slug => $d):
+            $ent_tot = $d['ent_tr'] + $d['ent_ef'];
+            $pen_tot = $d['pen_tr'] + $d['pen_ef'];
+        ?>
+            <div class="bg-white rounded-2xl shadow-md p-5">
+                <!-- Cabecera con toggle -->
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-xl"><?= $d['icon'] ?></span>
+                    <span class="font-bold text-gray-800"><?= $d['nombre'] ?></span>
+                    <div class="ml-auto flex rounded-lg overflow-hidden border border-gray-200 text-xs font-semibold">
+                        <button onclick="togglePanel('<?= $slug ?>','ent')"
+                                id="btn_ent_<?= $slug ?>"
+                                class="px-3 py-1.5 bg-green-500 text-white transition">✅ Entregados</button>
+                        <button onclick="togglePanel('<?= $slug ?>','pen')"
+                                id="btn_pen_<?= $slug ?>"
+                                class="px-3 py-1.5 bg-white text-gray-500 hover:bg-gray-50 transition">⏳ Pendientes</button>
+                    </div>
+                </div>
+
+                <!-- Vista ENTREGADOS -->
+                <div id="panel_ent_<?= $slug ?>">
+                    <p class="text-xs text-gray-400 mb-3">Solo pedidos Entregados · período seleccionado</p>
+                    <div class="flex gap-4 items-center">
+                        <canvas id="chart_ent_<?= $slug ?>" width="110" height="110" style="max-width:110px;max-height:110px"></canvas>
+                        <div class="flex-1 space-y-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-green-500"></span>Transferencia</span>
+                                <span class="font-semibold text-gray-700"><?= $d['ent_ctr'] ?> · $<?= number_format($d['ent_tr'],0,',','.') ?></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-blue-500"></span>Efectivo</span>
+                                <span class="font-semibold text-gray-700"><?= $d['ent_cef'] ?> · $<?= number_format($d['ent_ef'],0,',','.') ?></span>
+                            </div>
+                            <div class="border-t pt-2 text-xs text-gray-400 flex justify-between">
+                                <span><?= $d['ent_ctr'] + $d['ent_cef'] ?> pedidos</span>
+                                <span class="font-bold text-green-600">$<?= number_format($ent_tot,0,',','.') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista PENDIENTES (oculta por defecto) -->
+                <div id="panel_pen_<?= $slug ?>" class="hidden">
+                    <p class="text-xs text-gray-400 mb-3">Pedidos en estado Pendiente · período seleccionado</p>
+                    <div class="flex gap-4 items-center">
+                        <canvas id="chart_pen_<?= $slug ?>" width="110" height="110" style="max-width:110px;max-height:110px"></canvas>
+                        <div class="flex-1 space-y-2 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-green-500"></span>Transferencia</span>
+                                <span class="font-semibold text-gray-700"><?= $d['pen_ctr'] ?> · $<?= number_format($d['pen_tr'],0,',','.') ?></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-orange-400"></span>Efectivo</span>
+                                <span class="font-semibold text-gray-700"><?= $d['pen_cef'] ?> · $<?= number_format($d['pen_ef'],0,',','.') ?></span>
+                            </div>
+                            <div class="border-t pt-2 text-xs text-gray-400 flex justify-between">
+                                <span><?= $d['pen_ctr'] + $d['pen_cef'] ?> pedidos</span>
+                                <span class="font-bold text-yellow-600">$<?= number_format($pen_tot,0,',','.') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        </div>
+
     </main>
 
     <script>
@@ -699,6 +833,48 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
             }
         }
     });
+
+    // ============================================
+    // GRÁFICOS: Ingresos por ubicación (toggle)
+    // ============================================
+    const chartOpts = (colors) => ({
+        cutout: '65%',
+        plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (c) => ' $' + c.raw.toLocaleString('es-AR') } }
+        }
+    });
+
+    <?php foreach ($ubs_data as $slug => $d): ?>
+    new Chart(document.getElementById('chart_ent_<?= $slug ?>'), {
+        type: 'doughnut',
+        data: { labels: ['Transferencia','Efectivo'], datasets: [{ data: [<?= $d['ent_tr'] ?>, <?= $d['ent_ef'] ?>], backgroundColor: ['#10b981','#3b82f6'], borderWidth: 2 }] },
+        options: chartOpts()
+    });
+    new Chart(document.getElementById('chart_pen_<?= $slug ?>'), {
+        type: 'doughnut',
+        data: { labels: ['Transferencia','Efectivo'], datasets: [{ data: [<?= $d['pen_tr'] ?>, <?= $d['pen_ef'] ?>], backgroundColor: ['#10b981','#f97316'], borderWidth: 2 }] },
+        options: chartOpts()
+    });
+    <?php endforeach; ?>
+
+    function togglePanel(slug, vista) {
+        const ent = document.getElementById('panel_ent_' + slug);
+        const pen = document.getElementById('panel_pen_' + slug);
+        const btnEnt = document.getElementById('btn_ent_' + slug);
+        const btnPen = document.getElementById('btn_pen_' + slug);
+        if (vista === 'ent') {
+            ent.classList.remove('hidden');
+            pen.classList.add('hidden');
+            btnEnt.className = 'px-3 py-1.5 bg-green-500 text-white transition';
+            btnPen.className = 'px-3 py-1.5 bg-white text-gray-500 hover:bg-gray-50 transition';
+        } else {
+            pen.classList.remove('hidden');
+            ent.classList.add('hidden');
+            btnPen.className = 'px-3 py-1.5 bg-yellow-400 text-white transition';
+            btnEnt.className = 'px-3 py-1.5 bg-white text-gray-500 hover:bg-gray-50 transition';
+        }
+    }
     </script>
 
 </body>
