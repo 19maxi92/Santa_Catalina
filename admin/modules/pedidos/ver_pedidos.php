@@ -129,8 +129,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         case 'cambiar_estado':
                             $nuevo_estado = $_POST['nuevo_estado'] ?? '';
                             if ($nuevo_estado) {
-                                $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
-                                $stmt->execute(array_merge([$nuevo_estado], $pedidos));
+                                $forma_pago_masiva = $_POST['forma_pago'] ?? null;
+                                if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia'])) {
+                                    // Actualizar uno por uno para aplicar lógica de precio
+                                    foreach ($pedidos as $_pid) {
+                                        $_pid = (int)$_pid;
+                                        $stmtP = $pdo->prepare("SELECT producto, precio FROM pedidos WHERE id = ?");
+                                        $stmtP->execute([$_pid]);
+                                        $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
+                                        $nuevo_precio = null;
+                                        if ($pedidoActual && $forma_pago_masiva === 'Efectivo') {
+                                            $nombreProducto = $pedidoActual['producto'];
+                                            $precioActual   = (float)$pedidoActual['precio'];
+                                            if (preg_match('/personalizado/i', $nombreProducto)) {
+                                                preg_match('/\((\d+)\s+plancha/i', $nombreProducto, $m);
+                                                $planchas = isset($m[1]) ? (int)$m[1] : 0;
+                                                $nuevo_precio = $precioActual - floor($planchas / 3) * 1000;
+                                            } else {
+                                                $stmtProd = $pdo->prepare("SELECT precio_efectivo FROM productos WHERE activo = 1 AND LOWER(TRIM(nombre)) = LOWER(TRIM(?)) LIMIT 1");
+                                                $stmtProd->execute([$nombreProducto]);
+                                                $prod = $stmtProd->fetch(PDO::FETCH_ASSOC);
+                                                if ($prod) $nuevo_precio = (float)$prod['precio_efectivo'];
+                                            }
+                                        }
+                                        if ($nuevo_precio !== null) {
+                                            $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, updated_at = NOW() WHERE id = ?")->execute([$nuevo_estado, $forma_pago_masiva, $nuevo_precio, $_pid]);
+                                        } else {
+                                            $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?")->execute([$nuevo_estado, $forma_pago_masiva, $_pid]);
+                                        }
+                                    }
+                                } else {
+                                    $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
+                                    $stmt->execute(array_merge([$nuevo_estado], $pedidos));
+                                }
                                 try { require_once '../../../google_sheets_helper.php'; foreach ($pedidos as $_pid) { actualizarEstadoEnSheets($_pid, $nuevo_estado); } } catch (\Throwable $_e) {}
                                 $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
                             }
@@ -1456,31 +1487,35 @@ arsort($productos_unicos); // más pedidos primero
     function cambiarEstadoMasivo() {
         const seleccionados = getSeleccionados();
         const nuevoEstado = document.getElementById('estado_masivo').value;
-        
+
         if (seleccionados.length === 0) {
             alert('⚠️ Debes seleccionar al menos un pedido');
             return;
         }
-        
+
         if (!nuevoEstado) {
             alert('⚠️ Debes seleccionar un estado');
             return;
         }
-        
+
+        if (nuevoEstado === 'Entregado') {
+            // Guardar seleccionados para usarlos cuando se confirme el pago
+            window._masivoPendienteIds = seleccionados;
+            _modalEntregaSel = null;
+            _modalEntregaOrigen = 'masivo';
+            abrirModalPago();
+            return;
+        }
+
         if (confirm(`¿Cambiar ${seleccionados.length} pedido(s) a "${nuevoEstado}"?`)) {
             const form = document.getElementById('accionMasivaForm');
             document.getElementById('tipo_accion').value = 'cambiar_estado';
             document.getElementById('nuevo_estado_hidden').value = nuevoEstado;
-            
-            // Agregar inputs hidden con los IDs
             seleccionados.forEach(id => {
                 const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'pedidos[]';
-                input.value = id;
+                input.type = 'hidden'; input.name = 'pedidos[]'; input.value = id;
                 form.appendChild(input);
             });
-            
             form.submit();
         }
     }
@@ -2476,10 +2511,30 @@ function confirmarPago(formaPago) {
         });
         document.body.appendChild(form);
         form.submit();
+    } else if (_modalEntregaOrigen === 'masivo') {
+        // Cambio masivo: usar el form de accionMasivaForm con forma_pago
+        const form = document.getElementById('accionMasivaForm');
+        document.getElementById('tipo_accion').value = 'cambiar_estado';
+        document.getElementById('nuevo_estado_hidden').value = 'Entregado';
+        // forma_pago para el masivo
+        let fpInput = form.querySelector('input[name="forma_pago"]');
+        if (!fpInput) {
+            fpInput = document.createElement('input');
+            fpInput.type = 'hidden'; fpInput.name = 'forma_pago';
+            form.appendChild(fpInput);
+        }
+        fpInput.value = formaPago;
+        (window._masivoPendienteIds || []).forEach(id => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = 'pedidos[]'; inp.value = id;
+            form.appendChild(inp);
+        });
+        form.submit();
     }
 
     _modalEntregaSel = null;
     _modalEntregaOrigen = null;
+    window._masivoPendienteIds = null;
 }
 </script>
 

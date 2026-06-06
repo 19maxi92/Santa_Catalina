@@ -18,6 +18,8 @@ $stmt = $pdo->query("
         COALESCE(AVG(precio), 0) as ticket_hoy,
         SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes_hoy,
         SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados_hoy,
+        COALESCE(SUM(CASE WHEN estado = 'Entregado' THEN precio ELSE 0 END), 0) as ventas_entregados_hoy,
+        COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN precio ELSE 0 END), 0) as ventas_pendientes_hoy,
         SUM(CASE WHEN impreso = 0 AND estado != 'Entregado' AND estado != 'Cancelado' THEN 1 ELSE 0 END) as sin_imprimir
     FROM pedidos
     WHERE DATE(created_at) = CURDATE()
@@ -42,7 +44,11 @@ $ayer = $stmt->fetch();
 $stmt = $pdo->query("
     SELECT
         COUNT(*) as pedidos_semana,
-        COALESCE(SUM(precio), 0) as ventas_semana
+        COALESCE(SUM(precio), 0) as ventas_semana,
+        SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados_semana,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes_semana,
+        COALESCE(SUM(CASE WHEN estado = 'Entregado' THEN precio ELSE 0 END), 0) as ventas_entregados_semana,
+        COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN precio ELSE 0 END), 0) as ventas_pendientes_semana
     FROM pedidos
     WHERE YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)
     AND estado != 'Cancelado'
@@ -66,7 +72,11 @@ $stmt = $pdo->query("
     SELECT
         COUNT(*) as pedidos_mes,
         COALESCE(SUM(precio), 0) as ventas_mes,
-        COALESCE(AVG(precio), 0) as ticket_mes
+        COALESCE(AVG(precio), 0) as ticket_mes,
+        SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados_mes,
+        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) as pendientes_mes,
+        COALESCE(SUM(CASE WHEN estado = 'Entregado' THEN precio ELSE 0 END), 0) as ventas_entregados_mes,
+        COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN precio ELSE 0 END), 0) as ventas_pendientes_mes
     FROM pedidos
     WHERE YEAR(created_at) = YEAR(CURDATE())
     AND MONTH(created_at) = MONTH(CURDATE())
@@ -348,6 +358,18 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
         <?php endif; ?>
 
         <!-- MEGA KPIs PRINCIPALES -->
+        <!-- Toggle global -->
+        <div class="flex justify-center mb-4">
+            <div class="inline-flex rounded-xl overflow-hidden border border-gray-200 shadow text-xs font-bold">
+                <button onclick="setKpiVista('todos')" id="kpi_btn_todos"
+                        class="px-5 py-2 bg-gray-700 text-white transition">📋 Todos</button>
+                <button onclick="setKpiVista('entregados')" id="kpi_btn_entregados"
+                        class="px-5 py-2 bg-white text-gray-500 hover:bg-green-50 transition">✅ Entregados</button>
+                <button onclick="setKpiVista('pendientes')" id="kpi_btn_pendientes"
+                        class="px-5 py-2 bg-white text-gray-500 hover:bg-yellow-50 transition">⏳ Pendientes</button>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
 
             <!-- HOY -->
@@ -355,10 +377,8 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 <div class="stat-label text-blue-600 mb-3">
                     <i class="fas fa-calendar-day mr-1"></i>HOY
                 </div>
-                <div class="mega-stat text-gray-900 mb-2">
-                    <?= number_format($hoy['total_hoy']) ?>
-                </div>
-                <div class="text-sm text-gray-600 font-semibold mb-3">
+                <div class="mega-stat text-gray-900 mb-2" id="kpi_hoy_pedidos"><?= number_format($hoy['total_hoy']) ?></div>
+                <div class="text-sm text-gray-600 font-semibold mb-3" id="kpi_hoy_ventas">
                     pedidos · $<?= number_format($hoy['ventas_hoy'], 0, ',', '.') ?>
                 </div>
                 <div class="change-badge <?= $cambio_dia > 0 ? 'change-up' : ($cambio_dia < 0 ? 'change-down' : 'change-neutral') ?>">
@@ -366,14 +386,8 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     <?= number_format(abs($cambio_dia), 1) ?>% vs ayer
                 </div>
                 <div class="mt-4 pt-4 border-t flex justify-between text-xs font-semibold text-gray-600">
-                    <div>
-                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
-                        <?= $hoy['entregados_hoy'] ?> entregados
-                    </div>
-                    <div>
-                        <i class="fas fa-clock text-orange-500 mr-1"></i>
-                        <?= $hoy['pendientes_hoy'] ?> pendientes
-                    </div>
+                    <div><i class="fas fa-check-circle text-green-500 mr-1"></i><?= $hoy['entregados_hoy'] ?> entregados</div>
+                    <div><i class="fas fa-clock text-orange-500 mr-1"></i><?= $hoy['pendientes_hoy'] ?> pendientes</div>
                 </div>
             </div>
 
@@ -382,18 +396,16 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 <div class="stat-label text-purple-600 mb-3">
                     <i class="fas fa-calendar-week mr-1"></i>ESTA SEMANA
                 </div>
-                <div class="mega-stat text-gray-900 mb-2">
-                    <?= number_format($esta_semana['pedidos_semana']) ?>
-                </div>
-                <div class="text-sm text-gray-600 font-semibold mb-3">
+                <div class="mega-stat text-gray-900 mb-2" id="kpi_semana_pedidos"><?= number_format($esta_semana['pedidos_semana']) ?></div>
+                <div class="text-sm text-gray-600 font-semibold mb-3" id="kpi_semana_ventas">
                     pedidos · $<?= number_format($esta_semana['ventas_semana'], 0, ',', '.') ?>
                 </div>
                 <div class="change-badge <?= $cambio_semana > 0 ? 'change-up' : ($cambio_semana < 0 ? 'change-down' : 'change-neutral') ?>">
                     <i class="fas fa-arrow-<?= $cambio_semana > 0 ? 'up' : ($cambio_semana < 0 ? 'down' : 'right') ?>"></i>
                     <?= number_format(abs($cambio_semana), 1) ?>% vs semana pasada
                 </div>
-                <div class="mt-4 pt-4 border-t text-xs font-semibold text-gray-600">
-                    <div>Promedio diario: <?= number_format($esta_semana['pedidos_semana'] / 7, 0) ?> pedidos</div>
+                <div class="mt-4 pt-4 border-t text-xs font-semibold text-gray-600" id="kpi_semana_extra">
+                    Promedio diario: <?= number_format($esta_semana['pedidos_semana'] / 7, 0) ?> pedidos
                 </div>
             </div>
 
@@ -402,10 +414,8 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 <div class="stat-label text-green-600 mb-3">
                     <i class="fas fa-calendar-alt mr-1"></i>ESTE MES
                 </div>
-                <div class="mega-stat text-gray-900 mb-2">
-                    <?= number_format($este_mes['pedidos_mes']) ?>
-                </div>
-                <div class="text-sm text-gray-600 font-semibold mb-3">
+                <div class="mega-stat text-gray-900 mb-2" id="kpi_mes_pedidos"><?= number_format($este_mes['pedidos_mes']) ?></div>
+                <div class="text-sm text-gray-600 font-semibold mb-3" id="kpi_mes_ventas">
                     pedidos · $<?= number_format($este_mes['ventas_mes'], 0, ',', '.') ?>
                 </div>
                 <div class="change-badge <?= $cambio_mes > 0 ? 'change-up' : ($cambio_mes < 0 ? 'change-down' : 'change-neutral') ?>">
@@ -413,7 +423,7 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                     <?= number_format(abs($cambio_mes), 1) ?>% vs mes pasado
                 </div>
                 <div class="mt-4 pt-4 border-t text-xs font-semibold text-gray-600">
-                    <div>Ticket promedio: $<?= number_format($este_mes['ticket_mes'], 0, ',', '.') ?></div>
+                    Ticket promedio: $<?= number_format($este_mes['ticket_mes'], 0, ',', '.') ?>
                 </div>
             </div>
 
@@ -469,6 +479,24 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 <a href="?" class="px-5 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-bold">
                     <i class="fas fa-redo mr-2"></i>RESET
                 </a>
+                <!-- Accesos rápidos -->
+                <div class="flex gap-2 ml-1">
+                    <?php
+                    $atajos = [
+                        '24hs'   => [date('Y-m-d'), date('Y-m-d')],
+                        '48hs'   => [date('Y-m-d', strtotime('-1 day')), date('Y-m-d')],
+                        '7 días' => [date('Y-m-d', strtotime('-6 days')), date('Y-m-d')],
+                        '15 días'=> [date('Y-m-d', strtotime('-14 days')), date('Y-m-d')],
+                    ];
+                    foreach ($atajos as $label => [$desde, $hasta]):
+                        $activo = ($fecha_inicio === $desde && $fecha_fin === $hasta);
+                    ?>
+                    <a href="?fecha_inicio=<?= $desde ?>&fecha_fin=<?= $hasta ?>"
+                       class="px-3 py-2 rounded-lg text-xs font-bold border transition <?= $activo ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-300 hover:border-purple-400 hover:text-purple-600' ?>">
+                        <?= $label ?>
+                    </a>
+                    <?php endforeach; ?>
+                </div>
             </form>
         </div>
 
@@ -857,6 +885,62 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
         options: chartOpts()
     });
     <?php endforeach; ?>
+
+    // ============================================
+    // TOGGLE KPIs: Todos / Entregados / Pendientes
+    // ============================================
+    const kpiData = {
+        todos: {
+            hoy_ped:      <?= (int)$hoy['total_hoy'] ?>,
+            hoy_ven:      <?= (float)$hoy['ventas_hoy'] ?>,
+            semana_ped:   <?= (int)$esta_semana['pedidos_semana'] ?>,
+            semana_ven:   <?= (float)$esta_semana['ventas_semana'] ?>,
+            mes_ped:      <?= (int)$este_mes['pedidos_mes'] ?>,
+            mes_ven:      <?= (float)$este_mes['ventas_mes'] ?>,
+        },
+        entregados: {
+            hoy_ped:      <?= (int)$hoy['entregados_hoy'] ?>,
+            hoy_ven:      <?= (float)$hoy['ventas_entregados_hoy'] ?>,
+            semana_ped:   <?= (int)$esta_semana['entregados_semana'] ?>,
+            semana_ven:   <?= (float)$esta_semana['ventas_entregados_semana'] ?>,
+            mes_ped:      <?= (int)$este_mes['entregados_mes'] ?>,
+            mes_ven:      <?= (float)$este_mes['ventas_entregados_mes'] ?>,
+        },
+        pendientes: {
+            hoy_ped:      <?= (int)$hoy['pendientes_hoy'] ?>,
+            hoy_ven:      <?= (float)$hoy['ventas_pendientes_hoy'] ?>,
+            semana_ped:   <?= (int)$esta_semana['pendientes_semana'] ?>,
+            semana_ven:   <?= (float)$esta_semana['ventas_pendientes_semana'] ?>,
+            mes_ped:      <?= (int)$este_mes['pendientes_mes'] ?>,
+            mes_ven:      <?= (float)$este_mes['ventas_pendientes_mes'] ?>,
+        }
+    };
+
+    const btnStyles = {
+        todos:      'px-5 py-2 bg-gray-700 text-white transition',
+        entregados: 'px-5 py-2 bg-green-500 text-white transition',
+        pendientes: 'px-5 py-2 bg-yellow-400 text-white transition',
+        inactive:   'px-5 py-2 bg-white text-gray-500 hover:bg-gray-50 transition',
+    };
+
+    function fmt(n) { return Math.round(n).toLocaleString('es-AR'); }
+
+    function setKpiVista(vista) {
+        const d = kpiData[vista];
+        const label = vista === 'todos' ? 'pedidos' : (vista === 'entregados' ? 'entregados' : 'pendientes');
+
+        document.getElementById('kpi_hoy_pedidos').textContent   = fmt(d.hoy_ped);
+        document.getElementById('kpi_hoy_ventas').textContent     = label + ' · $' + fmt(d.hoy_ven);
+        document.getElementById('kpi_semana_pedidos').textContent = fmt(d.semana_ped);
+        document.getElementById('kpi_semana_ventas').textContent  = label + ' · $' + fmt(d.semana_ven);
+        document.getElementById('kpi_semana_extra').textContent   = 'Promedio diario: ' + Math.round(d.semana_ped / 7) + ' ' + label;
+        document.getElementById('kpi_mes_pedidos').textContent    = fmt(d.mes_ped);
+        document.getElementById('kpi_mes_ventas').textContent     = label + ' · $' + fmt(d.mes_ven);
+
+        ['todos','entregados','pendientes'].forEach(v => {
+            document.getElementById('kpi_btn_' + v).className = (v === vista) ? btnStyles[v] : btnStyles.inactive;
+        });
+    }
 
     function togglePanel(slug, vista) {
         const ent = document.getElementById('panel_ent_' + slug);
