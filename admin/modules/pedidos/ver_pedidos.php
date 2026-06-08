@@ -228,7 +228,17 @@ $filtro_ubicacion = $_GET['ubicacion'] ?? '';
 $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $busqueda = $_GET['buscar'] ?? '';
+$filtro_turno = $_GET['turno'] ?? '';
 $orden = $_GET['orden'] ?? 'created_at DESC';
+
+// Leer turnos desde configuración (dinámico)
+$turnos_config = [];
+try {
+    $rows = $pdo->query("SELECT turno, hora_inicio, hora_fin FROM config_pedidos_online ORDER BY FIELD(turno,'Mañana','Siesta','Tarde')")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) {
+        $turnos_config[$r['turno']] = ['inicio' => $r['hora_inicio'], 'fin' => $r['hora_fin']];
+    }
+} catch (Exception $e) {}
 
 // Por defecto: pedidos de hoy
 if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
@@ -279,6 +289,12 @@ if ($busqueda) {
     $sql .= " AND (p.nombre LIKE ? OR p.apellido LIKE ? OR p.telefono LIKE ? OR p.producto LIKE ? OR CAST(p.id AS CHAR) LIKE ? OR cf.nombre LIKE ? OR cf.apellido LIKE ?)";
     $busqueda_param = '%' . $busqueda . '%';
     $params = array_merge($params, array_fill(0, 7, $busqueda_param));
+}
+
+if ($filtro_turno && isset($turnos_config[$filtro_turno])) {
+    $sql .= " AND TIME(p.hora_entrega) BETWEEN ? AND ?";
+    $params[] = $turnos_config[$filtro_turno]['inicio'];
+    $params[] = $turnos_config[$filtro_turno]['fin'];
 }
 
 // Ordenamiento
@@ -703,6 +719,41 @@ arsort($productos_unicos); // más pedidos primero
                         class="filter-tab bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-2 border-transparent transition-all">
                     👥 Por Cliente <span class="ml-1 bg-indigo-600 text-white text-xs rounded-full px-1.5"><?= $clientes_unicos ?></span>
                 </button>
+
+                <?php if (!empty($turnos_config)):
+                    // Parámetros actuales sin turno (para construir URLs)
+                    $params_base = http_build_query(array_filter([
+                        'estado'        => $filtro_estado,
+                        'ubicacion'     => $filtro_ubicacion,
+                        'modalidad'     => $filtro_modalidad,
+                        'fecha_desde'   => $fecha_desde,
+                        'fecha_hasta'   => $fecha_hasta,
+                        'buscar'        => $busqueda,
+                        'orden'         => $orden !== 'created_at DESC' ? $orden : '',
+                    ]));
+                    $iconos = ['Mañana' => '🌅', 'Siesta' => '☀️', 'Tarde' => '🌆'];
+                ?>
+                <!-- Separador -->
+                <span class="text-gray-300 self-center text-lg">|</span>
+
+                <!-- Todo el día -->
+                <a href="?<?= $params_base ?>"
+                   class="filter-tab <?= empty($filtro_turno) ? 'active' : 'bg-gray-100 text-gray-600' ?>">
+                    🕐 Todo el día
+                </a>
+
+                <?php foreach ($turnos_config as $nombre => $rango):
+                    $url_turno = $params_base . ($params_base ? '&' : '') . 'turno=' . urlencode($nombre);
+                    $label_hora = substr($rango['inicio'], 0, 5) . '-' . substr($rango['fin'], 0, 5);
+                    $icono = $iconos[$nombre] ?? '🕐';
+                ?>
+                <a href="?<?= $url_turno ?>"
+                   class="filter-tab <?= $filtro_turno === $nombre ? 'active' : 'bg-teal-100 text-teal-800' ?>">
+                    <?= $icono ?> <?= $nombre ?>
+                    <span class="text-xs opacity-70 ml-1"><?= $label_hora ?></span>
+                </a>
+                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
             
             <!-- FILTROS AVANZADOS (COLAPSABLES) -->
