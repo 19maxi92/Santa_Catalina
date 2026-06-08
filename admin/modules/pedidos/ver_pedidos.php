@@ -292,9 +292,8 @@ if ($busqueda) {
 }
 
 if ($filtro_turno && isset($turnos_config[$filtro_turno])) {
-    $sql .= " AND TIME(p.hora_entrega) BETWEEN ? AND ?";
-    $params[] = $turnos_config[$filtro_turno]['inicio'];
-    $params[] = $turnos_config[$filtro_turno]['fin'];
+    $sql .= " AND p.turno_entrega = ?";
+    $params[] = $filtro_turno;
 }
 
 // Ordenamiento
@@ -1080,14 +1079,17 @@ arsort($productos_unicos); // más pedidos primero
                                             </div>
                                         </div>
                                         
-                                        <!-- BOTÓN OJO -->
-                                        <button onclick="verDetalles(<?= $pedido['id'] ?>)" 
+                                    </div>
+
+                                    <!-- BOTÓN OJO (separado para evitar overlap) -->
+                                    <div class="shrink-0">
+                                        <button onclick="verDetalles(<?= $pedido['id'] ?>)"
                                                 class="btn bg-blue-500 hover:bg-blue-600 text-white p-2 rounded text-sm"
                                                 title="Ver detalles completos">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                     </div>
-                                    
+
                                     <!-- ESTADO COMPACTO -->
                                     <div class="min-w-[130px]">
                                         <form method="POST" class="inline">
