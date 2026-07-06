@@ -582,9 +582,13 @@ try {
                         <div class="mb-4">
                             <h4 class="text-sm font-semibold text-gray-700 mb-2">Tipo de surtido</h4>
                             <div class="flex flex-wrap gap-2" id="botonesCategoria">
-                                <button type="button" onclick="seleccionarCategoria('jyq')" id="cat-jyq"
+                                <button type="button" onclick="seleccionarCategoria('jyq24')" id="cat-jyq24"
                                         class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
-                                    Jamón y Queso
+                                    JyQ x24
+                                </button>
+                                <button type="button" onclick="seleccionarCategoria('jyq48')" id="cat-jyq48"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    JyQ x48
                                 </button>
                                 <button type="button" onclick="seleccionarCategoria('clasico')" id="cat-clasico"
                                         class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
@@ -731,18 +735,19 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
-let categoriaPersonalizado = 'jyq';
+let categoriaPersonalizado = 'jyq24';
 
 // Tabla de precios por planchas y categoría (8 sándwiches = 1 plancha)
 const PRECIOS_PERSONALIZADO = {
-    'jyq':     { 3: 16000, 6: 30000 },
+    'jyq24':   { 3: 16000 },
+    'jyq48':   { 6: 30000 },
     'clasico': { 6: 27000 },
     'especial':{ 6: 30000 },
     'premium': { 1: 9000, 2: 18000, 3: 27000, 4: 36000, 5: 45000, 6: 54000 },
     'elegidos':{ 1: 5400,  2: 10800, 3: 16000, 4: 21400, 5: 26800, 6: 32000 }
 };
 
-const CAT_NOMBRES = { jyq: 'Jamón y Queso', clasico: 'Clásico', especial: 'Especial', premium: 'Premium', elegidos: 'Elegidos' };
+const CAT_NOMBRES = { jyq24: 'JyQ x24', jyq48: 'JyQ x48', clasico: 'Clásico', especial: 'Especial', premium: 'Premium', elegidos: 'Elegidos' };
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -1244,7 +1249,7 @@ function agregarPedidoPersonalizado() {
     // Resetear personalizado
     planchasPorSabor = {};
     historial = [];
-    categoriaPersonalizado = 'jyq';
+    categoriaPersonalizado = 'jyq24';
     seleccionarCategoria('jyq');
     actualizarContadores();
     document.getElementById('observaciones_personalizado').value = '';
