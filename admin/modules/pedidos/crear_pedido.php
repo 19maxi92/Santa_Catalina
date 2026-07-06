@@ -1178,7 +1178,18 @@ function seleccionarCategoria(cat) {
         btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
         btn.classList.add('border-blue-500', 'bg-blue-500', 'text-white');
     }
-    recalcularPrecioPersonalizado();
+    // JyQ pre-carga planchas de Jamón y Queso automáticamente
+    if (cat === 'jyq24') {
+        historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
+        planchasPorSabor = { 'Jamón y Queso': 3 };
+        actualizarContadores();
+    } else if (cat === 'jyq48') {
+        historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
+        planchasPorSabor = { 'Jamón y Queso': 6 };
+        actualizarContadores();
+    } else {
+        recalcularPrecioPersonalizado();
+    }
 }
 
 function recalcularPrecioPersonalizado() {
