@@ -55,6 +55,33 @@ try {
     // Usar precios por defecto si falla
 }
 
+// CARGAR PRECIOS PREMIUM Y ELEGIDOS DESDE TABLA PRODUCTOS
+$precios_personalizados_db = ['premium' => [], 'elegidos' => []];
+try {
+    $rows = $pdo->query("
+        SELECT nombre, precio_transferencia
+        FROM productos
+        WHERE (nombre LIKE 'Surtidos Premium x%' OR nombre LIKE 'Surtidos Elegidos x%') AND activo = 1
+        ORDER BY nombre
+    ")->fetchAll();
+    foreach ($rows as $r) {
+        preg_match('/x(\d+)$/i', $r['nombre'], $m);
+        if (!$m) continue;
+        $sandwiches = (int)$m[1];
+        $planchas = $sandwiches / 8;
+        $cat = stripos($r['nombre'], 'Premium') !== false ? 'premium' : 'elegidos';
+        $precios_personalizados_db[$cat][$planchas] = (int)$r['precio_transferencia'];
+    }
+} catch (PDOException $e) {}
+
+// Fallback si no hay datos en DB todavía
+if (empty($precios_personalizados_db['premium'])) {
+    $precios_personalizados_db['premium'] = [1=>9000,2=>18000,3=>27000,4=>36000,5=>45000,6=>54000];
+}
+if (empty($precios_personalizados_db['elegidos'])) {
+    $precios_personalizados_db['elegidos'] = [1=>5400,2=>10800,3=>16000,4=>21400,5=>26800,6=>32000];
+}
+
 // CARGAR LOCALIDADES DE DELIVERY
 $localidades_delivery = [];
 try {
@@ -581,26 +608,14 @@ try {
                         <!-- Categoría del personalizado -->
                         <div class="mb-4">
                             <h4 class="text-sm font-semibold text-gray-700 mb-2">Tipo de surtido</h4>
-                            <div class="flex flex-wrap gap-2" id="botonesCategoria">
-                                <button type="button" onclick="seleccionarCategoria('jyq')" id="cat-jyq"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
-                                    Jamón y Queso
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('clasico')" id="cat-clasico"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Clásico
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('especial')" id="cat-especial"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Especial
-                                </button>
+                            <div class="flex gap-3" id="botonesCategoria">
                                 <button type="button" onclick="seleccionarCategoria('premium')" id="cat-premium"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Premium
+                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
+                                    🟠 Premium
                                 </button>
                                 <button type="button" onclick="seleccionarCategoria('elegidos')" id="cat-elegidos"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Elegidos
+                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    ⭐ Elegidos
                                 </button>
                             </div>
                         </div>
@@ -731,18 +746,15 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
-let categoriaPersonalizado = 'jyq';
+let categoriaPersonalizado = 'premium';
 
-// Tabla de precios por planchas y categoría (8 sándwiches = 1 plancha)
-const PRECIOS_PERSONALIZADO = {
-    'jyq':     { 3: 16000, 6: 30000 },
-    'clasico': { 6: 27000 },
-    'especial':{ 6: 30000 },
-    'premium': { 1: 9000, 2: 18000, 3: 27000, 4: 36000, 5: 45000, 6: 54000 },
-    'elegidos':{ 1: 5400,  2: 10800, 3: 16000, 4: 21400, 5: 26800, 6: 32000 }
-};
+// Tabla de precios por planchas y categoría — cargada desde DB
+const PRECIOS_PERSONALIZADO = <?= json_encode([
+    'premium'  => $precios_personalizados_db['premium'],
+    'elegidos' => $precios_personalizados_db['elegidos'],
+]) ?>;
 
-const CAT_NOMBRES = { jyq: 'Jamón y Queso', clasico: 'Clásico', especial: 'Especial', premium: 'Premium', elegidos: 'Elegidos' };
+const CAT_NOMBRES = { premium: 'Premium', elegidos: 'Elegidos' };
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -1031,6 +1043,8 @@ function seleccionarTipoPedido(tipo) {
         if (document.getElementById('saboresComunes').children.length === 0) {
             generarBotonesSabores();
         }
+        // Aplicar restricción de la categoría actual
+        seleccionarCategoria(categoriaPersonalizado);
     }
 }
 
@@ -1164,6 +1178,8 @@ function actualizarContadores() {
 
 function seleccionarCategoria(cat) {
     categoriaPersonalizado = cat;
+
+    // Highlight botón activo
     document.querySelectorAll('.categoria-btn').forEach(btn => {
         btn.classList.remove('border-blue-500', 'bg-blue-500', 'text-white');
         btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
@@ -1173,7 +1189,31 @@ function seleccionarCategoria(cat) {
         btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
         btn.classList.add('border-blue-500', 'bg-blue-500', 'text-white');
     }
-    recalcularPrecioPersonalizado();
+
+    // Resetear planchas y habilitar solo los sabores correctos
+    historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
+    planchasPorSabor = {};
+
+    const secComunes  = document.getElementById('saboresComunes');
+    const secPremium  = document.getElementById('saboresPremium');
+    const tituloComun = secComunes?.previousElementSibling;
+    const tituloPrem  = secPremium?.previousElementSibling;
+
+    if (cat === 'premium') {
+        // Solo sabores premium
+        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = true);  secComunes.style.opacity  = '0.35'; }
+        if (tituloComun) tituloComun.style.opacity = '0.35';
+        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = false); secPremium.style.opacity  = '1'; }
+        if (tituloPrem)  tituloPrem.style.opacity  = '1';
+    } else if (cat === 'elegidos') {
+        // Solo sabores comunes
+        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = false); secComunes.style.opacity  = '1'; }
+        if (tituloComun) tituloComun.style.opacity = '1';
+        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = true);  secPremium.style.opacity  = '0.35'; }
+        if (tituloPrem)  tituloPrem.style.opacity  = '0.35';
+    }
+
+    actualizarContadores();
 }
 
 function recalcularPrecioPersonalizado() {
@@ -1244,7 +1284,7 @@ function agregarPedidoPersonalizado() {
     // Resetear personalizado
     planchasPorSabor = {};
     historial = [];
-    categoriaPersonalizado = 'jyq';
+    categoriaPersonalizado = 'premium';
     seleccionarCategoria('jyq');
     actualizarContadores();
     document.getElementById('observaciones_personalizado').value = '';

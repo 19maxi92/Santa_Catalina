@@ -124,9 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
         }
-        if (empty($forma_pago)) {
-            throw new Exception('Por favor seleccioná la forma de pago');
-        }
+        $forma_pago = 'Transferencia'; // siempre transferencia al crear
         if ($modalidad === 'Delivery' && empty($direccion)) {
             throw new Exception('Si elegís Delivery, ingresá la dirección de entrega');
         }
@@ -637,7 +635,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="tipo_pedido" id="campo_tipo_pedido" value="simple">
                 <input type="hidden" name="combos_json" id="campo_combos_json" value="[]">
                 <input type="hidden" name="turno" id="campo_turno" value="">
-                <input type="hidden" name="forma_pago" id="campo_forma_pago" value="">
+                <input type="hidden" name="forma_pago" id="campo_forma_pago" value="Transferencia">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
                 <input type="hidden" name="direccion" id="campo_direccion" value="">
                 <input type="hidden" name="fecha_pedido" id="campo_fecha_pedido" value="">
@@ -937,24 +935,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
 
-                        <!-- 5. Forma de pago -->
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-3">
-                                <i class="fas fa-credit-card text-green-500 mr-1"></i>Forma de pago
-                            </label>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="pago-card p-4 text-center" onclick="seleccionarPago('Efectivo')">
-                                    <i class="fas fa-money-bill-wave text-3xl text-green-500 mb-2"></i>
-                                    <div class="font-bold text-gray-900">Efectivo</div>
-                                    <div class="text-xs text-gray-500 mt-1">En el momento</div>
-                                </div>
-                                <div class="pago-card p-4 text-center" onclick="seleccionarPago('Transferencia')">
-                                    <i class="fas fa-university text-3xl text-blue-500 mb-2"></i>
-                                    <div class="font-bold text-gray-900">Transferencia</div>
-                                    <div class="text-xs text-gray-500 mt-1">Te pasamos el CBU</div>
-                                </div>
-                            </div>
-                        </div>
+                        <!-- forma_pago siempre Transferencia -->
 
                         <!-- 6. Observaciones -->
                         <div>
@@ -1534,8 +1515,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             e.preventDefault();
             return false;
         }
-        if (!document.getElementById('campo_forma_pago').value) {
-            alert('Por favor seleccioná la forma de pago');
+        if (false) { // forma_pago siempre Transferencia
             e.preventDefault();
             return false;
         }
