@@ -581,30 +581,14 @@ try {
                         <!-- Categoría del personalizado -->
                         <div class="mb-4">
                             <h4 class="text-sm font-semibold text-gray-700 mb-2">Tipo de surtido</h4>
-                            <div class="flex flex-wrap gap-2" id="botonesCategoria">
-                                <button type="button" onclick="seleccionarCategoria('jyq24')" id="cat-jyq24"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
-                                    JyQ x24
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('jyq48')" id="cat-jyq48"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    JyQ x48
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('clasico')" id="cat-clasico"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Clásico
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('especial')" id="cat-especial"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Especial
-                                </button>
+                            <div class="flex gap-3" id="botonesCategoria">
                                 <button type="button" onclick="seleccionarCategoria('premium')" id="cat-premium"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Premium
+                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
+                                    🟠 Premium
                                 </button>
                                 <button type="button" onclick="seleccionarCategoria('elegidos')" id="cat-elegidos"
-                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    Elegidos
+                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    ⭐ Elegidos
                                 </button>
                             </div>
                         </div>
@@ -735,7 +719,7 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
-let categoriaPersonalizado = 'jyq24';
+let categoriaPersonalizado = 'premium';
 
 // Tabla de precios por planchas y categoría (8 sándwiches = 1 plancha)
 const PRECIOS_PERSONALIZADO = {
@@ -1260,7 +1244,7 @@ function agregarPedidoPersonalizado() {
     // Resetear personalizado
     planchasPorSabor = {};
     historial = [];
-    categoriaPersonalizado = 'jyq24';
+    categoriaPersonalizado = 'premium';
     seleccionarCategoria('jyq');
     actualizarContadores();
     document.getElementById('observaciones_personalizado').value = '';
