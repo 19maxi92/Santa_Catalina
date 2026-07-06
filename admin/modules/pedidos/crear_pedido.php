@@ -55,19 +55,31 @@ try {
     // Usar precios por defecto si falla
 }
 
-// CARGAR PRECIOS PERSONALIZADOS DESDE DB
+// CARGAR PRECIOS PREMIUM Y ELEGIDOS DESDE TABLA PRODUCTOS
 $precios_personalizados_db = ['premium' => [], 'elegidos' => []];
 try {
-    $rows = $pdo->query("SELECT categoria, planchas, precio FROM precios_personalizados ORDER BY categoria, planchas")->fetchAll();
+    $rows = $pdo->query("
+        SELECT nombre, precio_transferencia
+        FROM productos
+        WHERE (nombre LIKE 'Surtidos Premium x%' OR nombre LIKE 'Surtidos Elegidos x%') AND activo = 1
+        ORDER BY nombre
+    ")->fetchAll();
     foreach ($rows as $r) {
-        $precios_personalizados_db[$r['categoria']][(int)$r['planchas']] = (int)$r['precio'];
+        preg_match('/x(\d+)$/i', $r['nombre'], $m);
+        if (!$m) continue;
+        $sandwiches = (int)$m[1];
+        $planchas = $sandwiches / 8;
+        $cat = stripos($r['nombre'], 'Premium') !== false ? 'premium' : 'elegidos';
+        $precios_personalizados_db[$cat][$planchas] = (int)$r['precio_transferencia'];
     }
-} catch (PDOException $e) {
-    // Fallback a precios del menú si la tabla no existe aún
-    $precios_personalizados_db = [
-        'premium' => [1=>9000,2=>18000,3=>27000,4=>36000,5=>45000,6=>54000],
-        'elegidos' => [1=>5400,2=>10800,3=>16000,4=>21400,5=>26800,6=>32000],
-    ];
+} catch (PDOException $e) {}
+
+// Fallback si no hay datos en DB todavía
+if (empty($precios_personalizados_db['premium'])) {
+    $precios_personalizados_db['premium'] = [1=>9000,2=>18000,3=>27000,4=>36000,5=>45000,6=>54000];
+}
+if (empty($precios_personalizados_db['elegidos'])) {
+    $precios_personalizados_db['elegidos'] = [1=>5400,2=>10800,3=>16000,4=>21400,5=>26800,6=>32000];
 }
 
 // CARGAR LOCALIDADES DE DELIVERY
