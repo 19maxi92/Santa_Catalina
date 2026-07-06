@@ -55,6 +55,21 @@ try {
     // Usar precios por defecto si falla
 }
 
+// CARGAR PRECIOS PERSONALIZADOS DESDE DB
+$precios_personalizados_db = ['premium' => [], 'elegidos' => []];
+try {
+    $rows = $pdo->query("SELECT categoria, planchas, precio FROM precios_personalizados ORDER BY categoria, planchas")->fetchAll();
+    foreach ($rows as $r) {
+        $precios_personalizados_db[$r['categoria']][(int)$r['planchas']] = (int)$r['precio'];
+    }
+} catch (PDOException $e) {
+    // Fallback a precios del menú si la tabla no existe aún
+    $precios_personalizados_db = [
+        'premium' => [1=>9000,2=>18000,3=>27000,4=>36000,5=>45000,6=>54000],
+        'elegidos' => [1=>5400,2=>10800,3=>16000,4=>21400,5=>26800,6=>32000],
+    ];
+}
+
 // CARGAR LOCALIDADES DE DELIVERY
 $localidades_delivery = [];
 try {
@@ -721,17 +736,13 @@ let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
 let categoriaPersonalizado = 'premium';
 
-// Tabla de precios por planchas y categoría (8 sándwiches = 1 plancha)
-const PRECIOS_PERSONALIZADO = {
-    'jyq24':   { 3: 16000 },
-    'jyq48':   { 6: 30000 },
-    'clasico': { 6: 27000 },
-    'especial':{ 6: 30000 },
-    'premium': { 1: 9000, 2: 18000, 3: 27000, 4: 36000, 5: 45000, 6: 54000 },
-    'elegidos':{ 1: 5400,  2: 10800, 3: 16000, 4: 21400, 5: 26800, 6: 32000 }
-};
+// Tabla de precios por planchas y categoría — cargada desde DB
+const PRECIOS_PERSONALIZADO = <?= json_encode([
+    'premium'  => $precios_personalizados_db['premium'],
+    'elegidos' => $precios_personalizados_db['elegidos'],
+]) ?>;
 
-const CAT_NOMBRES = { jyq24: 'JyQ x24', jyq48: 'JyQ x48', clasico: 'Clásico', especial: 'Especial', premium: 'Premium', elegidos: 'Elegidos' };
+const CAT_NOMBRES = { premium: 'Premium', elegidos: 'Elegidos' };
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;

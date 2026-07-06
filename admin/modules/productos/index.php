@@ -204,6 +204,10 @@ $stats = [
                     </h1>
                     <p class="text-xs text-gray-500">Administra precios y productos de forma centralizada</p>
                 </div>
+                <a href="precios_personalizados.php"
+                   class="ml-4 px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold text-sm transition-all">
+                    <i class="fas fa-sliders-h mr-1"></i>Precios Personalizados
+                </a>
             </div>
             <a href="../../logout.php" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition">
                 <i class="fas fa-sign-out-alt mr-2"></i>Salir
