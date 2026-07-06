@@ -1043,6 +1043,8 @@ function seleccionarTipoPedido(tipo) {
         if (document.getElementById('saboresComunes').children.length === 0) {
             generarBotonesSabores();
         }
+        // Aplicar restricción de la categoría actual
+        seleccionarCategoria(categoriaPersonalizado);
     }
 }
 
@@ -1176,6 +1178,8 @@ function actualizarContadores() {
 
 function seleccionarCategoria(cat) {
     categoriaPersonalizado = cat;
+
+    // Highlight botón activo
     document.querySelectorAll('.categoria-btn').forEach(btn => {
         btn.classList.remove('border-blue-500', 'bg-blue-500', 'text-white');
         btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
@@ -1185,18 +1189,31 @@ function seleccionarCategoria(cat) {
         btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
         btn.classList.add('border-blue-500', 'bg-blue-500', 'text-white');
     }
-    // JyQ pre-carga planchas de Jamón y Queso automáticamente
-    if (cat === 'jyq24') {
-        historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
-        planchasPorSabor = { 'Jamón y Queso': 3 };
-        actualizarContadores();
-    } else if (cat === 'jyq48') {
-        historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
-        planchasPorSabor = { 'Jamón y Queso': 6 };
-        actualizarContadores();
-    } else {
-        recalcularPrecioPersonalizado();
+
+    // Resetear planchas y habilitar solo los sabores correctos
+    historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
+    planchasPorSabor = {};
+
+    const secComunes  = document.getElementById('saboresComunes');
+    const secPremium  = document.getElementById('saboresPremium');
+    const tituloComun = secComunes?.previousElementSibling;
+    const tituloPrem  = secPremium?.previousElementSibling;
+
+    if (cat === 'premium') {
+        // Solo sabores premium
+        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = true);  secComunes.style.opacity  = '0.35'; }
+        if (tituloComun) tituloComun.style.opacity = '0.35';
+        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = false); secPremium.style.opacity  = '1'; }
+        if (tituloPrem)  tituloPrem.style.opacity  = '1';
+    } else if (cat === 'elegidos') {
+        // Solo sabores comunes
+        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = false); secComunes.style.opacity  = '1'; }
+        if (tituloComun) tituloComun.style.opacity = '1';
+        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = true);  secPremium.style.opacity  = '0.35'; }
+        if (tituloPrem)  tituloPrem.style.opacity  = '0.35';
     }
+
+    actualizarContadores();
 }
 
 function recalcularPrecioPersonalizado() {
