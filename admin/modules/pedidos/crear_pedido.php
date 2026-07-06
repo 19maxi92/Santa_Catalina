@@ -372,23 +372,8 @@ try {
                             </div>
                         </div>
 
-                        <!-- Forma de pago -->
-                        <div class="mb-6">
-                            <label class="block text-sm font-medium text-gray-700 mb-3">Forma de Pago *</label>
-                            <div class="grid grid-cols-2 gap-4">
-                                <label class="pago-card">
-                                    <input type="radio" name="forma_pago" value="Efectivo" class="hidden">
-                                    <div class="text-4xl mb-2">💵</div>
-                                    <div class="font-bold">Efectivo</div>
-                                    <div class="text-xs text-green-600 mt-1">10% descuento</div>
-                                </label>
-                                <label class="pago-card">
-                                    <input type="radio" name="forma_pago" value="Transferencia" class="hidden">
-                                    <div class="text-4xl mb-2">💳</div>
-                                    <div class="font-bold">Transferencia</div>
-                                </label>
-                            </div>
-                        </div>
+                        <!-- Forma de pago: siempre Transferencia, se define en entrega -->
+                        <input type="hidden" id="forma_pago_oculto" value="Transferencia">
 
                         <!-- Estado de pago (para clientes por WhatsApp) -->
                         <div class="mb-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
@@ -487,7 +472,7 @@ try {
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq24']['nombre']) ?></div>
-                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq24']['precio_efectivo']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq24']['precio_transferencia']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -505,7 +490,7 @@ try {
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['jyq48']['nombre']) ?></div>
-                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq48']['precio_efectivo']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['jyq48']['precio_transferencia']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -523,7 +508,7 @@ try {
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_clasico48']['nombre']) ?></div>
-                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_clasico48']['precio_efectivo']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_clasico48']['precio_transferencia']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -541,7 +526,7 @@ try {
                                     <input type="checkbox" class="combo-checkbox w-5 h-5 mr-4">
                                     <div class="flex-1">
                                         <div class="font-bold text-lg"><?= htmlspecialchars($preciosDB['surtido_especial48']['nombre']) ?></div>
-                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_especial48']['precio_efectivo']) ?></div>
+                                        <div class="precio-display text-blue-600 font-bold text-xl"><?= formatPrice($preciosDB['surtido_especial48']['precio_transferencia']) ?></div>
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <button type="button" onclick="cambiarCantidadCombo(this, -1)" class="cantidad-btn">-</button>
@@ -593,6 +578,33 @@ try {
                             </div>
                         </div>
 
+                        <!-- Categoría del personalizado -->
+                        <div class="mb-4">
+                            <h4 class="text-sm font-semibold text-gray-700 mb-2">Tipo de surtido</h4>
+                            <div class="flex flex-wrap gap-2" id="botonesCategoria">
+                                <button type="button" onclick="seleccionarCategoria('jyq')" id="cat-jyq"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
+                                    Jamón y Queso
+                                </button>
+                                <button type="button" onclick="seleccionarCategoria('clasico')" id="cat-clasico"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    Clásico
+                                </button>
+                                <button type="button" onclick="seleccionarCategoria('especial')" id="cat-especial"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    Especial
+                                </button>
+                                <button type="button" onclick="seleccionarCategoria('premium')" id="cat-premium"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    Premium
+                                </button>
+                                <button type="button" onclick="seleccionarCategoria('elegidos')" id="cat-elegidos"
+                                        class="categoria-btn px-4 py-2 rounded-lg font-semibold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
+                                    Elegidos
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Sabores Comunes -->
                         <div class="mb-4">
                             <h4 class="font-bold text-green-700 mb-2">🟢 SABORES COMUNES</h4>
@@ -613,16 +625,15 @@ try {
                             </button>
                         </div>
 
-                        <!-- Precio -->
+                        <!-- Precio auto-calculado -->
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                Precio Total *
-                                <span id="formaPagoIndicador" class="ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700"></span>
-                            </label>
-                            <input type="number" id="precioPersonalizado" step="500" required
-                                   class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 text-lg"
-                                   placeholder="Ej: 14500">
-                            <p class="text-xs text-gray-500 mt-1">Ingresá el precio según la forma de pago seleccionada</p>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Precio Total</label>
+                            <div id="precioPersonalizadoDisplay"
+                                 class="w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 rounded-lg text-2xl font-bold text-gray-400">
+                                $0
+                            </div>
+                            <input type="hidden" id="precioPersonalizado">
+                            <p id="precioMensaje" class="text-xs text-gray-500 mt-1">Seleccioná planchas y el precio se calculará automáticamente</p>
                         </div>
 
                         <!-- Observaciones -->
@@ -720,6 +731,18 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
+let categoriaPersonalizado = 'jyq';
+
+// Tabla de precios por planchas y categoría (8 sándwiches = 1 plancha)
+const PRECIOS_PERSONALIZADO = {
+    'jyq':     { 3: 16000, 6: 30000 },
+    'clasico': { 6: 27000 },
+    'especial':{ 6: 30000 },
+    'premium': { 1: 9000, 2: 18000, 3: 27000, 4: 36000, 5: 45000, 6: 54000 },
+    'elegidos':{ 1: 5400,  2: 10800, 3: 16000, 4: 21400, 5: 26800, 6: 32000 }
+};
+
+const CAT_NOMBRES = { jyq: 'Jamón y Queso', clasico: 'Clásico', especial: 'Especial', premium: 'Premium', elegidos: 'Elegidos' };
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -870,8 +893,6 @@ function validarPaso1() {
     const modalidad = document.querySelector('input[name="modalidad"]:checked');
     const ubicacion = document.querySelector('input[name="ubicacion"]:checked');
     const turno = document.querySelector('input[name="turno"]:checked');
-    const formaPago = document.querySelector('input[name="forma_pago"]:checked');
-
     if (!nombre || !apellido) {
         return false;
     }
@@ -903,10 +924,6 @@ function validarPaso1() {
         return false;
     }
 
-    if (!formaPago) {
-        return false;
-    }
-
     // Guardar datos del cliente
     datosCliente = {
         nombre: nombre,
@@ -917,7 +934,7 @@ function validarPaso1() {
         ubicacion: ubicacion.value,
         fecha_entrega: document.getElementById('fecha_entrega').value,
         turno: turno.value,
-        formaPago: formaPago.value,
+        formaPago: 'Transferencia',
         yaPagado: document.getElementById('yaPagado').checked,
         imprimirAuto: document.getElementById('imprimirAuto').checked,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
@@ -1141,22 +1158,68 @@ function actualizarContadores() {
 
     if (elemPlanchas) elemPlanchas.textContent = totalPlanchas;
     if (elemSandwiches) elemSandwiches.textContent = totalSandwiches;
+
+    recalcularPrecioPersonalizado();
+}
+
+function seleccionarCategoria(cat) {
+    categoriaPersonalizado = cat;
+    document.querySelectorAll('.categoria-btn').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'bg-blue-500', 'text-white');
+        btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
+    });
+    const btn = document.getElementById('cat-' + cat);
+    if (btn) {
+        btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
+        btn.classList.add('border-blue-500', 'bg-blue-500', 'text-white');
+    }
+    recalcularPrecioPersonalizado();
+}
+
+function recalcularPrecioPersonalizado() {
+    const totalPlanchas = Object.values(planchasPorSabor).reduce((a, b) => a + b, 0);
+    const tabla = PRECIOS_PERSONALIZADO[categoriaPersonalizado] || {};
+    const precio = tabla[totalPlanchas];
+
+    const display = document.getElementById('precioPersonalizadoDisplay');
+    const hidden = document.getElementById('precioPersonalizado');
+    const msg = document.getElementById('precioMensaje');
+    if (!display) return;
+
+    if (totalPlanchas === 0) {
+        display.textContent = '$0';
+        display.className = 'w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 rounded-lg text-2xl font-bold text-gray-400';
+        hidden.value = '';
+        msg.textContent = 'Seleccioná planchas y el precio se calculará automáticamente';
+    } else if (precio) {
+        display.textContent = '$' + precio.toLocaleString('es-AR');
+        display.className = 'w-full px-4 py-3 border-2 border-green-400 bg-green-50 rounded-lg text-2xl font-bold text-green-700';
+        hidden.value = precio;
+        msg.textContent = `${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''} · ${CAT_NOMBRES[categoriaPersonalizado]}`;
+    } else {
+        display.textContent = 'Sin precio para esta combinación';
+        display.className = 'w-full px-4 py-3 border-2 border-red-300 bg-red-50 rounded-lg text-lg font-bold text-red-500';
+        hidden.value = '';
+        msg.textContent = `No hay precio definido para ${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''} de ${CAT_NOMBRES[categoriaPersonalizado]}`;
+    }
 }
 
 function agregarPedidoPersonalizado() {
     const totalPlanchas = Object.values(planchasPorSabor).reduce((sum, val) => sum + val, 0);
 
     if (totalPlanchas === 0) {
+        alert('Seleccioná al menos una plancha');
         return;
     }
 
     const precio = parseFloat(document.getElementById('precioPersonalizado').value);
-
     if (!precio || precio <= 0) {
+        alert('No hay precio definido para esta combinación de planchas y categoría');
         return;
     }
 
     const totalSandwiches = totalPlanchas * 8;
+    const catNombre = CAT_NOMBRES[categoriaPersonalizado] || categoriaPersonalizado;
 
     // Crear detalle de sabores
     let detalleSabores = '\n=== SABORES PERSONALIZADOS ===';
@@ -1171,7 +1234,7 @@ function agregarPedidoPersonalizado() {
     // Agregar pedido
     pedidosAcumulados.push({
         tipo_pedido: 'personalizado',
-        producto: `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''})`,
+        producto: `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''}) - ${catNombre}`,
         cantidad: totalSandwiches,
         precio: precio,
         sabores_personalizados_json: JSON.stringify(planchasPorSabor),
@@ -1181,11 +1244,11 @@ function agregarPedidoPersonalizado() {
     // Resetear personalizado
     planchasPorSabor = {};
     historial = [];
+    categoriaPersonalizado = 'jyq';
+    seleccionarCategoria('jyq');
     actualizarContadores();
-    document.getElementById('precioPersonalizado').value = '';
     document.getElementById('observaciones_personalizado').value = '';
 
-    // Ir al resumen (sin alert, el mensaje final aparecerá al crear todos)
     irAPaso(4);
 }
 
@@ -1391,47 +1454,6 @@ function finalizarYCrearPedidos() {
         });
 }
 
-// Actualizar indicador de forma de pago en pedido personalizado
-function actualizarIndicadorFormaPago() {
-    const formaPagoSeleccionada = document.querySelector('input[name="forma_pago"]:checked');
-    const indicador = document.getElementById('formaPagoIndicador');
-
-    if (formaPagoSeleccionada && indicador) {
-        const formaPago = formaPagoSeleccionada.value;
-        indicador.textContent = `💳 Forma de pago: ${formaPago}`;
-        indicador.className = formaPago === 'Efectivo'
-            ? 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700'
-            : 'ml-2 px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700';
-    }
-}
-
-// Actualizar precios cuando cambia la forma de pago
-document.querySelectorAll('input[name="forma_pago"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-        const formaPago = this.value;
-        const items = document.querySelectorAll('.combo-item');
-
-        // Actualizar indicador de forma de pago
-        actualizarIndicadorFormaPago();
-
-        items.forEach(item => {
-            const precioDisplay = item.querySelector('.precio-display');
-            if (precioDisplay) {
-                const precioEfectivo = parseFloat(item.dataset.precioEfectivo);
-                const precioTransferencia = parseFloat(item.dataset.precioTransferencia);
-                const precioAMostrar = formaPago === 'Efectivo' ? precioEfectivo : precioTransferencia;
-
-                // Formatear precio con separador de miles
-                const precioFormateado = '$' + precioAMostrar.toLocaleString('es-AR', {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0
-                });
-
-                precioDisplay.textContent = precioFormateado;
-            }
-        });
-    });
-});
 
 console.log('🚀 Sistema Express Admin cargado');
 
