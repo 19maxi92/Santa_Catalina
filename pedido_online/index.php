@@ -344,13 +344,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pedido_confirmado = [
             'id'          => $pedido_id,
             'nombre'      => $nombre,
+            'apellido'    => $apellido,
             'turno'       => $turno,
             'producto'    => $nombre_producto,
             'precio'      => $precio,
             'modalidad'   => $modalidad,
             'forma_pago'  => $forma_pago,
             'fecha_pedido'=> $fecha_entrega,
+            'direccion'   => $direccion,
+            'observaciones'=> $obs_interna,
         ];
+
+        // Armar mensaje WhatsApp
+        $dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+        $fecha_ts  = strtotime($fecha_entrega);
+        $fecha_str = $dias[date('w', $fecha_ts)] . ' ' . date('d/m', $fecha_ts);
+
+        $wamsg  = "🥪 *NUEVO PEDIDO - Santa Catalina*\n\n";
+        $wamsg .= "*Pedido nº #$pedido_id*\n\n";
+        $wamsg .= "👤 *$nombre $apellido*\n";
+        $wamsg .= "📅 $fecha_str · Turno $turno\n";
+        $wamsg .= "🏪 $modalidad";
+        if ($modalidad === 'Delivery' && !empty($direccion)) {
+            $wamsg .= "\n📍 $direccion";
+        }
+        $wamsg .= "\n\n📋 *Pedido:*\n";
+
+        // Desglosar líneas del producto (puede ser múltiple en observaciones)
+        foreach (explode("\n", $nombre_producto) as $linea) {
+            $linea = trim($linea);
+            if ($linea !== '') $wamsg .= "• $linea\n";
+        }
+
+        // Observaciones limpias (sin el prefijo "Turno: X" que se agrega internamente)
+        $obs_limpia = preg_replace('/^Turno:[^\n]*\n?/m', '', $obs_interna);
+        $obs_limpia = trim($obs_limpia);
+        if ($obs_limpia !== '') {
+            $wamsg .= "📝 $obs_limpia\n";
+        }
+
+        $pedido_confirmado['wamsg'] = $wamsg;
 
     } catch (Exception $e) {
         $error = $e->getMessage();
@@ -581,17 +614,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php endif; ?>
                 <?php endif; ?>
 
-                <div class="grid grid-cols-2 gap-3">
-                    <button onclick="window.location.href='/pedido_online/index.php'"
-                            class="bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold transition-all">
-                        <i class="fas fa-plus mr-2"></i>Otro pedido
-                    </button>
-                    <a href="https://wa.me/541159813546?text=Hice+un+pedido+online+%23<?= $pedido_confirmado['id'] ?>+y+quiero+consultar"
-                       target="_blank"
-                       class="bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold transition-all text-center flex items-center justify-center">
-                        <i class="fab fa-whatsapp mr-2"></i>Consultar
-                    </a>
-                </div>
+                <!-- Botón principal WhatsApp -->
+                <a href="https://wa.me/541159813546?text=<?= rawurlencode($pedido_confirmado['wamsg']) ?>"
+                   target="_blank"
+                   class="block w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg transition-all text-center shadow-lg">
+                    <i class="fab fa-whatsapp mr-2 text-xl"></i>Enviar pedido por WhatsApp
+                </a>
+                <p class="text-xs text-center text-gray-500 -mt-1">Se abre WhatsApp con tu pedido listo para enviar</p>
+
+                <button onclick="window.location.href='/pedido_online/index.php'"
+                        class="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-3 rounded-xl font-semibold transition-all">
+                    <i class="fas fa-plus mr-2"></i>Hacer otro pedido
+                </button>
             </div>
         </div>
 

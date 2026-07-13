@@ -605,20 +605,6 @@ try {
                             </div>
                         </div>
 
-                        <!-- Categoría del personalizado -->
-                        <div class="mb-4">
-                            <h4 class="text-sm font-semibold text-gray-700 mb-2">Tipo de surtido</h4>
-                            <div class="flex gap-3" id="botonesCategoria">
-                                <button type="button" onclick="seleccionarCategoria('premium')" id="cat-premium"
-                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-blue-500 bg-blue-500 text-white transition-all">
-                                    🟠 Premium
-                                </button>
-                                <button type="button" onclick="seleccionarCategoria('elegidos')" id="cat-elegidos"
-                                        class="categoria-btn flex-1 py-3 rounded-lg font-bold text-sm border-2 border-gray-300 bg-white text-gray-700 transition-all">
-                                    ⭐ Elegidos
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- Sabores Comunes -->
                         <div class="mb-4">
@@ -746,15 +732,12 @@ let datosCliente = null;
 let planchasPorSabor = {};
 let historial = [];
 let clienteFijoId = <?= $clientePreCargado ? (int)$clientePreCargado['id'] : 'null' ?>;
-let categoriaPersonalizado = 'premium';
-
-// Tabla de precios por planchas y categoría — cargada desde DB
+// Tabla de precios por planchas — cargada desde DB
+// comunes → precio elegidos, premium → precio premium
 const PRECIOS_PERSONALIZADO = <?= json_encode([
     'premium'  => $precios_personalizados_db['premium'],
     'elegidos' => $precios_personalizados_db['elegidos'],
 ]) ?>;
-
-const CAT_NOMBRES = { premium: 'Premium', elegidos: 'Elegidos' };
 
 // IMPORTANTE: Precios cargados desde la base de datos (PHP)
 const precios = <?= json_encode($preciosDB) ?>;
@@ -1043,8 +1026,6 @@ function seleccionarTipoPedido(tipo) {
         if (document.getElementById('saboresComunes').children.length === 0) {
             generarBotonesSabores();
         }
-        // Aplicar restricción de la categoría actual
-        seleccionarCategoria(categoriaPersonalizado);
     }
 }
 
@@ -1176,72 +1157,54 @@ function actualizarContadores() {
     recalcularPrecioPersonalizado();
 }
 
-function seleccionarCategoria(cat) {
-    categoriaPersonalizado = cat;
-
-    // Highlight botón activo
-    document.querySelectorAll('.categoria-btn').forEach(btn => {
-        btn.classList.remove('border-blue-500', 'bg-blue-500', 'text-white');
-        btn.classList.add('border-gray-300', 'bg-white', 'text-gray-700');
-    });
-    const btn = document.getElementById('cat-' + cat);
-    if (btn) {
-        btn.classList.remove('border-gray-300', 'bg-white', 'text-gray-700');
-        btn.classList.add('border-blue-500', 'bg-blue-500', 'text-white');
-    }
-
-    // Resetear planchas y habilitar solo los sabores correctos
-    historial.push(JSON.parse(JSON.stringify(planchasPorSabor)));
-    planchasPorSabor = {};
-
-    const secComunes  = document.getElementById('saboresComunes');
-    const secPremium  = document.getElementById('saboresPremium');
-    const tituloComun = secComunes?.previousElementSibling;
-    const tituloPrem  = secPremium?.previousElementSibling;
-
-    if (cat === 'premium') {
-        // Solo sabores premium
-        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = true);  secComunes.style.opacity  = '0.35'; }
-        if (tituloComun) tituloComun.style.opacity = '0.35';
-        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = false); secPremium.style.opacity  = '1'; }
-        if (tituloPrem)  tituloPrem.style.opacity  = '1';
-    } else if (cat === 'elegidos') {
-        // Solo sabores comunes
-        if (secComunes)  { secComunes.querySelectorAll('button').forEach(b => b.disabled = false); secComunes.style.opacity  = '1'; }
-        if (tituloComun) tituloComun.style.opacity = '1';
-        if (secPremium)  { secPremium.querySelectorAll('button').forEach(b => b.disabled = true);  secPremium.style.opacity  = '0.35'; }
-        if (tituloPrem)  tituloPrem.style.opacity  = '0.35';
-    }
-
-    actualizarContadores();
-}
-
 function recalcularPrecioPersonalizado() {
-    const totalPlanchas = Object.values(planchasPorSabor).reduce((a, b) => a + b, 0);
-    const tabla = PRECIOS_PERSONALIZADO[categoriaPersonalizado] || {};
-    const precio = tabla[totalPlanchas];
+    // Separar planchas por tipo de sabor
+    let planchasPrem = 0, planchasComun = 0;
+    for (const [sabor, cant] of Object.entries(planchasPorSabor)) {
+        if (saboresPremium.includes(sabor)) planchasPrem += cant;
+        else planchasComun += cant;
+    }
 
     const display = document.getElementById('precioPersonalizadoDisplay');
-    const hidden = document.getElementById('precioPersonalizado');
-    const msg = document.getElementById('precioMensaje');
+    const hidden  = document.getElementById('precioPersonalizado');
+    const msg     = document.getElementById('precioMensaje');
     if (!display) return;
+
+    const totalPlanchas = planchasPrem + planchasComun;
 
     if (totalPlanchas === 0) {
         display.textContent = '$0';
         display.className = 'w-full px-4 py-3 border-2 border-gray-300 bg-gray-50 rounded-lg text-2xl font-bold text-gray-400';
         hidden.value = '';
-        msg.textContent = 'Seleccioná planchas y el precio se calculará automáticamente';
-    } else if (precio) {
-        display.textContent = '$' + precio.toLocaleString('es-AR');
-        display.className = 'w-full px-4 py-3 border-2 border-green-400 bg-green-50 rounded-lg text-2xl font-bold text-green-700';
-        hidden.value = precio;
-        msg.textContent = `${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''} · ${CAT_NOMBRES[categoriaPersonalizado]}`;
-    } else {
+        msg.textContent = 'Seleccioná planchas — premium y/o comunes';
+        return;
+    }
+
+    let precio = 0;
+    const partes = [];
+    let sinPrecio = false;
+
+    if (planchasPrem > 0) {
+        const p = PRECIOS_PERSONALIZADO['premium'][planchasPrem];
+        if (p) { precio += p; partes.push(`${planchasPrem}P premium $${p.toLocaleString('es-AR')}`); }
+        else { sinPrecio = true; partes.push(`${planchasPrem}P premium (sin precio)`); }
+    }
+    if (planchasComun > 0) {
+        const p = PRECIOS_PERSONALIZADO['elegidos'][planchasComun];
+        if (p) { precio += p; partes.push(`${planchasComun}P comunes $${p.toLocaleString('es-AR')}`); }
+        else { sinPrecio = true; partes.push(`${planchasComun}P comunes (sin precio)`); }
+    }
+
+    if (sinPrecio) {
         display.textContent = 'Sin precio para esta combinación';
         display.className = 'w-full px-4 py-3 border-2 border-red-300 bg-red-50 rounded-lg text-lg font-bold text-red-500';
         hidden.value = '';
-        msg.textContent = `No hay precio definido para ${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''} de ${CAT_NOMBRES[categoriaPersonalizado]}`;
+    } else {
+        display.textContent = '$' + precio.toLocaleString('es-AR');
+        display.className = 'w-full px-4 py-3 border-2 border-green-400 bg-green-50 rounded-lg text-2xl font-bold text-green-700';
+        hidden.value = precio;
     }
+    msg.textContent = partes.join(' + ');
 }
 
 function agregarPedidoPersonalizado() {
@@ -1259,8 +1222,6 @@ function agregarPedidoPersonalizado() {
     }
 
     const totalSandwiches = totalPlanchas * 8;
-    const catNombre = CAT_NOMBRES[categoriaPersonalizado] || categoriaPersonalizado;
-
     // Crear detalle de sabores
     let detalleSabores = '\n=== SABORES PERSONALIZADOS ===';
     for (let sabor in planchasPorSabor) {
@@ -1274,7 +1235,7 @@ function agregarPedidoPersonalizado() {
     // Agregar pedido
     pedidosAcumulados.push({
         tipo_pedido: 'personalizado',
-        producto: `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''}) - ${catNombre}`,
+        producto: `Personalizado x${totalSandwiches} (${totalPlanchas} plancha${totalPlanchas > 1 ? 's' : ''})`,
         cantidad: totalSandwiches,
         precio: precio,
         sabores_personalizados_json: JSON.stringify(planchasPorSabor),
@@ -1284,8 +1245,6 @@ function agregarPedidoPersonalizado() {
     // Resetear personalizado
     planchasPorSabor = {};
     historial = [];
-    categoriaPersonalizado = 'premium';
-    seleccionarCategoria('jyq');
     actualizarContadores();
     document.getElementById('observaciones_personalizado').value = '';
 
