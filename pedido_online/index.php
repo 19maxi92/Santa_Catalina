@@ -313,8 +313,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? (float)$prod['precio_efectivo']
                     : (float)$prod['precio_transferencia'];
 
+                // Sándwiches por caja: primer número que aparece en el nombre del producto (ej: "24 Jamón y Queso" -> 24)
+                preg_match('/(\d+)/', $prod['nombre'], $m_unid);
+                $unidades_por_caja = (int)($m_unid[1] ?? 1);
+
                 $precio             += $precio_unit * $combo_qty;
-                $cantidad_sandwiches += $combo_qty;
+                $cantidad_sandwiches += $combo_qty * $unidades_por_caja;
                 $partes_nombre[]     = "{$combo_qty}x {$prod['nombre']}";
                 $wa_lineas[]         = "{$combo_qty}x {$prod['nombre']}";
             }
@@ -692,12 +696,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2 flex-shrink-0">
+                                            <?php
+                                                preg_match('/(\d+)/', $prod['nombre'], $m_unid);
+                                                $unidades_prod = (int)($m_unid[1] ?? 1);
+                                            ?>
                                             <button type="button"
-                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, -1)"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, -1, <?= $unidades_prod ?>)"
                                                     class="w-9 h-9 border-2 border-gray-300 rounded-lg text-gray-500 font-black text-lg hover:border-orange-400 hover:text-orange-500 transition-all">−</button>
                                             <span id="cant-carrito-<?= $prod['id'] ?>" class="text-xl font-black text-gray-900 w-6 text-center">0</span>
                                             <button type="button"
-                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, 1)"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, 1, <?= $unidades_prod ?>)"
                                                     class="w-9 h-9 border-2 border-orange-500 rounded-lg text-orange-600 font-black text-lg hover:bg-orange-500 hover:text-white transition-all">+</button>
                                         </div>
                                     </div>
@@ -1306,14 +1314,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // CARRITO DE COMBOS CLÁSICOS
     // ============================================================
-    function cambiarCantidadCarrito(id, nombre, precioEf, precioTr, delta) {
+    function cambiarCantidadCarrito(id, nombre, precioEf, precioTr, delta, unidades) {
+        unidades = unidades || 1;
         const actual = estado.carrito[id]?.cantidad ?? 0;
         const nueva  = Math.max(0, Math.min(10, actual + delta));
 
         if (nueva === 0) {
             delete estado.carrito[id];
         } else {
-            estado.carrito[id] = { nombre, cantidad: nueva, precioEf, precioTr };
+            estado.carrito[id] = { nombre, cantidad: nueva, precioEf, precioTr, unidades };
         }
 
         // Actualizar contador en la card
@@ -1507,7 +1516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (estado.tipoPedido === 'personalizado') {
             return estado.elegidosCantidad || 0;
         }
-        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
+        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad * (c.unidades || 1), 0);
     }
 
     function actualizarDisplayResumen() {
