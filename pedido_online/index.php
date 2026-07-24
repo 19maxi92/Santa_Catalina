@@ -92,7 +92,7 @@ $sabores_disponibles = [
     ['id' => 'tomate',          'nombre' => 'Tomate',            'emoji' => '🍅', 'tipo' => 'comun'],
     ['id' => 'huevo',           'nombre' => 'Huevo',             'emoji' => '🥚', 'tipo' => 'comun'],
     ['id' => 'choclo',          'nombre' => 'Choclo',            'emoji' => '🌽', 'tipo' => 'comun'],
-    ['id' => 'aceitunas',       'nombre' => 'Aceitunas',         'emoji' => '🫒', 'tipo' => 'comun'],
+    ['id' => 'aceitunas',       'nombre' => 'Aceitunas',         'emoji' => '🟢', 'tipo' => 'comun'],
     ['id' => 'zanahoria_queso', 'nombre' => 'Zanahoria y Queso', 'emoji' => '🥕', 'tipo' => 'comun'],
     ['id' => 'zanahoria_huevo', 'nombre' => 'Zanahoria y Huevo', 'emoji' => '🥕', 'tipo' => 'comun'],
     // Premium
@@ -101,11 +101,11 @@ $sabores_disponibles = [
     ['id' => 'berenjena',   'nombre' => 'Berenjena',   'emoji' => '🍆', 'tipo' => 'premium'],
     ['id' => 'jamon_crudo', 'nombre' => 'Jamón Crudo', 'emoji' => '🥓', 'tipo' => 'premium'],
     ['id' => 'morron',      'nombre' => 'Morrón',      'emoji' => '🌶️', 'tipo' => 'premium'],
-    ['id' => 'palmito',     'nombre' => 'Palmito',     'emoji' => '🌿', 'tipo' => 'premium'],
+    ['id' => 'palmito',     'nombre' => 'Palmito',     'emoji' => '🥗', 'tipo' => 'premium'],
     ['id' => 'panceta',     'nombre' => 'Panceta',     'emoji' => '🥓', 'tipo' => 'premium'],
     ['id' => 'pollo',       'nombre' => 'Pollo',       'emoji' => '🍗', 'tipo' => 'premium'],
     ['id' => 'roquefort',   'nombre' => 'Roquefort',   'emoji' => '🧀', 'tipo' => 'premium'],
-    ['id' => 'salame',      'nombre' => 'Salame',      'emoji' => '🍕', 'tipo' => 'premium'],
+    ['id' => 'salame',      'nombre' => 'Salame',      'emoji' => '🥩', 'tipo' => 'premium'],
 ];
 
 // Procesar formulario
@@ -147,6 +147,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $forma_pago = 'Transferencia'; // siempre transferencia al crear
         if ($modalidad === 'Delivery' && empty($direccion)) {
             throw new Exception('Si elegís Delivery, ingresá la dirección de entrega');
+        }
+        if ($modalidad === 'Delivery' && strpos($direccion, 'entre ') === false) {
+            throw new Exception('Para delivery, ingresá las calles entre las que está tu domicilio');
         }
         if ($modalidad === 'Delivery' && empty($fecha_pedido)) {
             throw new Exception('Seleccioná la fecha de entrega');
@@ -321,6 +324,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $nombre_producto = implode(' + ', $partes_nombre);
+        }
+
+        // Mínimo de 3 planchas (24 sándwiches) para delivery
+        if ($modalidad === 'Delivery' && $cantidad_sandwiches < 24) {
+            throw new Exception('El mínimo para delivery es 24 sándwiches (3 planchas)');
         }
 
         if (!empty($observaciones)) {
@@ -732,16 +740,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <p class="text-xs text-orange-600 mb-3">Los pedidos elegidos se arman en planchas de 8 unidades</p>
                             <div class="grid grid-cols-3 gap-2" id="grid-elegidos">
                                 <?php
-                                $opciones_elegidos = [
-                                    8  => $precio_elegido_8,
-                                    16 => $precio_elegido_16,
-                                    24 => $precio_elegido_24,
-                                    32 => $precio_elegido_32,
-                                    40 => $precio_elegido_40,
-                                    48 => $precio_elegido_48,
-                                ];
-                                foreach ($opciones_elegidos as $cant => $prod_e):
-                                    if ($prod_e):
+                                foreach ([8, 16, 24, 32, 40, 48] as $cant):
                                     $planchas = $cant / 8;
                                 ?>
                                     <button type="button"
@@ -750,7 +749,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         <div class="text-2xl font-black text-gray-900"><?= $cant ?></div>
                                         <div class="text-xs text-gray-500"><?= $planchas ?> plancha<?= $planchas > 1 ? 's' : '' ?></div>
                                     </button>
-                                <?php endif; endforeach; ?>
+                                <?php endforeach; ?>
                             </div>
                         </div>
 
@@ -910,7 +909,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <input type="text" id="dir_entre_calles" placeholder="Entre calles (ej: Belgrano y San Martín)"
+                            <input type="text" id="dir_entre_calles" placeholder="Entre calles * (ej: Belgrano y San Martín)"
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
 
@@ -1035,14 +1034,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     function turnoDisponibleDeDisp(turno, fechaISO) {
         const disp = estado.disponibilidad?.[turno];
         if (!disp || !disp.activo || disp.disponible <= 0) return false;
-        // Validar corte de horario (aplica a todas las modalidades)
         const cfg = turnosConfig.find(t => t.turno === turno);
         if (!cfg) return false;
-        const [h, min] = cfg.hora_inicio.split(':').map(Number);
+
         const [y, mo, d] = fechaISO.split('-').map(Number);
-        const turnoUTC  = Date.UTC(y, mo - 1, d, h + 3, min);
-        const cutoffUTC = turnoUTC - cfg.minutos_antes_corte * 60000;
-        return Date.now() < cutoffUTC;
+        const [h, min] = cfg.hora_inicio.split(':').map(Number);
+        const turnoInicioUTC = Date.UTC(y, mo - 1, d, h + 3, min);
+        const cutoffUTC = turnoInicioUTC - cfg.minutos_antes_corte * 60000;
+
+        if (Date.now() < cutoffUTC) return true;
+
+        // Retiro: si el turno ya arrancó pero sigue vigente (no pasó hora_fin), se puede pedir para retirar hoy
+        if (estado.modalidad === 'Retiro' && cfg.hora_fin) {
+            const [hf, minf] = cfg.hora_fin.split(':').map(Number);
+            const turnoFinUTC = Date.UTC(y, mo - 1, d, hf + 3, minf);
+            if (Date.now() >= turnoInicioUTC && Date.now() < turnoFinUTC) return true;
+        }
+
+        return false;
     }
 
     function turnoMotivoBloqueo(turno, fechaISO) {
@@ -1133,6 +1142,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         generarFechas();
         estado.disponibilidad = null;
         cargarDisponibilidad(estado.fechaPedido);
+
+        // Deshabilitar Delivery si el pedido no llega al mínimo (3 planchas / 24 sándwiches)
+        const cardDelivery = document.querySelector('.modalidad-card[onclick*="Delivery"]');
+        if (cardDelivery) {
+            if (totalUnidadesPedido() < 24) {
+                cardDelivery.classList.add('opacity-40', 'pointer-events-none');
+                if (!cardDelivery.querySelector('.aviso-minimo')) {
+                    const aviso = document.createElement('div');
+                    aviso.className = 'aviso-minimo text-xs text-red-500 font-bold mt-1';
+                    aviso.textContent = 'Mínimo 24 sándwiches (3 planchas)';
+                    cardDelivery.appendChild(aviso);
+                }
+            } else {
+                cardDelivery.classList.remove('opacity-40', 'pointer-events-none');
+                cardDelivery.querySelector('.aviso-minimo')?.remove();
+            }
+        }
     }
 
     // ============================================================
@@ -1421,6 +1447,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function seleccionarModalidad(modalidad) {
+        if (modalidad === 'Delivery' && totalUnidadesPedido() < 24) {
+            alert('El mínimo para delivery es 24 sándwiches (3 planchas). Tu pedido actual no llega al mínimo, pero podés retirarlo en el local.');
+            return;
+        }
         estado.modalidad = modalidad;
         document.getElementById('campo_modalidad').value = modalidad;
         document.querySelectorAll('.modalidad-card').forEach(c => c.classList.remove('seleccionado'));
@@ -1470,6 +1500,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     function formatPrecio(n) {
         return '$' + Math.round(n).toLocaleString('es-AR');
+    }
+
+    function totalUnidadesPedido() {
+        if (estado.tipoPedido === 'personalizado') {
+            return estado.elegidosCantidad || 0;
+        }
+        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
     }
 
     function actualizarDisplayResumen() {
@@ -1527,6 +1564,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             return false;
         }
         if (estado.modalidad === 'Delivery') {
+            if (totalUnidadesPedido() < 24) {
+                alert('El mínimo para delivery es 24 sándwiches (3 planchas)');
+                e.preventDefault();
+                return false;
+            }
             if (!document.getElementById('campo_fecha_pedido').value) {
                 alert('Seleccioná la fecha de entrega');
                 e.preventDefault();
@@ -1536,14 +1578,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const numero      = document.getElementById('dir_numero')?.value.trim();
             const localidad   = document.getElementById('dir_localidad')?.value.trim();
             const entrecalles = document.getElementById('dir_entre_calles')?.value.trim();
-            if (!calle || !numero || !localidad) {
-                alert('Ingresá calle, número y localidad para el delivery');
+            if (!calle || !numero || !localidad || !entrecalles) {
+                alert('Ingresá calle, número, localidad y entre calles para el delivery');
                 e.preventDefault();
                 return false;
             }
 
-            let dirCompuesta = `${calle} ${numero}, ${localidad}`;
-            if (entrecalles) dirCompuesta += ` (entre ${entrecalles})`;
+            let dirCompuesta = `${calle} ${numero}, ${localidad} (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
         }
 
