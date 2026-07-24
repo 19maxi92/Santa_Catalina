@@ -258,7 +258,7 @@ $sql = "SELECT p.*, COALESCE(p.pagado, 0) as pagado, p.bebidas_json, COALESCE(p.
                END as prioridad
         FROM pedidos p
         LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id
-        WHERE 1=1";
+        WHERE (p.tomado = 1 OR p.tomado IS NULL)";
 
 $params = [];
 

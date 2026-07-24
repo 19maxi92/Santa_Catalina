@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         switch ($accion) {
             case 'tomar_pedido':
                 if ($id) {
-                    $pdo->prepare("UPDATE pedidos SET estado = 'Preparando', updated_at = NOW() WHERE id = ?")
+                    $pdo->prepare("UPDATE pedidos SET estado = 'Preparando', tomado = 1, updated_at = NOW() WHERE id = ?")
                         ->execute([$id]);
                     echo json_encode(['success' => true, 'mensaje' => 'Pedido tomado']);
                 }
@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'cambiar_estado':
                 $estado = $_POST['estado'] ?? '';
                 if ($id && $estado) {
-                    $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?")
+                    $pdo->prepare("UPDATE pedidos SET estado = ?, tomado = 1, updated_at = NOW() WHERE id = ?")
                         ->execute([$estado, $id]);
                     $_SESSION['mensaje'] = "✅ Estado actualizado";
                 }

@@ -38,9 +38,10 @@ try {
         SELECT id, nombre, apellido, producto, telefono, modalidad, 
                precio, forma_pago, observaciones, created_at,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_espera
-        FROM pedidos 
-        WHERE ubicacion = 'Local 1' 
+        FROM pedidos
+        WHERE ubicacion = 'Local 1'
           AND estado IN ('Pendiente', 'Preparando')
+          AND (tomado = 1 OR tomado IS NULL)
           AND DATE(created_at) = CURDATE()
           AND created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
         ORDER BY created_at ASC

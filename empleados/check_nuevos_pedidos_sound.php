@@ -20,7 +20,7 @@ $ultimo_id_visto = isset($_SESSION['ultimo_pedido_visto_local1']) ? (int)$_SESSI
 
 // Si es la primera vez, inicializar con el maximo actual para no notificar pedidos viejos
 if ($ultimo_id_visto === 0) {
-    $max_actual = $pdo->query("SELECT MAX(id) FROM pedidos WHERE ubicacion = 'Local 1'")->fetchColumn();
+    $max_actual = $pdo->query("SELECT MAX(id) FROM pedidos WHERE ubicacion = 'Local 1' AND (tomado = 1 OR tomado IS NULL)")->fetchColumn();
     $_SESSION['ultimo_pedido_visto_local1'] = $max_actual ?: 0;
     echo json_encode([
         'success' => true,
@@ -36,6 +36,7 @@ $stmt = $pdo->prepare("
     SELECT MAX(id) as max_id, COUNT(*) as nuevos
     FROM pedidos
     WHERE ubicacion = 'Local 1'
+    AND (tomado = 1 OR tomado IS NULL)
     AND id > ?
 ");
 $stmt->execute([$ultimo_id_visto]);

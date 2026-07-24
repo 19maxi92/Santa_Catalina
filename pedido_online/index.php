@@ -344,13 +344,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 producto, cantidad, precio,
                 modalidad, forma_pago, ubicacion,
                 estado, observaciones, fecha_entrega, turno_entrega,
-                created_at, fecha_display
+                created_at, fecha_display, tomado
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, 'Local 1',
                 'Pendiente', ?, ?, ?,
-                NOW(), ?
+                NOW(), ?, 0
             )
         ");
 

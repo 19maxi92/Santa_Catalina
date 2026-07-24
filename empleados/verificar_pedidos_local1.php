@@ -30,9 +30,10 @@ try {
     $stmt = $pdo->prepare("
         SELECT id, nombre, apellido, producto, created_at,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_desde_creacion
-        FROM pedidos 
-        WHERE ubicacion = 'Local 1' 
+        FROM pedidos
+        WHERE ubicacion = 'Local 1'
           AND estado = 'Pendiente'
+          AND (tomado = 1 OR tomado IS NULL)
           AND created_at >= DATE_SUB(NOW(), INTERVAL 3 MINUTE)
         ORDER BY created_at DESC
         LIMIT 5

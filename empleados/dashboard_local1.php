@@ -88,6 +88,7 @@ try {
                END as prioridad
         FROM pedidos p
         WHERE p.ubicacion = 'Local 1'
+          AND (p.tomado = 1 OR p.tomado IS NULL)
           AND (
               (p.fecha_entrega IS NULL AND DATE(p.created_at) = CURDATE())
               OR (p.fecha_entrega IS NOT NULL AND DATE(p.fecha_entrega) = CURDATE())
@@ -114,8 +115,9 @@ try {
             SUM(CASE WHEN estado = 'Entregado' THEN 1 ELSE 0 END) as entregados,
             COALESCE(SUM(CASE WHEN estado = 'Entregado' THEN precio ELSE 0 END), 0) as total_ventas,
             COALESCE(AVG(CASE WHEN estado = 'Entregado' THEN TIMESTAMPDIFF(MINUTE, created_at, updated_at) END), 0) as tiempo_promedio
-        FROM pedidos 
-        WHERE ubicacion = 'Local 1' 
+        FROM pedidos
+        WHERE ubicacion = 'Local 1'
+          AND (tomado = 1 OR tomado IS NULL)
           AND DATE(created_at) = CURDATE()
     ");
     $stats_stmt->execute();
