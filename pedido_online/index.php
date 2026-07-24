@@ -180,19 +180,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('El turno seleccionado no está disponible');
         }
 
-        // Config por día de semana
-        $stmtDia = $pdo->prepare("SELECT max_pedidos, activo FROM config_pedidos_online_dias WHERE turno = ? AND dia_semana = ?");
+        // Config por día de semana (cupo independiente para Retiro vs Delivery)
+        try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_retiro INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+        try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_delivery INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+
+        $colMax = $modalidad === 'Delivery' ? 'max_pedidos_delivery' : 'max_pedidos_retiro';
+        $stmtDia = $pdo->prepare("SELECT max_pedidos, max_pedidos_retiro, max_pedidos_delivery, activo FROM config_pedidos_online_dias WHERE turno = ? AND dia_semana = ?");
         $stmtDia->execute([$turno, $dia_semana]);
         $dayConfig = $stmtDia->fetch();
-        $maxPedidos = $dayConfig ? (int)$dayConfig['max_pedidos'] : (int)$config_turno['max_pedidos'];
+        $maxPedidos = $dayConfig ? (int)$dayConfig[$colMax] : (int)$config_turno['max_pedidos'];
         $turnoActivo = $dayConfig ? (bool)$dayConfig['activo'] : true;
         if (!$turnoActivo) {
             throw new Exception('El turno no está disponible ese día');
         }
 
-        // Contar ocupados para esa fecha
-        $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE observaciones LIKE ? AND DATE(fecha_entrega) = ? AND estado != 'Cancelado'");
-        $cntStmt->execute(['%PEDIDO ONLINE%Turno: ' . $turno . '%', $fecha_entrega]);
+        // Contar ocupados para esa fecha, turno y modalidad (mismo criterio que disponibilidad.php)
+        $cntStmt = $pdo->prepare("
+            SELECT COUNT(*) FROM pedidos
+            WHERE DATE(fecha_entrega) = ?
+              AND estado != 'Cancelado'
+              AND modalidad = ?
+              AND (
+                turno_entrega = ?
+                OR (turno_entrega IS NULL AND observaciones LIKE ?)
+              )
+        ");
+        $cntStmt->execute([$fecha_entrega, $modalidad, $turno, '%PEDIDO ONLINE%Turno: ' . $turno . '%']);
         $ocupados = (int)$cntStmt->fetchColumn();
         if ($ocupados >= $maxPedidos) {
             throw new Exception('¡Lo sentimos! No hay cupos disponibles para ese turno y fecha. Elegí otro.');
@@ -1027,16 +1040,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const grid = document.getElementById('grid-turnos');
         grid.innerHTML = `<div class="col-span-3 text-center text-gray-400 py-4">
             <i class="fas fa-spinner fa-spin mr-2"></i>Verificando disponibilidad...</div>`;
+
+        const idPeticion = ++estado._dispReqId;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         try {
-            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fechaISO}`);
+            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fechaISO}&modalidad=${estado.modalidad}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (!res.ok) throw new Error('Error');
             const data = await res.json();
+            if (idPeticion !== estado._dispReqId) return; // llegó una respuesta vieja, ignorar
             estado.disponibilidad = data;
             renderTurnos(fechaISO);
         } catch (e) {
+            clearTimeout(timeoutId);
+            if (idPeticion !== estado._dispReqId) return;
             grid.innerHTML = `<div class="col-span-3 bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-600">
                 <p class="font-bold">No se pudo verificar disponibilidad</p>
-                <p class="text-sm">Intentá de nuevo o consultanos por WhatsApp</p></div>`;
+                <p class="text-sm mb-2">Intentá de nuevo o consultanos por WhatsApp</p>
+                <button type="button" onclick="cargarDisponibilidad('${fechaISO}')"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    <i class="fas fa-redo mr-1"></i>Reintentar
+                </button></div>`;
         }
     }
 
@@ -1186,6 +1212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fechaPedido: '',
         pasoActual: 1,
         disponibilidad: null,
+        _dispReqId: 0,
     };
 
     // ============================================================

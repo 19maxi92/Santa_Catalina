@@ -378,7 +378,7 @@ $stmt_stats->execute([$fecha]);
 
     <script>
     function tomarPedido(pedidoId, telefono, mensajeEncoded) {
-        if (!confirm('¿Tomar el pedido #' + pedidoId + '?\n\nSe cambiará a "Preparando" y se abrirá WhatsApp para notificar al cliente.')) {
+        if (!confirm('¿Tomar el pedido #' + pedidoId + '?\n\nPasará a la lista de pedidos del local.')) {
             return;
         }
 
@@ -390,20 +390,10 @@ $stmt_stats->execute([$fecha]);
         fetch(window.location.href, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    // Abrir WhatsApp con el mensaje pre-llenado
-                    window.open('https://wa.me/' + telefono + '?text=' + mensajeEncoded, '_blank');
-                    // Recargar para ver el estado actualizado
-                    setTimeout(() => location.reload(), 800);
-                } else {
-                    alert('Error al actualizar el estado');
-                }
-            })
-            .catch(() => {
-                // Si falla AJAX, igual abrir WhatsApp y recargar
-                window.open('https://wa.me/' + telefono + '?text=' + mensajeEncoded, '_blank');
+                if (!data.success) alert('Error al actualizar el estado');
                 location.reload();
-            });
+            })
+            .catch(() => location.reload());
     }
 
     // Auto-refresh cada 60 segundos si hay pedidos pendientes
