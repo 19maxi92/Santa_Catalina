@@ -51,7 +51,10 @@ foreach ($meses as $eng => $esp) {
 }
 
 $precio_formatted = '$' . number_format($pedido['precio'], 0, ',', '.');
-$es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
+// Detecta tanto el formato admin ("Personalizado x48 (...)") como el online ("48 Surtidos Elegidos" + Sabores: en observaciones)
+$es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false
+    || strpos($pedido['producto'], 'Surtidos Elegidos') !== false
+    || strpos($pedido['observaciones'] ?? '', 'Sabores:') !== false;
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -320,8 +323,13 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 
                 <!-- TOTAL SÁNDWICHES -->
                 <?php
-                preg_match('/x(\d+)/', $pedido['producto'], $match_total);
-                $total_sandwiches = $match_total[1] ?? '?';
+                if (preg_match('/x(\d+)/i', $pedido['producto'], $match_total)) {
+                    $total_sandwiches = $match_total[1];
+                } elseif (preg_match('/^(\d+)/', $pedido['producto'], $match_total)) {
+                    $total_sandwiches = $match_total[1];
+                } else {
+                    $total_sandwiches = '?';
+                }
                 ?>
                 <div class="total-sandwiches">
                     TOTAL: <?= $total_sandwiches ?> sándwiches
