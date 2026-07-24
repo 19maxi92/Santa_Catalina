@@ -180,19 +180,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('El turno seleccionado no está disponible');
         }
 
-        // Config por día de semana
-        $stmtDia = $pdo->prepare("SELECT max_pedidos, activo FROM config_pedidos_online_dias WHERE turno = ? AND dia_semana = ?");
+        // Config por día de semana (cupo independiente para Retiro vs Delivery)
+        try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_retiro INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+        try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_delivery INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+
+        $colMax = $modalidad === 'Delivery' ? 'max_pedidos_delivery' : 'max_pedidos_retiro';
+        $stmtDia = $pdo->prepare("SELECT max_pedidos, max_pedidos_retiro, max_pedidos_delivery, activo FROM config_pedidos_online_dias WHERE turno = ? AND dia_semana = ?");
         $stmtDia->execute([$turno, $dia_semana]);
         $dayConfig = $stmtDia->fetch();
-        $maxPedidos = $dayConfig ? (int)$dayConfig['max_pedidos'] : (int)$config_turno['max_pedidos'];
+        $maxPedidos = $dayConfig ? (int)$dayConfig[$colMax] : (int)$config_turno['max_pedidos'];
         $turnoActivo = $dayConfig ? (bool)$dayConfig['activo'] : true;
         if (!$turnoActivo) {
             throw new Exception('El turno no está disponible ese día');
         }
 
-        // Contar ocupados para esa fecha
-        $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE observaciones LIKE ? AND DATE(fecha_entrega) = ? AND estado != 'Cancelado'");
-        $cntStmt->execute(['%PEDIDO ONLINE%Turno: ' . $turno . '%', $fecha_entrega]);
+        // Contar ocupados para esa fecha, turno y modalidad (mismo criterio que disponibilidad.php)
+        $cntStmt = $pdo->prepare("
+            SELECT COUNT(*) FROM pedidos
+            WHERE DATE(fecha_entrega) = ?
+              AND estado != 'Cancelado'
+              AND modalidad = ?
+              AND (
+                turno_entrega = ?
+                OR (turno_entrega IS NULL AND observaciones LIKE ?)
+              )
+        ");
+        $cntStmt->execute([$fecha_entrega, $modalidad, $turno, '%PEDIDO ONLINE%Turno: ' . $turno . '%']);
         $ocupados = (int)$cntStmt->fetchColumn();
         if ($ocupados >= $maxPedidos) {
             throw new Exception('¡Lo sentimos! No hay cupos disponibles para ese turno y fecha. Elegí otro.');
@@ -313,8 +326,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ? (float)$prod['precio_efectivo']
                     : (float)$prod['precio_transferencia'];
 
+                // Sándwiches por caja: primer número que aparece en el nombre del producto (ej: "24 Jamón y Queso" -> 24)
+                preg_match('/(\d+)/', $prod['nombre'], $m_unid);
+                $unidades_por_caja = (int)($m_unid[1] ?? 1);
+
                 $precio             += $precio_unit * $combo_qty;
-                $cantidad_sandwiches += $combo_qty;
+                $cantidad_sandwiches += $combo_qty * $unidades_por_caja;
                 $partes_nombre[]     = "{$combo_qty}x {$prod['nombre']}";
                 $wa_lineas[]         = "{$combo_qty}x {$prod['nombre']}";
             }
@@ -692,12 +709,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2 flex-shrink-0">
+                                            <?php
+                                                preg_match('/(\d+)/', $prod['nombre'], $m_unid);
+                                                $unidades_prod = (int)($m_unid[1] ?? 1);
+                                            ?>
                                             <button type="button"
-                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, -1)"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, -1, <?= $unidades_prod ?>)"
                                                     class="w-9 h-9 border-2 border-gray-300 rounded-lg text-gray-500 font-black text-lg hover:border-orange-400 hover:text-orange-500 transition-all">−</button>
                                             <span id="cant-carrito-<?= $prod['id'] ?>" class="text-xl font-black text-gray-900 w-6 text-center">0</span>
                                             <button type="button"
-                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, 1)"
+                                                    onclick="cambiarCantidadCarrito(<?= $prod['id'] ?>, '<?= htmlspecialchars(addslashes($prod['nombre'])) ?>', <?= $prod['precio_efectivo'] ?>, <?= $prod['precio_transferencia'] ?>, 1, <?= $unidades_prod ?>)"
                                                     class="w-9 h-9 border-2 border-orange-500 rounded-lg text-orange-600 font-black text-lg hover:bg-orange-500 hover:text-white transition-all">+</button>
                                         </div>
                                     </div>
@@ -1019,16 +1040,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         const grid = document.getElementById('grid-turnos');
         grid.innerHTML = `<div class="col-span-3 text-center text-gray-400 py-4">
             <i class="fas fa-spinner fa-spin mr-2"></i>Verificando disponibilidad...</div>`;
+
+        const idPeticion = ++estado._dispReqId;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         try {
-            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fechaISO}`);
+            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fechaISO}&modalidad=${estado.modalidad}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (!res.ok) throw new Error('Error');
             const data = await res.json();
+            if (idPeticion !== estado._dispReqId) return; // llegó una respuesta vieja, ignorar
             estado.disponibilidad = data;
             renderTurnos(fechaISO);
         } catch (e) {
+            clearTimeout(timeoutId);
+            if (idPeticion !== estado._dispReqId) return;
             grid.innerHTML = `<div class="col-span-3 bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-600">
                 <p class="font-bold">No se pudo verificar disponibilidad</p>
-                <p class="text-sm">Intentá de nuevo o consultanos por WhatsApp</p></div>`;
+                <p class="text-sm mb-2">Intentá de nuevo o consultanos por WhatsApp</p>
+                <button type="button" onclick="cargarDisponibilidad('${fechaISO}')"
+                        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    <i class="fas fa-redo mr-1"></i>Reintentar
+                </button></div>`;
         }
     }
 
@@ -1178,6 +1212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fechaPedido: '',
         pasoActual: 1,
         disponibilidad: null,
+        _dispReqId: 0,
     };
 
     // ============================================================
@@ -1306,14 +1341,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // CARRITO DE COMBOS CLÁSICOS
     // ============================================================
-    function cambiarCantidadCarrito(id, nombre, precioEf, precioTr, delta) {
+    function cambiarCantidadCarrito(id, nombre, precioEf, precioTr, delta, unidades) {
+        unidades = unidades || 1;
         const actual = estado.carrito[id]?.cantidad ?? 0;
         const nueva  = Math.max(0, Math.min(10, actual + delta));
 
         if (nueva === 0) {
             delete estado.carrito[id];
         } else {
-            estado.carrito[id] = { nombre, cantidad: nueva, precioEf, precioTr };
+            estado.carrito[id] = { nombre, cantidad: nueva, precioEf, precioTr, unidades };
         }
 
         // Actualizar contador en la card
@@ -1507,7 +1543,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (estado.tipoPedido === 'personalizado') {
             return estado.elegidosCantidad || 0;
         }
-        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
+        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad * (c.unidades || 1), 0);
     }
 
     function actualizarDisplayResumen() {

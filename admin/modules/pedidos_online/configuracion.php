@@ -22,17 +22,22 @@ try {
             turno VARCHAR(20) NOT NULL,
             dia_semana TINYINT(1) NOT NULL,
             max_pedidos INT NOT NULL DEFAULT 30,
+            max_pedidos_retiro INT NOT NULL DEFAULT 30,
+            max_pedidos_delivery INT NOT NULL DEFAULT 30,
             activo TINYINT(1) NOT NULL DEFAULT 1,
             UNIQUE KEY uk_turno_dia (turno, dia_semana)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_retiro INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+    try { $pdo->exec("ALTER TABLE config_pedidos_online_dias ADD COLUMN max_pedidos_delivery INT NOT NULL DEFAULT 30"); } catch (PDOException $e) {}
+
     $count = (int)$pdo->query("SELECT COUNT(*) FROM config_pedidos_online_dias")->fetchColumn();
     if ($count === 0) {
         $base = $pdo->query("SELECT turno, max_pedidos FROM config_pedidos_online")->fetchAll();
-        $ins = $pdo->prepare("INSERT IGNORE INTO config_pedidos_online_dias (turno, dia_semana, max_pedidos, activo) VALUES (?,?,?,1)");
+        $ins = $pdo->prepare("INSERT IGNORE INTO config_pedidos_online_dias (turno, dia_semana, max_pedidos, max_pedidos_retiro, max_pedidos_delivery, activo) VALUES (?,?,?,?,?,1)");
         foreach ($base as $b) {
             for ($d = 0; $d <= 6; $d++) {
-                $ins->execute([$b['turno'], $d, $b['max_pedidos']]);
+                $ins->execute([$b['turno'], $d, $b['max_pedidos'], $b['max_pedidos'], $b['max_pedidos']]);
             }
         }
     }
@@ -86,6 +91,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
         $mensaje_exito = "Cupos del día actualizados";
     }
 
+    // Guardar TODOS los cupos por día de una vez (un solo botón) — cupo independiente Retiro / Delivery
+    if ($_POST['accion'] === 'actualizar_dias_bulk') {
+        $stmtUp = $pdo->prepare("
+            INSERT INTO config_pedidos_online_dias (turno, dia_semana, max_pedidos, max_pedidos_retiro, max_pedidos_delivery, activo)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE max_pedidos_retiro = VALUES(max_pedidos_retiro), max_pedidos_delivery = VALUES(max_pedidos_delivery), max_pedidos = VALUES(max_pedidos_retiro), activo = VALUES(activo)
+        ");
+        foreach (['Mañana', 'Siesta', 'Tarde'] as $turno) {
+            for ($dia = 0; $dia <= 6; $dia++) {
+                $maxRetiro   = max(0, (int)($_POST['max_pedidos_retiro'][$turno][$dia] ?? 0));
+                $maxDelivery = max(0, (int)($_POST['max_pedidos_delivery'][$turno][$dia] ?? 0));
+                $activo      = isset($_POST['activo'][$turno][$dia]) ? 1 : 0;
+                $stmtUp->execute([$turno, $dia, $maxRetiro, $maxRetiro, $maxDelivery, $activo]);
+            }
+        }
+        $mensaje_exito = "Cupos de la semana actualizados";
+    }
+
+    // Guardar TODOS los horarios/corte de una vez (un solo botón)
+    if ($_POST['accion'] === 'actualizar_turnos_bulk') {
+        $stmtUp = $pdo->prepare("UPDATE config_pedidos_online SET hora_inicio = ?, hora_fin = ?, minutos_antes_corte = ? WHERE turno = ?");
+        foreach (['Mañana', 'Siesta', 'Tarde'] as $turno) {
+            $hora_inicio   = $_POST['hora_inicio'][$turno] ?? '';
+            $hora_fin      = $_POST['hora_fin'][$turno] ?? '';
+            $minutos_corte = max(0, (int)($_POST['minutos_antes_corte'][$turno] ?? 30));
+            $stmtUp->execute([$hora_inicio, $hora_fin, $minutos_corte, $turno]);
+        }
+        $mensaje_exito = "Horarios de turnos actualizados";
+    }
+
     // Guardar precios de planchas
     if ($_POST['accion'] === 'actualizar_precios') {
         foreach (['comun', 'premium'] as $tipo) {
@@ -116,12 +151,20 @@ foreach ($pdo->query("SELECT * FROM config_precios_elegidos")->fetchAll() as $r)
     $precios_elegidos[$r['tipo']] = $r;
 }
 
-// Ocupación de hoy por turno
+// Ocupación de hoy por turno, separado Retiro / Delivery
 $ocupacion_hoy = [];
 foreach (['Mañana', 'Siesta', 'Tarde'] as $t) {
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE observaciones LIKE ? AND DATE(fecha_entrega) = CURDATE() AND estado != 'Cancelado'");
-    $stmt->execute(['%PEDIDO ONLINE%Turno: ' . $t . '%']);
-    $ocupacion_hoy[$t] = (int)$stmt->fetchColumn();
+    foreach (['Retiro', 'Delivery'] as $mod) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM pedidos
+            WHERE DATE(fecha_entrega) = CURDATE()
+              AND estado != 'Cancelado'
+              AND modalidad = ?
+              AND (turno_entrega = ? OR (turno_entrega IS NULL AND observaciones LIKE ?))
+        ");
+        $stmt->execute([$mod, $t, '%PEDIDO ONLINE%Turno: ' . $t . '%']);
+        $ocupacion_hoy[$t][$mod] = (int)$stmt->fetchColumn();
+    }
 }
 
 $dias_semana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -166,109 +209,128 @@ $dia_hoy     = (int)date('w'); // 0=Dom
     <div class="grid grid-cols-3 gap-4 mb-8">
         <?php foreach (['Mañana', 'Siesta', 'Tarde'] as $t): ?>
             <?php
-            $diaConfig = $config_dias[$t][$dia_hoy] ?? null;
-            $maxHoy    = $diaConfig ? $diaConfig['max_pedidos'] : '—';
-            $ocupHoy   = $ocupacion_hoy[$t];
+            $diaConfig   = $config_dias[$t][$dia_hoy] ?? null;
+            $maxRetiro   = $diaConfig ? ($diaConfig['max_pedidos_retiro']   ?? $diaConfig['max_pedidos']) : '—';
+            $maxDelivery = $diaConfig ? ($diaConfig['max_pedidos_delivery'] ?? $diaConfig['max_pedidos']) : '—';
+            $ocupRetiro   = $ocupacion_hoy[$t]['Retiro']   ?? 0;
+            $ocupDelivery = $ocupacion_hoy[$t]['Delivery'] ?? 0;
             ?>
             <div class="bg-white rounded-xl shadow p-4 text-center">
-                <div class="text-sm font-bold text-gray-500 uppercase mb-1"><?= $t ?> — HOY</div>
-                <div class="text-3xl font-black text-gray-900"><?= $ocupHoy ?><span class="text-base text-gray-400 font-normal">/<?= $maxHoy ?></span></div>
-                <div class="text-xs text-gray-400 mt-1">pedidos ocupados</div>
+                <div class="text-sm font-bold text-gray-500 uppercase mb-2"><?= $t ?> — HOY</div>
+                <div class="flex justify-around">
+                    <div>
+                        <div class="text-xl font-black text-gray-900">🏪 <?= $ocupRetiro ?><span class="text-sm text-gray-400 font-normal">/<?= $maxRetiro ?></span></div>
+                        <div class="text-[10px] text-gray-400">Retiro</div>
+                    </div>
+                    <div>
+                        <div class="text-xl font-black text-gray-900">🛵 <?= $ocupDelivery ?><span class="text-sm text-gray-400 font-normal">/<?= $maxDelivery ?></span></div>
+                        <div class="text-[10px] text-gray-400">Delivery</div>
+                    </div>
+                </div>
             </div>
         <?php endforeach; ?>
     </div>
 
     <!-- Grid cupos por día de semana -->
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-        <div class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-4">
-            <h2 class="text-lg font-bold"><i class="fas fa-calendar-week mr-2"></i>Cupos por día de semana</h2>
-            <p class="text-sm opacity-80">Configurá el máximo de pedidos por turno para cada día</p>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead>
-                    <tr class="bg-gray-50 border-b">
-                        <th class="px-4 py-3 text-left font-bold text-gray-700">Turno</th>
-                        <?php foreach ($dias_semana as $idx => $dia): ?>
-                            <th class="px-3 py-3 text-center font-bold <?= $idx === $dia_hoy ? 'text-orange-600 bg-orange-50' : 'text-gray-600' ?>">
-                                <?= $dia ?>
-                                <?php if ($idx === $dia_hoy): ?><div class="text-xs font-normal text-orange-500">hoy</div><?php endif; ?>
-                            </th>
-                        <?php endforeach; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach (['Mañana', 'Siesta', 'Tarde'] as $turno): ?>
-                        <?php $g = $config_global[$turno] ?? []; ?>
-                        <tr class="border-b hover:bg-gray-50">
-                            <td class="px-4 py-3">
-                                <div class="font-bold text-gray-900"><?= $turno ?></div>
-                                <div class="text-xs text-gray-400"><?= substr($g['hora_inicio']??'', 0, 5) ?> – <?= substr($g['hora_fin']??'', 0, 5) ?></div>
-                            </td>
+    <form method="POST">
+        <input type="hidden" name="accion" value="actualizar_dias_bulk">
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
+            <div class="bg-gradient-to-r from-orange-500 to-red-500 text-white px-6 py-4">
+                <h2 class="text-lg font-bold"><i class="fas fa-calendar-week mr-2"></i>Cupos por día de semana</h2>
+                <p class="text-sm opacity-80">Configurá el máximo de pedidos por turno para cada día</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 border-b">
+                            <th class="px-4 py-3 text-left font-bold text-gray-700">Turno</th>
                             <?php foreach ($dias_semana as $idx => $dia): ?>
-                                <?php
-                                $dc      = $config_dias[$turno][$idx] ?? ['max_pedidos' => 30, 'activo' => 1];
-                                $max     = $dc['max_pedidos'];
-                                $activo  = $dc['activo'];
-                                $esHoy   = $idx === $dia_hoy;
-                                ?>
-                                <td class="px-2 py-2 text-center <?= $esHoy ? 'bg-orange-50' : '' ?>">
-                                    <form method="POST" class="inline-block">
-                                        <input type="hidden" name="accion" value="actualizar_dia">
-                                        <input type="hidden" name="turno" value="<?= $turno ?>">
-                                        <input type="hidden" name="dia_semana" value="<?= $idx ?>">
-                                        <div class="flex flex-col items-center gap-1">
-                                            <input type="number" name="max_pedidos" value="<?= $max ?>" min="0" max="200"
-                                                   class="w-16 text-center border rounded-lg px-1 py-1 text-sm font-semibold <?= $activo ? 'border-gray-300' : 'border-gray-200 bg-gray-100 text-gray-400' ?>"
-                                                   <?= !$activo ? 'disabled' : '' ?>>
-                                            <label class="flex items-center gap-1 text-xs cursor-pointer">
-                                                <input type="checkbox" name="activo" value="1" <?= $activo ? 'checked' : '' ?>
-                                                       onchange="this.closest('form').querySelector('input[name=max_pedidos]').disabled=!this.checked;
-                                                                 this.closest('form').querySelector('input[name=max_pedidos]').className=this.checked?'w-16 text-center border border-gray-300 rounded-lg px-1 py-1 text-sm font-semibold':'w-16 text-center border border-gray-200 bg-gray-100 text-gray-400 rounded-lg px-1 py-1 text-sm'">
-                                                <span class="<?= $activo ? 'text-green-600' : 'text-gray-400' ?>"><?= $activo ? 'ON' : 'OFF' ?></span>
-                                            </label>
-                                            <button type="submit" class="text-xs bg-orange-500 hover:bg-orange-600 text-white px-2 py-0.5 rounded font-semibold">
-                                                OK
-                                            </button>
-                                        </div>
-                                    </form>
-                                </td>
+                                <th class="px-3 py-3 text-center font-bold <?= $idx === $dia_hoy ? 'text-orange-600 bg-orange-50' : 'text-gray-600' ?>">
+                                    <?= $dia ?>
+                                    <?php if ($idx === $dia_hoy): ?><div class="text-xs font-normal text-orange-500">hoy</div><?php endif; ?>
+                                </th>
                             <?php endforeach; ?>
                         </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        <?php foreach (['Mañana', 'Siesta', 'Tarde'] as $turno): ?>
+                            <?php $g = $config_global[$turno] ?? []; ?>
+                            <tr class="border-b hover:bg-gray-50">
+                                <td class="px-4 py-3">
+                                    <div class="font-bold text-gray-900"><?= $turno ?></div>
+                                    <div class="text-xs text-gray-400"><?= substr($g['hora_inicio']??'', 0, 5) ?> – <?= substr($g['hora_fin']??'', 0, 5) ?></div>
+                                </td>
+                                <?php foreach ($dias_semana as $idx => $dia): ?>
+                                    <?php
+                                    $dc          = $config_dias[$turno][$idx] ?? ['max_pedidos_retiro' => 30, 'max_pedidos_delivery' => 30, 'activo' => 1];
+                                    $maxRetiro   = $dc['max_pedidos_retiro']   ?? ($dc['max_pedidos'] ?? 30);
+                                    $maxDelivery = $dc['max_pedidos_delivery'] ?? ($dc['max_pedidos'] ?? 30);
+                                    $activo      = $dc['activo'];
+                                    $esHoy       = $idx === $dia_hoy;
+                                    $fieldIdR    = "cupoR_{$turno}_{$idx}";
+                                    $fieldIdD    = "cupoD_{$turno}_{$idx}";
+                                    $inputClass  = $activo ? 'border-gray-300' : 'border-gray-200 bg-gray-100 text-gray-400';
+                                    ?>
+                                    <td class="px-2 py-2 text-center <?= $esHoy ? 'bg-orange-50' : '' ?>">
+                                        <div class="flex flex-col items-center gap-1">
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-[10px] text-gray-400 w-4" title="Retiro">🏪</span>
+                                                <input type="number" id="<?= $fieldIdR ?>" name="max_pedidos_retiro[<?= $turno ?>][<?= $idx ?>]" value="<?= $maxRetiro ?>" min="0" max="200"
+                                                       class="w-14 text-center border rounded-lg px-1 py-1 text-xs font-semibold <?= $inputClass ?>">
+                                            </div>
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-[10px] text-gray-400 w-4" title="Delivery">🛵</span>
+                                                <input type="number" id="<?= $fieldIdD ?>" name="max_pedidos_delivery[<?= $turno ?>][<?= $idx ?>]" value="<?= $maxDelivery ?>" min="0" max="200"
+                                                       class="w-14 text-center border rounded-lg px-1 py-1 text-xs font-semibold <?= $inputClass ?>">
+                                            </div>
+                                            <label class="flex items-center gap-1 text-xs cursor-pointer mt-1">
+                                                <input type="checkbox" name="activo[<?= $turno ?>][<?= $idx ?>]" value="1" <?= $activo ? 'checked' : '' ?>
+                                                       onchange="const cls=this.checked?'w-14 text-center border border-gray-300 rounded-lg px-1 py-1 text-xs font-semibold':'w-14 text-center border border-gray-200 bg-gray-100 text-gray-400 rounded-lg px-1 py-1 text-xs font-semibold'; document.getElementById('<?= $fieldIdR ?>').className=cls; document.getElementById('<?= $fieldIdD ?>').className=cls; this.nextElementSibling.className=this.checked?'text-green-600':'text-gray-400'; this.nextElementSibling.textContent=this.checked?'ON':'OFF';">
+                                                <span class="<?= $activo ? 'text-green-600' : 'text-gray-400' ?>"><?= $activo ? 'ON' : 'OFF' ?></span>
+                                            </label>
+                                        </div>
+                                    </td>
+                                <?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4 bg-gray-50 border-t">
+                <button type="submit" class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-bold text-lg shadow">
+                    <i class="fas fa-save mr-2"></i> Guardar Cupos por Día
+                </button>
+            </div>
         </div>
-    </div>
+    </form>
 
     <!-- Config global de turnos (corte de horario) -->
-    <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
-        <div class="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-6 py-4">
-            <h2 class="text-lg font-bold"><i class="fas fa-stopwatch mr-2"></i>Corte de horario por turno</h2>
-            <p class="text-sm opacity-80">Minutos antes del inicio del turno en que se cortan los pedidos de Delivery</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
-            <?php foreach (['Mañana', 'Siesta', 'Tarde'] as $turno): ?>
-                <?php $g = $config_global[$turno] ?? []; ?>
-                <form method="POST">
-                    <input type="hidden" name="accion" value="actualizar_turno_global">
-                    <input type="hidden" name="turno" value="<?= $turno ?>">
+    <form method="POST">
+        <input type="hidden" name="accion" value="actualizar_turnos_bulk">
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
+            <div class="bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-6 py-4">
+                <h2 class="text-lg font-bold"><i class="fas fa-stopwatch mr-2"></i>Corte de horario por turno</h2>
+                <p class="text-sm opacity-80">Minutos antes del inicio del turno en que se cortan los pedidos de Delivery</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+                <?php foreach (['Mañana', 'Siesta', 'Tarde'] as $turno): ?>
+                    <?php $g = $config_global[$turno] ?? []; ?>
                     <div class="border-2 border-gray-200 rounded-xl p-4">
                         <div class="font-black text-gray-900 mb-1"><?= $turno ?></div>
                         <div class="grid grid-cols-2 gap-2 mb-3">
                             <div>
                                 <label class="block text-xs font-bold text-gray-600 mb-1">Hora inicio</label>
-                                <input type="time" name="hora_inicio" value="<?= substr($g['hora_inicio']??'09:00', 0, 5) ?>"
+                                <input type="time" name="hora_inicio[<?= $turno ?>]" value="<?= substr($g['hora_inicio']??'09:00', 0, 5) ?>"
                                        class="w-full border-2 border-gray-300 rounded-lg px-2 py-2 text-sm font-semibold">
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-600 mb-1">Hora fin</label>
-                                <input type="time" name="hora_fin" value="<?= substr($g['hora_fin']??'13:00', 0, 5) ?>"
+                                <input type="time" name="hora_fin[<?= $turno ?>]" value="<?= substr($g['hora_fin']??'13:00', 0, 5) ?>"
                                        class="w-full border-2 border-gray-300 rounded-lg px-2 py-2 text-sm font-semibold">
                             </div>
                         </div>
                         <label class="block text-xs font-bold text-gray-600 mb-1">Minutos de corte</label>
-                        <input type="number" name="minutos_antes_corte" value="<?= $g['minutos_antes_corte'] ?? 30 ?>" min="0" max="1440"
+                        <input type="number" name="minutos_antes_corte[<?= $turno ?>]" value="<?= $g['minutos_antes_corte'] ?? 30 ?>" min="0" max="1440"
                                class="w-full border-2 border-gray-300 rounded-lg px-3 py-2 font-semibold text-center text-lg mb-1">
                         <?php
                         $min = $g['minutos_antes_corte'] ?? 30;
@@ -279,14 +341,16 @@ $dia_hoy     = (int)date('w'); // 0=Dom
                             echo "<p class='text-xs text-gray-400 mb-3'>= {$min} min antes del turno</p>";
                         }
                         ?>
-                        <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-lg font-bold text-sm">
-                            <i class="fas fa-save mr-1"></i> Guardar
-                        </button>
                     </div>
-                </form>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            </div>
+            <div class="px-6 pb-6">
+                <button type="submit" class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-bold text-lg shadow">
+                    <i class="fas fa-save mr-2"></i> Guardar Horarios de Turnos
+                </button>
+            </div>
         </div>
-    </div>
+    </form>
 
     <!-- Precios de planchas elegidos -->
     <div class="bg-white rounded-xl shadow-lg overflow-hidden mb-8">
