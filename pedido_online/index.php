@@ -51,6 +51,10 @@ $precio_elegido_48 = null;
 
 foreach ($productos_todos as $prod) {
     $nombre_lower = strtolower($prod['nombre']);
+    // Los "Surtidos Premium xN" son solo tabla de precios del personalizado, no combos
+    if (strpos($nombre_lower, 'surtidos premium') !== false) {
+        continue;
+    }
     if (strpos($nombre_lower, 'elegido') !== false || strpos($nombre_lower, 'elegidos') !== false) {
         // Es un producto personalizable
         if (strpos($nombre_lower, '8') !== false)  $precio_elegido_8  = $prod;
@@ -61,6 +65,22 @@ foreach ($productos_todos as $prod) {
         if (strpos($nombre_lower, '48') !== false && strpos($nombre_lower, 'elegido') !== false) $precio_elegido_48 = $prod;
     } else {
         $productos_simples[] = $prod;
+    }
+}
+
+// Tabla de precios por planchas (Surtidos Premium/Elegidos xN de productos)
+// Fallback: valores del menú oficial
+$tabla_personalizado = [
+    'premium'  => [1=>9000, 2=>18000, 3=>27000, 4=>36000, 5=>45000, 6=>54000],
+    'elegidos' => [1=>5400, 2=>10800, 3=>16000, 4=>21400, 5=>26800, 6=>32000],
+];
+foreach ($productos_todos as $prod) {
+    if (preg_match('/^Surtidos (Premium|Elegidos) x(\d+)$/i', trim($prod['nombre']), $m)) {
+        $cat = strtolower($m[1]) === 'premium' ? 'premium' : 'elegidos';
+        $planchas = (int)$m[2] / 8;
+        if ($planchas >= 1 && $planchas == (int)$planchas) {
+            $tabla_personalizado[$cat][(int)$planchas] = (int)$prod['precio_transferencia'];
+        }
     }
 }
 
@@ -191,6 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $precio = 0;
         $nombre_producto = '';
         $cantidad_sandwiches = 0;
+        $wa_lineas = [];
         $obs_interna = "🌐 PEDIDO ONLINE\nTurno: {$turno}";
         if ($modalidad === 'Delivery' && !empty($fecha_pedido)) {
             $obs_interna .= "\nFecha entrega: " . date('d/m/Y', strtotime($fecha_pedido));
@@ -212,28 +233,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception('Elegí al menos un sabor para tu pedido personalizado');
             }
 
-            // Precio dinámico por plancha (común vs premium)
+            // Precio por tabla de planchas: premium → tabla premium, comunes → tabla elegidos
             $sabores_premium_ids = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
-            $precio_comun   = 4200;
-            $precio_premium = 5500;
-            try {
-                $pc = $pdo->query("SELECT tipo, precio_efectivo, precio_transferencia FROM config_precios_elegidos")->fetchAll();
-                foreach ($pc as $r) {
-                    if ($r['tipo'] === 'comun')   $precio_comun   = $forma_pago === 'Efectivo' ? (float)$r['precio_efectivo'] : (float)$r['precio_transferencia'];
-                    if ($r['tipo'] === 'premium')  $precio_premium = $forma_pago === 'Efectivo' ? (float)$r['precio_efectivo'] : (float)$r['precio_transferencia'];
-                }
-            } catch (PDOException $ex) {}
 
             $planchas_comun    = 0;
             $planchas_premium  = 0;
             foreach ($sabores as $sabor_id => $cant) {
                 if ($cant > 0) {
-                    $planchas = $cant / 8;
+                    $planchas = (int)($cant / 8);
                     if (in_array($sabor_id, $sabores_premium_ids)) $planchas_premium += $planchas;
                     else                                             $planchas_comun   += $planchas;
                 }
             }
-            $precio = ($planchas_comun * $precio_comun) + ($planchas_premium * $precio_premium);
+
+            $precio = 0;
+            if ($planchas_premium > 0) {
+                $precio += $tabla_personalizado['premium'][$planchas_premium]
+                    ?? ($planchas_premium * ($tabla_personalizado['premium'][1] ?? 9000));
+            }
+            if ($planchas_comun > 0) {
+                $precio += $tabla_personalizado['elegidos'][$planchas_comun]
+                    ?? ($planchas_comun * ($tabla_personalizado['elegidos'][1] ?? 5400));
+            }
 
             $nombre_producto     = $elegidos_cantidad . ' Surtidos Elegidos';
             $cantidad_sandwiches = $elegidos_cantidad;
@@ -251,6 +272,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $obs_interna .= "\n\n🎨 Pedido Personalizado\nSabores: " . implode(', ', $lista_sabores);
             $obs_interna .= "\n[Datos sabores: " . $sabores_json . "]";
+
+            // Líneas para el mensaje de WhatsApp
+            $wa_lineas = [$nombre_producto];
+            foreach ($sabores as $sabor_id => $cant_sabor) {
+                if ($cant_sabor > 0) {
+                    $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
+                    if (!empty($sabor_info)) {
+                        $pl = (int)($cant_sabor / 8);
+                        $wa_lineas[] = "  ↳ {$sabor_info[0]['nombre']}: {$pl} plancha" . ($pl > 1 ? 's' : '');
+                    }
+                }
+            }
 
         } else {
             // Pedido con carrito de combos clásicos
@@ -280,6 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $precio             += $precio_unit * $combo_qty;
                 $cantidad_sandwiches += $combo_qty;
                 $partes_nombre[]     = "{$combo_qty}x {$prod['nombre']}";
+                $wa_lineas[]         = "{$combo_qty}x {$prod['nombre']}";
             }
 
             if ($cantidad_sandwiches === 0) {
@@ -370,17 +404,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $wamsg .= "\n\n📋 *Pedido:*\n";
 
-        // Desglosar líneas del producto (puede ser múltiple en observaciones)
-        foreach (explode("\n", $nombre_producto) as $linea) {
-            $linea = trim($linea);
-            if ($linea !== '') $wamsg .= "• $linea\n";
+        if (empty($wa_lineas)) $wa_lineas = [$nombre_producto];
+        foreach ($wa_lineas as $linea) {
+            $wamsg .= (strpos($linea, '↳') !== false ? "$linea\n" : "• $linea\n");
         }
 
-        // Observaciones limpias (sin el prefijo "Turno: X" que se agrega internamente)
-        $obs_limpia = preg_replace('/^Turno:[^\n]*\n?/m', '', $obs_interna);
-        $obs_limpia = trim($obs_limpia);
-        if ($obs_limpia !== '') {
-            $wamsg .= "📝 $obs_limpia\n";
+        if (!empty($observaciones)) {
+            $wamsg .= "📝 " . trim($observaciones) . "\n";
         }
 
         $pedido_confirmado['wamsg'] = $wamsg;
@@ -498,7 +528,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
                     <i class="fas fa-check text-green-500 text-4xl"></i>
                 </div>
-                <h2 class="text-3xl font-black mb-2">¡Pedido Confirmado!</h2>
+                <h2 class="text-3xl font-black mb-2">¡Orden Generada!</h2>
                 <p class="text-green-100 text-lg">Pedido #<?= $pedido_confirmado['id'] ?></p>
             </div>
             <div class="p-6 space-y-4">
@@ -525,102 +555,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <span class="font-bold text-blue-700"><?= date('d/m/Y', strtotime($pedido_confirmado['fecha_pedido'])) ?></span>
                     </div>
                     <?php endif; ?>
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600 font-medium">Pago</span>
-                        <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['forma_pago']) ?></span>
-                    </div>
                     <div class="flex justify-between items-center border-t border-gray-200 pt-2 mt-1">
                         <span class="text-gray-700 font-bold">Total</span>
                         <span class="font-black text-green-700 text-lg">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
                     </div>
                 </div>
 
-                <div class="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                    <?php if ($pedido_confirmado['modalidad'] === 'Delivery'): ?>
-                        <p class="text-orange-800 font-semibold text-lg mb-1">
-                            🛵 ¡Pronto estaremos entregando tu pedido!
-                        </p>
-                        <p class="text-orange-600 text-sm">
-                            Coordinamos el horario exacto de entrega por WhatsApp. ¡Gracias por tu pedido!
-                        </p>
-                    <?php else: ?>
-                        <p class="text-orange-800 font-semibold text-lg mb-1">
-                            <i class="fas fa-clock mr-2"></i>¡Te esperamos en el local!
-                        </p>
-                        <p class="text-orange-600 text-sm mb-1">
-                            Turno <strong><?= htmlspecialchars($pedido_confirmado['turno']) ?></strong>
-                        </p>
-                        <p class="text-orange-500 text-xs">Cno. Gral. Belgrano 7287, Juan María Gutiérrez</p>
-                    <?php endif; ?>
-                </div>
-
-                <?php if ($pedido_confirmado['forma_pago'] === 'Transferencia'): ?>
-                    <?php if ($pedido_confirmado['modalidad'] === 'Delivery'): ?>
-                        <!-- Datos transferencia DELIVERY -->
-                        <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                            <p class="font-black text-blue-800 mb-3 flex items-center">
-                                🔄 Datos para transferir — Reparto
-                            </p>
-                            <div class="space-y-1 text-sm">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Alias CBU</span>
-                                    <span class="font-black text-blue-700 tracking-wide">MIGA.SANTA.CATALINA</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Banco</span>
-                                    <span class="font-semibold text-gray-800">Santander</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Titular</span>
-                                    <span class="font-semibold text-gray-800">Bozanic Juan Ignacio</span>
-                                </div>
-                                <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
-                                    <span class="text-gray-600 font-bold">Monto</span>
-                                    <span class="font-black text-green-700">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
-                                </div>
-                            </div>
-                            <div class="mt-3 bg-yellow-100 border border-yellow-300 rounded-lg p-2 text-center">
-                                <p class="text-yellow-800 font-bold text-sm">📎 Enviá el comprobante por WhatsApp</p>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <!-- Datos transferencia RETIRO -->
-                        <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                            <p class="font-black text-blue-800 mb-3 flex items-center">
-                                🔄 Datos para transferir — Retiro por local
-                            </p>
-                            <div class="space-y-1 text-sm">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Alias CBU</span>
-                                    <span class="font-black text-blue-700 tracking-wide">SANTA.CATALINA.1</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Banco</span>
-                                    <span class="font-semibold text-gray-800">Mercado Pago</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Titular</span>
-                                    <span class="font-semibold text-gray-800">Bassi Eliana Melisa</span>
-                                </div>
-                                <div class="flex justify-between border-t border-blue-200 pt-2 mt-1">
-                                    <span class="text-gray-600 font-bold">Monto</span>
-                                    <span class="font-black text-green-700">$<?= number_format($pedido_confirmado['precio'], 0, ',', '.') ?></span>
-                                </div>
-                            </div>
-                            <div class="mt-3 bg-yellow-100 border border-yellow-300 rounded-lg p-2 text-center">
-                                <p class="text-yellow-800 font-bold text-sm">📎 Enviá el comprobante por WhatsApp</p>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                <?php endif; ?>
-
                 <!-- Botón principal WhatsApp -->
                 <a href="https://wa.me/541159813546?text=<?= rawurlencode($pedido_confirmado['wamsg']) ?>"
                    target="_blank"
                    class="block w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg transition-all text-center shadow-lg">
-                    <i class="fab fa-whatsapp mr-2 text-xl"></i>Enviar pedido por WhatsApp
+                    <i class="fab fa-whatsapp mr-2 text-xl"></i>Confirmar pedido
                 </a>
-                <p class="text-xs text-center text-gray-500 -mt-1">Se abre WhatsApp con tu pedido listo para enviar</p>
+                <p class="text-xs text-center text-gray-500 -mt-1">Se abre WhatsApp con tu pedido para confirmarlo con nosotros</p>
 
                 <button onclick="window.location.href='/pedido_online/index.php'"
                         class="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-3 rounded-xl font-semibold transition-all">
@@ -755,13 +702,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <ul id="lista-carrito" class="text-sm text-gray-800 space-y-1"></ul>
                         </div>
 
-                        <!-- Pedido personalizado por WhatsApp -->
-                        <a href="https://wa.me/541159813546?text=Hola%21+Quisiera+hacer+un+pedido+personalizado+%F0%9F%A5%AA"
-                           target="_blank"
-                           class="flex items-center justify-center gap-2 bg-green-50 border border-green-300 hover:bg-green-100 text-green-800 py-3 px-4 rounded-xl font-semibold text-sm transition-all">
-                            <i class="fab fa-whatsapp text-green-600 text-lg"></i>
-                            ¿Querés un pedido personalizado? Escribinos por WhatsApp
-                        </a>
+                        <!-- Acceso a pedido personalizado -->
+                        <button type="button" onclick="abrirPersonalizado()"
+                                class="w-full flex items-center justify-center gap-2 bg-purple-50 border-2 border-purple-300 hover:bg-purple-100 text-purple-800 py-3 px-4 rounded-xl font-bold text-sm transition-all">
+                            🎨 ¿Querés armarlo a tu gusto? Pedido personalizado
+                        </button>
 
                         <div class="flex gap-3 mt-2">
                             <button type="button" onclick="irAPaso(1)"
@@ -867,12 +812,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div id="precio-elegidos-preview" class="hidden bg-orange-50 border-2 border-orange-200 rounded-xl p-3 text-center">
                             <div class="text-xs text-gray-500 mb-1">Precio estimado (según sabores)</div>
                             <div class="font-black text-green-700 text-xl" id="precio-elegidos-display">—</div>
-                            <div class="text-xs text-blue-500 mt-0.5" id="precio-elegidos-trans">—</div>
-                            <div class="text-xs text-gray-400 mt-1">El precio final se confirma al elegir forma de pago</div>
+                            <div class="text-xs text-blue-500 mt-0.5" id="precio-elegidos-trans"></div>
+                            <div class="text-xs text-gray-400 mt-1">Te confirmamos el precio final por WhatsApp</div>
                         </div>
 
                         <div class="flex gap-3 mt-2">
-                            <button type="button" onclick="irAPaso(2)"
+                            <button type="button" onclick="volverACombos()"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
                                 <i class="fas fa-arrow-left mr-2"></i>Volver
                             </button>
@@ -1040,6 +985,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const turnosConfig = <?= $turnos_config_json ?>;
     const preciosElegidos = <?= $precios_elegidos_json ?>;
     const localidadesActivas = <?= $localidades_activas_json ?>;
+    // Tabla de precios personalizados por planchas (transferencia)
+    const TABLA_PERSONALIZADO = <?= json_encode($tabla_personalizado) ?>;
 
     // ============================================================
     // UTILIDADES ZONA HORARIA ARGENTINA (UTC-3, sin DST)
@@ -1234,7 +1181,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mostrarPaso(num);
     }
 
+    function abrirPersonalizado() {
+        estado.tipoPedido = 'personalizado';
+        document.getElementById('campo_tipo_pedido').value = 'personalizado';
+        document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
+        document.getElementById('paso-3-personalizado').classList.add('activo');
+        estado.pasoActual = 3;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function volverACombos() {
+        estado.tipoPedido = 'simple';
+        document.getElementById('campo_tipo_pedido').value = 'simple';
+        mostrarPaso(3);
+    }
+
     function irAPasoDesdeProducto() {
+        estado.tipoPedido = 'simple';
+        document.getElementById('campo_tipo_pedido').value = 'simple';
         const totalUnidades = Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
         if (totalUnidades === 0) {
             alert('Por favor seleccioná al menos un combo');
@@ -1265,6 +1229,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             alert(`Tenés ${planchasActuales} plancha${planchasActuales !== 1 ? 's' : ''} elegida${planchasActuales !== 1 ? 's' : ''} pero necesitás ${planchasNecesarias}. Ajustá los sabores.`);
             return;
         }
+        estado.tipoPedido = 'personalizado';
+        document.getElementById('campo_tipo_pedido').value = 'personalizado';
         document.getElementById('campo_elegidos_cantidad').value = estado.elegidosCantidad;
         document.getElementById('campo_sabores_json').value = JSON.stringify(estado.sabores);
         actualizarDisplayResumen();
@@ -1364,19 +1330,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 else                              planchasComun    += p;
             }
         }
-        const pef = preciosElegidos.comun?.ef ?? 4200;
-        const ptr = preciosElegidos.comun?.tr ?? 4200;
-        const pefP = preciosElegidos.premium?.ef ?? 5500;
-        const ptrP = preciosElegidos.premium?.tr ?? 5500;
-        estado.precioCalculadoEf = planchasComun * pef + planchasPremium * pefP;
-        estado.precioCalculadoTr = planchasComun * ptr + planchasPremium * ptrP;
+
+        // Precio por tabla: premium → tabla premium, comunes → tabla elegidos
+        let precio = 0;
+        if (planchasPremium > 0) {
+            precio += TABLA_PERSONALIZADO.premium[planchasPremium]
+                   ?? planchasPremium * (TABLA_PERSONALIZADO.premium[1] ?? 9000);
+        }
+        if (planchasComun > 0) {
+            precio += TABLA_PERSONALIZADO.elegidos[planchasComun]
+                   ?? planchasComun * (TABLA_PERSONALIZADO.elegidos[1] ?? 5400);
+        }
+        estado.precioCalculadoEf = precio;
+        estado.precioCalculadoTr = precio;
 
         // Mostrar preview de precio
         const preview = document.getElementById('precio-elegidos-preview');
         if (estado.elegidosCantidad > 0 && (planchasComun + planchasPremium) > 0) {
             preview.classList.remove('hidden');
-            document.getElementById('precio-elegidos-display').textContent = '💵 ' + formatPrecio(estado.precioCalculadoEf);
-            document.getElementById('precio-elegidos-trans').textContent   = '🏦 Trans: ' + formatPrecio(estado.precioCalculadoTr);
+            document.getElementById('precio-elegidos-display').textContent = formatPrecio(precio);
+            document.getElementById('precio-elegidos-trans').textContent   = '';
         } else {
             preview.classList.add('hidden');
         }
