@@ -42,6 +42,7 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
         FROM pedidos
         WHERE ubicacion = 'Local 1'
+        AND (tomado = 1 OR tomado IS NULL)
         AND (
             DATE(created_at) BETWEEN :fecha_desde AND :fecha_hasta
             OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN :fecha_desde AND :fecha_hasta)

@@ -22,9 +22,10 @@ $ultima_verificacion = $_SESSION['ultima_verificacion_pedidos'] ?? date('Y-m-d H
 $stmt = $pdo->prepare("
     SELECT COUNT(*) as nuevos_pedidos,
            GROUP_CONCAT(CONCAT('#', id, ' - ', nombre, ' ', apellido) SEPARATOR ', ') as lista_pedidos
-    FROM pedidos 
-    WHERE created_at > ? 
+    FROM pedidos
+    WHERE created_at > ?
     AND estado IN ('Pendiente', 'Preparando')
+    AND (tomado = 1 OR tomado IS NULL)
 ");
 $stmt->execute([$ultima_verificacion]);
 $resultado = $stmt->fetch();
@@ -36,9 +37,10 @@ if ($resultado['nuevos_pedidos'] > 0) {
         SELECT id, nombre, apellido, producto, modalidad, ubicacion, 
                precio, estado, created_at,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
-        FROM pedidos 
-        WHERE created_at > ? 
+        FROM pedidos
+        WHERE created_at > ?
         AND estado IN ('Pendiente', 'Preparando')
+        AND (tomado = 1 OR tomado IS NULL)
         ORDER BY created_at DESC
         LIMIT 10
     ");

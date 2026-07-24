@@ -10,9 +10,10 @@ $pdo = getConnection();
 if (isset($_GET['check_new']) && $_GET['check_new'] == '1') {
     $stmt = $pdo->prepare("
         SELECT id, nombre, apellido, producto, created_at
-        FROM pedidos 
-        WHERE ubicacion = 'Local 1' 
-        AND estado = 'Pendiente' 
+        FROM pedidos
+        WHERE ubicacion = 'Local 1'
+        AND estado = 'Pendiente'
+        AND (tomado = 1 OR tomado IS NULL)
         AND DATE(created_at) = CURDATE()
         AND (impreso_auto IS NULL OR impreso_auto = 0)
         AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
