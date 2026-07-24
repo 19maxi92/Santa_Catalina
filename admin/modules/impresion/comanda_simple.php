@@ -276,11 +276,10 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 $obs = $pedido['observaciones'];
                 $sabores_encontrados = false;
 
-                // Intentar formato con planchas (con o sin saltos de línea)
+                // Formato admin (crear_pedido): === SABORES PERSONALIZADOS === \n • Sabor: N plancha(s) (M sándwiches)
                 if (preg_match('/===\s*SABORES PERSONALIZADOS\s*===[\s\n]*(.*?)(?:---|$)/s', $obs, $matches)) {
                     $sabores_texto = trim($matches[1]);
 
-                    // Buscar formato: • Sabor: X plancha(s) (Y sándwiches)
                     if (preg_match_all('/•\s*([^:]+):\s*(\d+)\s*plancha/i', $sabores_texto, $planchas_matches, PREG_SET_ORDER)) {
                         foreach ($planchas_matches as $match) {
                             $sabor = trim($match[1]);
@@ -291,17 +290,28 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                         }
                     }
 
-                    // Si no hay formato planchas, buscar formato directo: • Sabor: X (número de sándwiches)
                     if (!$sabores_encontrados) {
                         if (preg_match_all('/•\s*([^:•]+):\s*(\d+)(?!\s*plancha)/i', $sabores_texto, $direct_matches, PREG_SET_ORDER)) {
                             foreach ($direct_matches as $match) {
                                 $sabor = trim($match[1]);
                                 $sandwiches = (int)$match[2];
-                                // Calcular planchas (8 sándwiches = 1 plancha)
-                                $planchas = ceil($sandwiches / 8);
                                 echo "<strong>{$sandwiches}</strong> {$sabor}<br>";
                                 $sabores_encontrados = true;
                             }
+                        }
+                    }
+                }
+
+                // Formato online (pedido_online): Sabores: 8x Tomate, 8x Jamón y Queso, ...
+                if (!$sabores_encontrados && preg_match('/Sabores:\s*(.+?)(?:\n\[|\n\n|$)/s', $obs, $matches)) {
+                    $sabores_texto = trim($matches[1]);
+                    if (preg_match_all('/(\d+)\s*x\s*([^,]+)/i', $sabores_texto, $direct_matches, PREG_SET_ORDER)) {
+                        foreach ($direct_matches as $match) {
+                            $sandwiches = (int)$match[1];
+                            $sabor = trim($match[2]);
+                            $planchas = ceil($sandwiches / 8);
+                            echo "<strong>{$planchas}pl</strong> {$sabor} ({$sandwiches})<br>";
+                            $sabores_encontrados = true;
                         }
                     }
                 }
@@ -339,12 +349,18 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
                 $obs_limpia = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_limpia);
                 $obs_limpia = preg_replace('/^Turno:.*$/m', '', $obs_limpia);
+                // Limpieza específica de pedidos online
+                $obs_limpia = preg_replace('/^🌐\s*PEDIDO ONLINE\s*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^🎨\s*Pedido Personalizado\s*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^Sabores:.*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/\[Datos sabores:.*?\]/s', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^Notas del cliente:\s*$/m', '', $obs_limpia);
                 $obs_limpia = trim(preg_replace('/\n\s*\n+/', "\n", $obs_limpia));
-                
+
                 if (!empty($obs_limpia)):
                 ?>
                     <div class="observaciones-container">
-                        <div class="observaciones-titulo">📝 OBSERVACIONES</div>
+                        <div class="observaciones-titulo">OBSERVACIONES</div>
                         <div class="observaciones-texto">
                             <?= nl2br(htmlspecialchars($obs_limpia)) ?>
                         </div>

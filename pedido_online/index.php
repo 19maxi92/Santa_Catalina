@@ -283,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
                     if (!empty($sabor_info)) {
                         $pl = (int)($cant_sabor / 8);
-                        $wa_lineas[] = "  ↳ {$sabor_info[0]['nombre']}: {$pl} plancha" . ($pl > 1 ? 's' : '');
+                        $wa_lineas[] = "  - {$sabor_info[0]['nombre']}: {$pl} plancha" . ($pl > 1 ? 's' : '');
                     }
                 }
             }
@@ -402,23 +402,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fecha_ts  = strtotime($fecha_entrega);
         $fecha_str = $dias[date('w', $fecha_ts)] . ' ' . date('d/m', $fecha_ts);
 
-        $wamsg  = "🥪 *NUEVO PEDIDO - Santa Catalina*\n\n";
+        $wamsg  = "*NUEVO PEDIDO - Santa Catalina*\n\n";
         $wamsg .= "*Pedido nº #$pedido_id*\n\n";
-        $wamsg .= "👤 *$nombre $apellido*\n";
-        $wamsg .= "📅 $fecha_str · Turno $turno\n";
-        $wamsg .= "🏪 $modalidad";
+        $wamsg .= "*$nombre $apellido*\n";
+        $wamsg .= "$fecha_str - Turno $turno\n";
+        $wamsg .= "$modalidad";
         if ($modalidad === 'Delivery' && !empty($direccion)) {
-            $wamsg .= "\n📍 $direccion";
+            $wamsg .= "\n$direccion";
         }
-        $wamsg .= "\n\n📋 *Pedido:*\n";
+        $wamsg .= "\n\n*Pedido:*\n";
 
         if (empty($wa_lineas)) $wa_lineas = [$nombre_producto];
         foreach ($wa_lineas as $linea) {
-            $wamsg .= (strpos($linea, '↳') !== false ? "$linea\n" : "• $linea\n");
+            $esSubitem = strpos($linea, '  - ') === 0;
+            $wamsg .= ($esSubitem ? "$linea\n" : "- $linea\n");
         }
 
         if (!empty($observaciones)) {
-            $wamsg .= "📝 " . trim($observaciones) . "\n";
+            $wamsg .= "Obs: " . trim($observaciones) . "\n";
         }
 
         $pedido_confirmado['wamsg'] = $wamsg;
