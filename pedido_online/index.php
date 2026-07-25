@@ -779,7 +779,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div id="bloque-sabores" class="hidden">
                             <div class="flex items-center justify-between mb-3">
                                 <label class="text-sm font-bold text-gray-700">
-                                    Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(de a planchas de 8)</span>
+                                    Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(tocá para sumar 1 plancha)</span>
                                 </label>
                                 <span class="text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">
                                     <span id="contador-planchas">0</span>/<span id="max-planchas">0</span> planchas
@@ -790,20 +790,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <p class="text-xs font-bold text-green-700 mb-2 mt-1">🟢 SABORES COMUNES</p>
                             <div class="grid grid-cols-2 gap-2 mb-4">
                                 <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'comun') as $sabor): ?>
-                                    <div class="sabor-btn flex items-center justify-between border-green-200 hover:border-green-500 hover:bg-green-50"
-                                         id="sabor-<?= $sabor['id'] ?>">
-                                        <div class="flex items-center">
-                                            <span class="text-lg mr-2"><?= $sabor['emoji'] ?></span>
-                                            <span class="text-xs font-medium text-gray-700 leading-tight"><?= htmlspecialchars($sabor['nombre']) ?></span>
-                                        </div>
-                                        <div class="flex items-center space-x-1">
-                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
-                                                    class="w-6 h-6 border border-green-300 rounded text-green-700 font-bold text-xs hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">−</button>
-                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900 text-sm">0</span>
-                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
-                                                    class="w-6 h-6 border border-green-300 rounded text-green-700 font-bold text-xs hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">+</button>
-                                        </div>
-                                    </div>
+                                    <button type="button" onclick="agregarSaborPlancha('<?= $sabor['id'] ?>')"
+                                            class="sabor-btn p-3 bg-white border-2 border-green-300 rounded-lg text-xs font-medium hover:bg-green-100 transition-all"
+                                            id="sabor-<?= $sabor['id'] ?>">
+                                        <div class="font-bold"><?= $sabor['emoji'] ?> <?= htmlspecialchars($sabor['nombre']) ?></div>
+                                        <div id="cant-sabor-<?= $sabor['id'] ?>" class="text-green-600 font-bold mt-1 text-lg">0</div>
+                                    </button>
                                 <?php endforeach; ?>
                             </div>
 
@@ -811,21 +803,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <p class="text-xs font-bold text-orange-600 mb-2">🟠 SABORES PREMIUM</p>
                             <div class="grid grid-cols-2 gap-2">
                                 <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'premium') as $sabor): ?>
-                                    <div class="sabor-btn flex items-center justify-between border-orange-200 hover:border-orange-500 hover:bg-orange-50"
-                                         id="sabor-<?= $sabor['id'] ?>">
-                                        <div class="flex items-center">
-                                            <span class="text-lg mr-2"><?= $sabor['emoji'] ?></span>
-                                            <span class="text-xs font-medium text-gray-700 leading-tight"><?= htmlspecialchars($sabor['nombre']) ?></span>
-                                        </div>
-                                        <div class="flex items-center space-x-1">
-                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
-                                                    class="w-6 h-6 border border-orange-300 rounded text-orange-700 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">−</button>
-                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900 text-sm">0</span>
-                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
-                                                    class="w-6 h-6 border border-orange-300 rounded text-orange-700 font-bold text-xs hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">+</button>
-                                        </div>
-                                    </div>
+                                    <button type="button" onclick="agregarSaborPlancha('<?= $sabor['id'] ?>')"
+                                            class="sabor-btn p-3 bg-white border-2 border-orange-300 rounded-lg text-xs font-medium hover:bg-orange-100 transition-all"
+                                            id="sabor-<?= $sabor['id'] ?>">
+                                        <div class="font-bold"><?= $sabor['emoji'] ?> <?= htmlspecialchars($sabor['nombre']) ?></div>
+                                        <div id="cant-sabor-<?= $sabor['id'] ?>" class="text-orange-600 font-bold mt-1 text-lg">0</div>
+                                    </button>
                                 <?php endforeach; ?>
+                            </div>
+
+                            <!-- Deshacer -->
+                            <div class="mt-4">
+                                <button type="button" onclick="deshacerPlanchaSabor()"
+                                        class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold text-sm">
+                                    <i class="fas fa-undo mr-2"></i>Deshacer última plancha
+                                </button>
                             </div>
                         </div>
 
@@ -1419,11 +1411,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         actualizarDisplayResumen();
     }
 
+    let historialSabores = [];
+
     function seleccionarElegidos(cantidad) {
         estado.elegidosCantidad = cantidad;
         estado.sabores = {};
         estado.precioCalculadoEf = 0;
         estado.precioCalculadoTr = 0;
+        historialSabores = [];
 
         document.querySelectorAll('.elegido-qty-btn').forEach(b => {
             b.classList.remove('border-orange-500', 'bg-orange-50');
@@ -1433,7 +1428,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         event.currentTarget.classList.remove('border-gray-300');
 
         document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
-        document.querySelectorAll('.sabor-btn').forEach(el => el.classList.remove('activo'));
 
         document.getElementById('max-planchas').textContent = cantidad / 8;
         document.getElementById('contador-planchas').textContent = 0;
@@ -1444,31 +1438,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         actualizarDisplayResumen();
     }
 
-    function cambiarSabor(saborId, delta) {
-        const paso = 8; // 1 unidad = 1 plancha de 8 sándwiches
+    function actualizarContadoresSabores() {
+        document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => {
+            const saborId = el.id.replace('cant-sabor-', '');
+            el.textContent = (estado.sabores[saborId] || 0) / 8;
+        });
+        const total = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
+        document.getElementById('contador-planchas').textContent = total / 8;
+        calcularPrecioElegidos();
+    }
+
+    function agregarSaborPlancha(saborId) {
+        const paso = 8; // 1 plancha = 8 sándwiches
         const maxTotal = estado.elegidosCantidad;
-        const actual = estado.sabores[saborId] || 0;
+        if (!maxTotal) {
+            alert('Elegí primero cuántos sándwiches querés');
+            return;
+        }
         const totalActual = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
 
-        if (delta > 0 && totalActual + paso > maxTotal) {
+        if (totalActual + paso > maxTotal) {
             const maxPlanchas = maxTotal / 8;
             alert(`Máximo ${maxPlanchas} plancha${maxPlanchas > 1 ? 's' : ''} (${maxTotal} sándwiches) en total`);
             return;
         }
 
-        const nuevo = Math.max(0, actual + delta * paso);
-        estado.sabores[saborId] = nuevo;
+        historialSabores.push(JSON.parse(JSON.stringify(estado.sabores)));
+        estado.sabores[saborId] = (estado.sabores[saborId] || 0) + paso;
+        actualizarContadoresSabores();
+    }
 
-        const el = document.getElementById('cant-sabor-' + saborId);
-        if (el) el.textContent = nuevo > 0 ? `${nuevo / 8}P` : '0';
-
-        const saborBtn = document.getElementById('sabor-' + saborId);
-        if (nuevo > 0) saborBtn?.classList.add('activo');
-        else saborBtn?.classList.remove('activo');
-
-        const total = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
-        document.getElementById('contador-planchas').textContent = total / 8;
-        calcularPrecioElegidos();
+    function deshacerPlanchaSabor() {
+        if (historialSabores.length > 0) {
+            estado.sabores = historialSabores.pop();
+            actualizarContadoresSabores();
+        }
     }
 
     // ============================================================
