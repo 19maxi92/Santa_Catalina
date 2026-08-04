@@ -271,7 +271,36 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false
             <div class="cliente-nombre">
                 <?= htmlspecialchars($nombre_completo) ?>
             </div>
-            
+
+            <!-- OBSERVACIONES (si existen) -->
+            <?php if (!empty($pedido['observaciones'])): ?>
+                <?php
+                $obs_limpia = $pedido['observaciones'];
+                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_limpia);
+                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_limpia);
+                $obs_limpia = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^Turno:.*$/m', '', $obs_limpia);
+                // Limpieza específica de pedidos online
+                $obs_limpia = preg_replace('/^🌐\s*PEDIDO ONLINE\s*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^🎨\s*Pedido Personalizado\s*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^Sabores:.*$/m', '', $obs_limpia);
+                $obs_limpia = preg_replace('/\[Datos sabores:.*?\]/s', '', $obs_limpia);
+                $obs_limpia = preg_replace('/^Notas del cliente:\s*$/m', '', $obs_limpia);
+                $obs_limpia = trim(preg_replace('/\n\s*\n+/', "\n", $obs_limpia));
+
+                if (!empty($obs_limpia)):
+                ?>
+                    <div class="observaciones-container">
+                        <div class="observaciones-titulo">OBSERVACIONES</div>
+                        <div class="observaciones-texto">
+                            <?= nl2br(htmlspecialchars($obs_limpia)) ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            <?php endif; ?>
+
             <?php if ($es_personalizado): ?>
                 <!-- PEDIDO PERSONALIZADO: SABORES GRANDES -->
                 <div class="sabores-detalle-grande">
@@ -346,36 +375,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false
             <div class="precio-total">
                 <?= $precio_formatted ?>
             </div>
-            
-            <!-- OBSERVACIONES (si existen) -->
-            <?php if (!empty($pedido['observaciones'])): ?>
-                <?php
-                $obs_limpia = $pedido['observaciones'];
-                $obs_limpia = preg_replace('/===\s*SABORES PERSONALIZADOS\s*===.*?(?=\n---|$)/s', '', $obs_limpia);
-                $obs_limpia = preg_replace('/---\s*Info del Sistema\s*---.*$/s', '', $obs_limpia);
-                $obs_limpia = preg_replace('/Pedido Express - Empleado ID:.*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/Fecha\/Hora:.*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/🔗\s*PEDIDO COMBINADO.*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/^Turno:.*$/m', '', $obs_limpia);
-                // Limpieza específica de pedidos online
-                $obs_limpia = preg_replace('/^🌐\s*PEDIDO ONLINE\s*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/^🎨\s*Pedido Personalizado\s*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/^Sabores:.*$/m', '', $obs_limpia);
-                $obs_limpia = preg_replace('/\[Datos sabores:.*?\]/s', '', $obs_limpia);
-                $obs_limpia = preg_replace('/^Notas del cliente:\s*$/m', '', $obs_limpia);
-                $obs_limpia = trim(preg_replace('/\n\s*\n+/', "\n", $obs_limpia));
 
-                if (!empty($obs_limpia)):
-                ?>
-                    <div class="observaciones-container">
-                        <div class="observaciones-titulo">OBSERVACIONES</div>
-                        <div class="observaciones-texto">
-                            <?= nl2br(htmlspecialchars($obs_limpia)) ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
-            <?php endif; ?>
-            
             <!-- INFO ADMINISTRATIVA -->
             <div class="info-admin">
                 Modalidad: <?= $pedido['modalidad'] ?> | Pago: <?= $pedido['forma_pago'] ?>
