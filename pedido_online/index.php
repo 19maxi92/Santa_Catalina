@@ -119,8 +119,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $apellido     = trim($_POST['apellido'] ?? '');
         $telefono     = trim($_POST['telefono'] ?? '');
         $turno        = trim($_POST['turno'] ?? '');
-        $tipo_pedido  = trim($_POST['tipo_pedido'] ?? 'simple');
-        $combos_json  = $_POST['combos_json'] ?? '[]';
         $forma_pago    = trim($_POST['forma_pago'] ?? '');
         $modalidad     = trim($_POST['modalidad'] ?? 'Retiro');
         $direccion     = trim($_POST['direccion'] ?? '');
@@ -233,88 +231,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $obs_interna .= "\nFecha entrega: " . date('d/m/Y', strtotime($fecha_pedido));
         }
 
-        if ($tipo_pedido === 'personalizado') {
-            // Pedido de elegidos con sabores
-            $elegidos_cantidad = (int)($_POST['elegidos_cantidad'] ?? 0);
-            $sabores_json      = $_POST['sabores_json'] ?? '{}';
+        // Pedido combinado: uno o más ítems, cada uno combo o personalizado, todo en un solo pedido
+        $items = json_decode($_POST['pedidos_json'] ?? '[]', true);
+        if (!is_array($items) || empty($items)) {
+            throw new Exception('Seleccioná al menos un producto para tu pedido');
+        }
 
-            // Decodificar sabores
-            $sabores = json_decode($sabores_json, true) ?? [];
-            $total_sabores = array_sum($sabores);
+        $sabores_premium_ids = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
 
-            if ($elegidos_cantidad === 0) {
-                throw new Exception('Seleccioná la cantidad de sándwiches');
-            }
-            if ($total_sabores === 0) {
-                throw new Exception('Elegí al menos un sabor para tu pedido personalizado');
-            }
+        $partes_nombre = [];
+        $detalle_personalizados = [];
 
-            // Precio por tabla de planchas: premium → tabla premium, comunes → tabla elegidos
-            $sabores_premium_ids = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
+        foreach ($items as $item) {
+            $tipoItem = $item['tipo'] ?? '';
 
-            $planchas_comun    = 0;
-            $planchas_premium  = 0;
-            foreach ($sabores as $sabor_id => $cant) {
-                if ($cant > 0) {
-                    $planchas = (int)($cant / 8);
-                    if (in_array($sabor_id, $sabores_premium_ids)) $planchas_premium += $planchas;
-                    else                                             $planchas_comun   += $planchas;
-                }
-            }
-
-            $precio = 0;
-            if ($planchas_premium > 0) {
-                $precio += $tabla_personalizado['premium'][$planchas_premium]
-                    ?? ($planchas_premium * ($tabla_personalizado['premium'][1] ?? 9000));
-            }
-            if ($planchas_comun > 0) {
-                $precio += $tabla_personalizado['elegidos'][$planchas_comun]
-                    ?? ($planchas_comun * ($tabla_personalizado['elegidos'][1] ?? 5400));
-            }
-
-            $nombre_producto     = $elegidos_cantidad . ' Surtidos Elegidos';
-            $cantidad_sandwiches = $elegidos_cantidad;
-
-            // Construir lista de sabores
-            $lista_sabores = [];
-            foreach ($sabores as $sabor_id => $cant_sabor) {
-                if ($cant_sabor > 0) {
-                    $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
-                    if (!empty($sabor_info)) {
-                        $lista_sabores[] = "{$cant_sabor}x {$sabor_info[0]['nombre']}";
-                    }
-                }
-            }
-
-            $obs_interna .= "\n\n🎨 Pedido Personalizado\nSabores: " . implode(', ', $lista_sabores);
-            $obs_interna .= "\n[Datos sabores: " . $sabores_json . "]";
-
-            // Líneas para el mensaje de WhatsApp
-            $wa_lineas = [$nombre_producto];
-            foreach ($sabores as $sabor_id => $cant_sabor) {
-                if ($cant_sabor > 0) {
-                    $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
-                    if (!empty($sabor_info)) {
-                        $pl = (int)($cant_sabor / 8);
-                        $wa_lineas[] = "  - {$sabor_info[0]['nombre']}: {$pl} plancha" . ($pl > 1 ? 's' : '');
-                    }
-                }
-            }
-
-        } else {
-            // Pedido con carrito de combos clásicos
-            $combos = json_decode($combos_json, true) ?? [];
-            if (empty($combos)) {
-                throw new Exception('Seleccioná al menos un combo');
-            }
-
-            $precio = 0;
-            $partes_nombre = [];
-            $cantidad_sandwiches = 0;
-
-            foreach ($combos as $combo) {
-                $combo_id  = (int)($combo['id'] ?? 0);
-                $combo_qty = (int)($combo['cantidad'] ?? 0);
+            if ($tipoItem === 'combo') {
+                $combo_id  = (int)($item['id'] ?? 0);
+                $combo_qty = (int)($item['cantidad'] ?? 0);
                 if ($combo_id <= 0 || $combo_qty <= 0) continue;
 
                 $stmt = $pdo->prepare("SELECT * FROM productos WHERE id = ? AND activo = 1");
@@ -330,17 +263,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 preg_match('/(\d+)/', $prod['nombre'], $m_unid);
                 $unidades_por_caja = (int)($m_unid[1] ?? 1);
 
-                $precio             += $precio_unit * $combo_qty;
+                $precio              += $precio_unit * $combo_qty;
                 $cantidad_sandwiches += $combo_qty * $unidades_por_caja;
-                $partes_nombre[]     = "{$combo_qty}x {$prod['nombre']}";
-                $wa_lineas[]         = "{$combo_qty}x {$prod['nombre']}";
-            }
+                $partes_nombre[]      = "{$combo_qty}x {$prod['nombre']}";
+                $wa_lineas[]          = "{$combo_qty}x {$prod['nombre']}";
 
-            if ($cantidad_sandwiches === 0) {
-                throw new Exception('Seleccioná al menos un combo');
-            }
+            } elseif ($tipoItem === 'personalizado') {
+                $elegidos_cantidad = (int)($item['elegidos_cantidad'] ?? 0);
+                $sabores           = is_array($item['sabores'] ?? null) ? $item['sabores'] : [];
+                $total_sabores     = array_sum($sabores);
+                if ($elegidos_cantidad === 0 || $total_sabores === 0) continue;
 
-            $nombre_producto = implode(' + ', $partes_nombre);
+                $planchas_comun   = 0;
+                $planchas_premium = 0;
+                foreach ($sabores as $sabor_id => $cant) {
+                    if ($cant > 0) {
+                        $planchas = (int)($cant / 8);
+                        if (in_array($sabor_id, $sabores_premium_ids)) $planchas_premium += $planchas;
+                        else                                            $planchas_comun   += $planchas;
+                    }
+                }
+
+                $precio_item = 0;
+                if ($planchas_premium > 0) {
+                    $precio_item += $tabla_personalizado['premium'][$planchas_premium]
+                        ?? ($planchas_premium * ($tabla_personalizado['premium'][1] ?? 9000));
+                }
+                if ($planchas_comun > 0) {
+                    $precio_item += $tabla_personalizado['elegidos'][$planchas_comun]
+                        ?? ($planchas_comun * ($tabla_personalizado['elegidos'][1] ?? 5400));
+                }
+
+                $precio              += $precio_item;
+                $cantidad_sandwiches += $elegidos_cantidad;
+                $partes_nombre[]      = "{$elegidos_cantidad} Surtidos Elegidos";
+                $wa_lineas[]          = "{$elegidos_cantidad} Surtidos Elegidos";
+
+                $lista_sabores = [];
+                foreach ($sabores as $sabor_id => $cant_sabor) {
+                    if ($cant_sabor > 0) {
+                        $sabor_info = array_values(array_filter($sabores_disponibles, fn($s) => $s['id'] === $sabor_id));
+                        if (!empty($sabor_info)) {
+                            $pl = (int)($cant_sabor / 8);
+                            $lista_sabores[] = "{$cant_sabor}x {$sabor_info[0]['nombre']}";
+                            $wa_lineas[]     = "  - {$sabor_info[0]['nombre']}: {$pl} plancha" . ($pl > 1 ? 's' : '');
+                        }
+                    }
+                }
+                $detalle_personalizados[] = "Sabores ({$elegidos_cantidad}): " . implode(', ', $lista_sabores)
+                    . "\n[Datos sabores: " . json_encode($sabores) . "]";
+            }
+        }
+
+        if ($cantidad_sandwiches === 0 || empty($partes_nombre)) {
+            throw new Exception('Seleccioná al menos un producto para tu pedido');
+        }
+
+        $nombre_producto = implode(' + ', $partes_nombre);
+
+        if (!empty($detalle_personalizados)) {
+            $obs_interna .= "\n\n🎨 Pedido Personalizado\n" . implode("\n", $detalle_personalizados);
         }
 
         // Mínimo de 3 planchas (24 sándwiches) para delivery
@@ -639,16 +621,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <form id="formPedido" method="POST" onsubmit="return enviarFormulario(event)">
-                <input type="hidden" name="tipo_pedido" id="campo_tipo_pedido" value="simple">
-                <input type="hidden" name="combos_json" id="campo_combos_json" value="[]">
+                <input type="hidden" name="pedidos_json" id="campo_pedidos_json" value="[]">
                 <input type="hidden" name="turno" id="campo_turno" value="">
                 <input type="hidden" name="forma_pago" id="campo_forma_pago" value="Transferencia">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
                 <input type="hidden" name="direccion" id="campo_direccion" value="">
                 <input type="hidden" name="fecha_pedido" id="campo_fecha_pedido" value="">
-                <input type="hidden" name="elegidos_prod_id" id="campo_elegidos_prod_id" value="0">
-                <input type="hidden" name="elegidos_cantidad" id="campo_elegidos_cantidad" value="">
-                <input type="hidden" name="sabores_json" id="campo_sabores_json" value="{}">
 
                 <div class="p-5 sm:p-6">
 
@@ -739,13 +717,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </button>
 
                         <div class="flex gap-3 mt-2">
-                            <button type="button" onclick="irAPaso(1)"
+                            <button type="button" onclick="volverDesdeProducto('combo')"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
                                 <i class="fas fa-arrow-left mr-2"></i>Volver
                             </button>
-                            <button type="button" onclick="irAPasoDesdeProducto()"
+                            <button type="button" onclick="agregarComboAlPedido()"
                                     class="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-3 rounded-xl font-black transition-all">
-                                Continuar <i class="fas fa-arrow-right ml-2"></i>
+                                Agregar a mi pedido <i class="fas fa-plus ml-2"></i>
                             </button>
                         </div>
                     </div>
@@ -830,15 +808,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
 
                         <div class="flex gap-3 mt-2">
-                            <button type="button" onclick="volverACombos()"
+                            <button type="button" onclick="volverDesdeProducto('personalizado')"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
                                 <i class="fas fa-arrow-left mr-2"></i>Volver
                             </button>
-                            <button type="button" onclick="irAPasoDesdeElegidos()"
+                            <button type="button" onclick="agregarPersonalizadoAlPedido()"
                                     class="flex-1 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-3 rounded-xl font-black transition-all">
-                                Continuar <i class="fas fa-arrow-right ml-2"></i>
+                                Agregar a mi pedido <i class="fas fa-plus ml-2"></i>
                             </button>
                         </div>
+                    </div>
+
+                    <!-- ===== PASO 3.5: RESUMEN ACUMULADO ===== -->
+                    <div id="paso-resumen-acumulado" class="paso space-y-4">
+                        <h2 class="text-xl font-black text-gray-900 mb-1">
+                            <i class="fas fa-list-check text-orange-500 mr-2"></i>Tu pedido hasta ahora
+                        </h2>
+                        <p class="text-sm text-gray-500 mb-3">Podés seguir agregando combos o pedidos personalizados antes de confirmar.</p>
+
+                        <div id="lista-acumulados" class="space-y-2"></div>
+
+                        <div class="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 flex justify-between items-center">
+                            <span class="font-bold text-gray-700">Total estimado</span>
+                            <span id="total-acumulado-display" class="text-2xl font-black text-green-700">$0</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button" onclick="mostrarPaso(3)"
+                                    class="bg-blue-50 border-2 border-blue-300 hover:bg-blue-100 text-blue-800 py-3 rounded-xl font-bold text-sm transition-all">
+                                🍔 + Combo
+                            </button>
+                            <button type="button" onclick="abrirPersonalizado()"
+                                    class="bg-purple-50 border-2 border-purple-300 hover:bg-purple-100 text-purple-800 py-3 rounded-xl font-bold text-sm transition-all">
+                                🎨 + Personalizado
+                            </button>
+                        </div>
+
+                        <button type="button" onclick="continuarAEntrega()"
+                                class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-3 rounded-xl font-black transition-all mt-2">
+                            Continuar a Entrega y Pago <i class="fas fa-arrow-right ml-2"></i>
+                        </button>
                     </div>
 
                     <!-- ===== PASO 4: ENTREGA Y PAGO ===== -->
@@ -973,7 +982,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
 
                         <div class="flex gap-3">
-                            <button type="button" onclick="volverAlProducto()"
+                            <button type="button" onclick="mostrarResumenAcumulado()"
                                     class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition-all">
                                 <i class="fas fa-arrow-left mr-2"></i>Volver
                             </button>
@@ -1198,6 +1207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sabores: {},
         precioCalculadoEf: 0,
         precioCalculadoTr: 0,
+        pedidosAcumulados: [], // { tipo:'combo'|'personalizado', ... } — se puede combinar varios antes de confirmar
         turno: '',
         modalidad: 'Retiro',
         formaPago: '',
@@ -1210,6 +1220,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ============================================================
     // NAVEGACIÓN ENTRE PASOS
     // ============================================================
+    function actualizarIndicadorPaso(indicadorActivo) {
+        document.querySelectorAll('[id^="indicador-paso-"]').forEach((el, i) => {
+            const indicadorNum = i + 1;
+            el.classList.remove('activo', 'completado');
+            if (indicadorNum < indicadorActivo) el.classList.add('completado');
+            if (indicadorNum === indicadorActivo) el.classList.add('activo');
+        });
+    }
+
     function mostrarPaso(num) {
         document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
 
@@ -1218,13 +1237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.getElementById(pasoId)?.classList.add('activo');
 
         // Mapeo paso→indicador: 1→1, 3→2, 4→3
-        const indicadorActivo = num === 1 ? 1 : num === 3 ? 2 : 3;
-        document.querySelectorAll('[id^="indicador-paso-"]').forEach((el, i) => {
-            const indicadorNum = i + 1;
-            el.classList.remove('activo', 'completado');
-            if (indicadorNum < indicadorActivo) el.classList.add('completado');
-            if (indicadorNum === indicadorActivo) el.classList.add('activo');
-        });
+        actualizarIndicadorPaso(num === 1 ? 1 : num === 3 ? 2 : 3);
 
         estado.pasoActual = num;
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1236,38 +1249,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function abrirPersonalizado() {
-        estado.tipoPedido = 'personalizado';
-        document.getElementById('campo_tipo_pedido').value = 'personalizado';
         document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
         document.getElementById('paso-3-personalizado').classList.add('activo');
+        actualizarIndicadorPaso(2);
         estado.pasoActual = 3;
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function volverACombos() {
-        estado.tipoPedido = 'simple';
-        document.getElementById('campo_tipo_pedido').value = 'simple';
-        mostrarPaso(3);
+    function volverDesdeProducto(origen) {
+        if (estado.pedidosAcumulados.length > 0) {
+            mostrarResumenAcumulado();
+        } else if (origen === 'personalizado') {
+            mostrarPaso(3);
+        } else {
+            irAPaso(1);
+        }
     }
 
-    function irAPasoDesdeProducto() {
-        estado.tipoPedido = 'simple';
-        document.getElementById('campo_tipo_pedido').value = 'simple';
+    // ============================================================
+    // ACUMULADOR DE PEDIDOS (combinar combos + personalizados)
+    // ============================================================
+    function agregarComboAlPedido() {
         const totalUnidades = Object.values(estado.carrito).reduce((s, c) => s + c.cantidad, 0);
         if (totalUnidades === 0) {
             alert('Por favor seleccioná al menos un combo');
             return;
         }
-        const combos = Object.entries(estado.carrito).map(([id, c]) => ({
-            id: parseInt(id), nombre: c.nombre, cantidad: c.cantidad,
-            precioEf: c.precioEf, precioTr: c.precioTr
+        const items = Object.entries(estado.carrito).map(([id, c]) => ({
+            tipo: 'combo', id: parseInt(id), nombre: c.nombre, cantidad: c.cantidad,
+            unidades: c.unidades || 1, precioEf: c.precioEf, precioTr: c.precioTr
         }));
-        document.getElementById('campo_combos_json').value = JSON.stringify(combos);
-        actualizarDisplayResumen();
-        mostrarPaso(4);
+        estado.pedidosAcumulados.push(...items);
+
+        // Reset carrito de combos
+        estado.carrito = {};
+        document.querySelectorAll('[id^="cant-carrito-"]').forEach(el => el.textContent = '0');
+        document.getElementById('resumen-carrito')?.classList.add('hidden');
+
+        mostrarResumenAcumulado();
     }
 
-    function irAPasoDesdeElegidos() {
+    function agregarPersonalizadoAlPedido() {
         if (!estado.elegidosCantidad) {
             alert('Por favor seleccioná la cantidad de sándwiches');
             return;
@@ -1283,16 +1305,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             alert(`Tenés ${planchasActuales} plancha${planchasActuales !== 1 ? 's' : ''} elegida${planchasActuales !== 1 ? 's' : ''} pero necesitás ${planchasNecesarias}. Ajustá los sabores.`);
             return;
         }
-        estado.tipoPedido = 'personalizado';
-        document.getElementById('campo_tipo_pedido').value = 'personalizado';
-        document.getElementById('campo_elegidos_cantidad').value = estado.elegidosCantidad;
-        document.getElementById('campo_sabores_json').value = JSON.stringify(estado.sabores);
-        actualizarDisplayResumen();
-        mostrarPaso(4);
+
+        estado.pedidosAcumulados.push({
+            tipo: 'personalizado',
+            elegidos_cantidad: estado.elegidosCantidad,
+            sabores: { ...estado.sabores }
+        });
+
+        // Reset selector de sabores
+        estado.elegidosCantidad = 0;
+        estado.sabores = {};
+        historialSabores = [];
+        document.querySelectorAll('.elegido-qty-btn').forEach(b => {
+            b.classList.remove('border-orange-500', 'bg-orange-50');
+            b.classList.add('border-gray-300');
+        });
+        document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
+        document.getElementById('bloque-sabores')?.classList.add('hidden');
+        document.getElementById('precio-elegidos-preview')?.classList.add('hidden');
+
+        mostrarResumenAcumulado();
     }
 
-    function volverAlProducto() {
-        mostrarPaso(3);
+    function precioDeSabores(sabores) {
+        let planchasComun = 0, planchasPremium = 0;
+        for (const [id, cant] of Object.entries(sabores)) {
+            if (cant > 0) {
+                const p = cant / 8;
+                if (SABORES_PREMIUM.includes(id)) planchasPremium += p; else planchasComun += p;
+            }
+        }
+        let precio = 0;
+        if (planchasPremium > 0) precio += TABLA_PERSONALIZADO.premium[planchasPremium] ?? planchasPremium * (TABLA_PERSONALIZADO.premium[1] ?? 9000);
+        if (planchasComun  > 0) precio += TABLA_PERSONALIZADO.elegidos[planchasComun]  ?? planchasComun  * (TABLA_PERSONALIZADO.elegidos[1] ?? 5400);
+        return precio;
+    }
+
+    const NOMBRES_SABORES = {
+        jamon_queso:'Jamón y Queso', lechuga:'Lechuga', tomate:'Tomate', huevo:'Huevo',
+        choclo:'Choclo', aceitunas:'Aceitunas', zanahoria_queso:'Zanahoria y Queso', zanahoria_huevo:'Zanahoria y Huevo',
+        anana:'Ananá', atun:'Atún', berenjena:'Berenjena', jamon_crudo:'Jamón Crudo', morron:'Morrón',
+        palmito:'Palmito', panceta:'Panceta', pollo:'Pollo', roquefort:'Roquefort', salame:'Salame'
+    };
+
+    function nombreDeSabores(sabores) {
+        return Object.entries(sabores).filter(([,c]) => c > 0)
+            .map(([id, c]) => `${c / 8}pl ${NOMBRES_SABORES[id] || id}`).join(', ');
+    }
+
+    function itemPrecio(item) {
+        return item.tipo === 'combo' ? item.cantidad * item.precioTr : precioDeSabores(item.sabores);
+    }
+
+    function itemNombre(item) {
+        return item.tipo === 'combo' ? `${item.cantidad}x ${item.nombre}` : `${item.elegidos_cantidad} Surtidos Elegidos`;
+    }
+
+    function mostrarResumenAcumulado() {
+        document.querySelectorAll('.paso').forEach(p => p.classList.remove('activo'));
+        document.getElementById('paso-resumen-acumulado').classList.add('activo');
+        renderListaAcumulados();
+        actualizarIndicadorPaso(2);
+        estado.pasoActual = 3;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderListaAcumulados() {
+        const cont = document.getElementById('lista-acumulados');
+        let total = 0;
+        cont.innerHTML = estado.pedidosAcumulados.map((item, idx) => {
+            const precio = itemPrecio(item);
+            total += precio;
+            const detalle = item.tipo === 'personalizado' ? nombreDeSabores(item.sabores) : '';
+            return `<div class="bg-white border-2 border-gray-200 rounded-xl p-3 flex justify-between items-start gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="font-bold text-gray-900">${itemNombre(item)}</div>
+                    ${detalle ? `<div class="text-xs text-gray-500 mt-0.5">${detalle}</div>` : ''}
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="font-bold text-green-600 text-sm">${formatPrecio(precio)}</span>
+                    <button type="button" onclick="quitarAcumulado(${idx})" class="text-red-400 hover:text-red-600 w-7 h-7 flex items-center justify-center">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('') || '<div class="text-center text-gray-400 py-6 text-sm">Todavía no agregaste nada</div>';
+        document.getElementById('total-acumulado-display').textContent = formatPrecio(total);
+    }
+
+    function quitarAcumulado(idx) {
+        estado.pedidosAcumulados.splice(idx, 1);
+        renderListaAcumulados();
+    }
+
+    function continuarAEntrega() {
+        if (estado.pedidosAcumulados.length === 0) {
+            alert('Agregá al menos un producto a tu pedido');
+            return;
+        }
+        actualizarDisplayResumen();
+        mostrarPaso(4);
     }
 
     // ============================================================
@@ -1432,7 +1544,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         document.getElementById('max-planchas').textContent = cantidad / 8;
         document.getElementById('contador-planchas').textContent = 0;
         document.getElementById('precio-elegidos-preview')?.classList.add('hidden');
-        document.getElementById('campo_elegidos_cantidad').value = cantidad;
 
         document.getElementById('bloque-sabores').classList.remove('hidden');
         actualizarDisplayResumen();
@@ -1544,34 +1655,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function totalUnidadesPedido() {
-        if (estado.tipoPedido === 'personalizado') {
-            return estado.elegidosCantidad || 0;
-        }
-        return Object.values(estado.carrito).reduce((s, c) => s + c.cantidad * (c.unidades || 1), 0);
+        return estado.pedidosAcumulados.reduce((sum, item) => {
+            return sum + (item.tipo === 'combo' ? item.cantidad * (item.unidades || 1) : item.elegidos_cantidad);
+        }, 0);
     }
 
     function actualizarDisplayResumen() {
-        let nombre = '';
-        let precio = 0;
-
-        if (estado.tipoPedido === 'personalizado') {
-            nombre = estado.elegidosCantidad ? `${estado.elegidosCantidad} Surtidos Elegidos` : '';
-            precio = estado.formaPago === 'Efectivo' ? estado.precioCalculadoEf : estado.precioCalculadoTr;
-            if (precio === 0 && estado.elegidosCantidad > 0) calcularPrecioElegidos();
-        } else {
-            const items = Object.values(estado.carrito);
-            if (items.length > 0) {
-                nombre = items.map(c => `${c.cantidad}x ${c.nombre}`).join(' + ');
-                precio = items.reduce((s, c) => s + c.cantidad * (estado.formaPago === 'Efectivo' ? c.precioEf : c.precioTr), 0);
-            }
-        }
+        const items = estado.pedidosAcumulados;
+        const nombre = items.map(itemNombre).join(' + ');
+        const precio = items.reduce((s, item) => s + itemPrecio(item), 0);
 
         const resumen = document.getElementById('resumen-pedido');
-        if (nombre && estado.turno && estado.formaPago) {
+        if (nombre && estado.turno) {
             resumen.classList.remove('hidden');
             document.getElementById('resumen-producto').textContent  = nombre;
             document.getElementById('resumen-turno').textContent     = estado.turno;
-            document.getElementById('resumen-pago').textContent      = estado.formaPago;
+            document.getElementById('resumen-pago').textContent      = 'Transferencia';
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
 
             const filaFecha = document.getElementById('resumen-fila-fecha');
@@ -1595,12 +1694,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ENVÍO DEL FORMULARIO
     // ============================================================
     function enviarFormulario(e) {
-        if (!document.getElementById('campo_turno').value) {
-            alert('Por favor seleccioná un turno');
+        if (estado.pedidosAcumulados.length === 0) {
+            alert('Tu pedido está vacío');
             e.preventDefault();
             return false;
         }
-        if (false) { // forma_pago siempre Transferencia
+        if (!document.getElementById('campo_turno').value) {
+            alert('Por favor seleccioná un turno');
             e.preventDefault();
             return false;
         }
@@ -1628,6 +1728,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             let dirCompuesta = `${calle} ${numero}, ${localidad} (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
         }
+
+        // Armar el payload combinado con todos los ítems acumulados
+        const pedidosPayload = estado.pedidosAcumulados.map(item => {
+            if (item.tipo === 'combo') {
+                return { tipo: 'combo', id: item.id, cantidad: item.cantidad };
+            }
+            return { tipo: 'personalizado', elegidos_cantidad: item.elegidos_cantidad, sabores: item.sabores };
+        });
+        document.getElementById('campo_pedidos_json').value = JSON.stringify(pedidosPayload);
 
         const btn = document.getElementById('btn-confirmar');
         btn.disabled = true;
