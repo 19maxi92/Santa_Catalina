@@ -142,7 +142,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($turno)) {
             throw new Exception('Por favor seleccioná un turno');
         }
-        $forma_pago = 'Transferencia'; // siempre transferencia al crear
+        // Forma de pago: solo informativa (no cambia el precio), se guarda para que quede registrada
+        if (!in_array($forma_pago, ['Efectivo', 'Transferencia'])) {
+            $forma_pago = 'Transferencia';
+        }
         if ($modalidad === 'Delivery' && empty($direccion)) {
             throw new Exception('Si elegís Delivery, ingresá la dirección de entrega');
         }
@@ -255,9 +258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prod = $stmt->fetch();
                 if (!$prod) continue;
 
-                $precio_unit = ($forma_pago === 'Efectivo')
-                    ? (float)$prod['precio_efectivo']
-                    : (float)$prod['precio_transferencia'];
+                // La forma de pago elegida es solo informativa: el precio siempre es el de transferencia
+                $precio_unit = (float)$prod['precio_transferencia'];
 
                 // Sándwiches por caja: primer número que aparece en el nombre del producto (ej: "24 Jamón y Queso" -> 24)
                 preg_match('/(\d+)/', $prod['nombre'], $m_unid);
@@ -420,6 +422,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($observaciones)) {
             $wamsg .= "Obs: " . trim($observaciones) . "\n";
         }
+
+        $precio_formateado = '$' . number_format($precio, 0, ',', '.');
+        $wamsg .= "\nForma de pago: {$forma_pago}\nTotal: {$precio_formateado}\n";
 
         $pedido_confirmado['wamsg'] = $wamsg;
 
@@ -730,72 +735,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <!-- ===== PASO 3B: ELEGIDOS / PERSONALIZADO ===== -->
                     <div id="paso-3-personalizado" class="paso space-y-4">
-                        <h2 class="text-xl font-black text-gray-900 mb-4">
+                        <h2 class="text-xl font-black text-gray-900 mb-1">
                             <i class="fas fa-sliders-h text-orange-500 mr-2"></i>Armá tu pedido
                         </h2>
 
-                        <!-- Selector de cantidad de elegidos -->
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-1">¿Cuántos sándwiches querés?</label>
-                            <p class="text-xs text-orange-600 mb-3">Los pedidos elegidos se arman en planchas de 8 unidades</p>
-                            <div class="grid grid-cols-3 gap-2" id="grid-elegidos">
-                                <?php
-                                foreach ([8, 16, 24, 32, 40, 48] as $cant):
-                                    $planchas = $cant / 8;
-                                ?>
-                                    <button type="button"
-                                            class="elegido-qty-btn border-2 border-gray-300 rounded-xl p-3 text-center hover:border-orange-500 hover:bg-orange-50 transition-all"
-                                            onclick="seleccionarElegidos(<?= $cant ?>)">
-                                        <div class="text-2xl font-black text-gray-900"><?= $cant ?></div>
-                                        <div class="text-xs text-gray-500"><?= $planchas ?> plancha<?= $planchas > 1 ? 's' : '' ?></div>
-                                    </button>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-
                         <!-- Selector de sabores -->
-                        <div id="bloque-sabores" class="hidden">
+                        <div id="bloque-sabores">
                             <div class="flex items-center justify-between mb-3">
                                 <label class="text-sm font-bold text-gray-700">
-                                    Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(tocá para sumar 1 plancha)</span>
+                                    Elegí tus sabores <span class="text-orange-500 font-normal text-xs">(máx. 6 planchas)</span>
                                 </label>
                                 <span class="text-sm font-bold text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-2 py-1">
-                                    <span id="contador-planchas">0</span>/<span id="max-planchas">0</span> planchas
+                                    <span id="contador-planchas">0</span>/6 planchas
                                 </span>
                             </div>
 
                             <!-- COMUNES -->
-                            <p class="text-xs font-bold text-green-700 mb-2 mt-1">🟢 SABORES COMUNES</p>
-                            <div class="grid grid-cols-2 gap-2 mb-4">
+                            <p class="text-xs font-bold text-green-700 mb-2 mt-1">🟢 SABORES CLÁSICOS</p>
+                            <div class="space-y-2 mb-4">
                                 <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'comun') as $sabor): ?>
-                                    <button type="button" onclick="agregarSaborPlancha('<?= $sabor['id'] ?>')"
-                                            class="sabor-btn p-3 bg-white border-2 border-green-300 rounded-lg text-xs font-medium hover:bg-green-100 transition-all"
-                                            id="sabor-<?= $sabor['id'] ?>">
-                                        <div class="font-bold"><?= $sabor['emoji'] ?> <?= htmlspecialchars($sabor['nombre']) ?></div>
-                                        <div id="cant-sabor-<?= $sabor['id'] ?>" class="text-green-600 font-bold mt-1 text-lg">0</div>
-                                    </button>
+                                    <div class="flex items-center justify-between border-2 border-green-200 rounded-lg px-3 py-2"
+                                         id="sabor-<?= $sabor['id'] ?>">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg"><?= $sabor['emoji'] ?></span>
+                                            <span class="text-sm font-medium text-gray-700"><?= htmlspecialchars($sabor['nombre']) ?></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
+                                                    class="w-8 h-8 border-2 border-green-300 rounded-lg text-green-700 font-bold hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">−</button>
+                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900">0</span>
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
+                                                    class="w-8 h-8 border-2 border-green-300 rounded-lg text-green-700 font-bold hover:bg-green-500 hover:text-white hover:border-green-500 transition-all">+</button>
+                                        </div>
+                                    </div>
                                 <?php endforeach; ?>
                             </div>
 
                             <!-- PREMIUM -->
                             <p class="text-xs font-bold text-orange-600 mb-2">🟠 SABORES PREMIUM</p>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="space-y-2">
                                 <?php foreach (array_filter($sabores_disponibles, fn($s) => $s['tipo'] === 'premium') as $sabor): ?>
-                                    <button type="button" onclick="agregarSaborPlancha('<?= $sabor['id'] ?>')"
-                                            class="sabor-btn p-3 bg-white border-2 border-orange-300 rounded-lg text-xs font-medium hover:bg-orange-100 transition-all"
-                                            id="sabor-<?= $sabor['id'] ?>">
-                                        <div class="font-bold"><?= $sabor['emoji'] ?> <?= htmlspecialchars($sabor['nombre']) ?></div>
-                                        <div id="cant-sabor-<?= $sabor['id'] ?>" class="text-orange-600 font-bold mt-1 text-lg">0</div>
-                                    </button>
+                                    <div class="flex items-center justify-between border-2 border-orange-200 rounded-lg px-3 py-2"
+                                         id="sabor-<?= $sabor['id'] ?>">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-lg"><?= $sabor['emoji'] ?></span>
+                                            <span class="text-sm font-medium text-gray-700"><?= htmlspecialchars($sabor['nombre']) ?></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', -1)"
+                                                    class="w-8 h-8 border-2 border-orange-300 rounded-lg text-orange-700 font-bold hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">−</button>
+                                            <span id="cant-sabor-<?= $sabor['id'] ?>" class="w-6 text-center font-bold text-gray-900">0</span>
+                                            <button type="button" onclick="cambiarSabor('<?= $sabor['id'] ?>', 1)"
+                                                    class="w-8 h-8 border-2 border-orange-300 rounded-lg text-orange-700 font-bold hover:bg-orange-500 hover:text-white hover:border-orange-500 transition-all">+</button>
+                                        </div>
+                                    </div>
                                 <?php endforeach; ?>
-                            </div>
-
-                            <!-- Deshacer -->
-                            <div class="mt-4">
-                                <button type="button" onclick="deshacerPlanchaSabor()"
-                                        class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold text-sm">
-                                    <i class="fas fa-undo mr-2"></i>Deshacer última plancha
-                                </button>
                             </div>
                         </div>
 
@@ -936,7 +930,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    class="w-full px-3 py-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-sm">
                         </div>
 
-                        <!-- forma_pago siempre Transferencia -->
+                        <!-- 5b. Forma de pago (informativo, no cambia el precio) -->
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-3">
+                                <i class="fas fa-wallet text-green-600 mr-1"></i>¿Cómo vas a pagar?
+                            </label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="pago-card p-4 text-center seleccionado" onclick="seleccionarPago('Transferencia', this)">
+                                    <i class="fas fa-university text-3xl text-blue-500 mb-2"></i>
+                                    <div class="font-bold text-gray-900">Transferencia</div>
+                                </div>
+                                <div class="pago-card p-4 text-center" onclick="seleccionarPago('Efectivo', this)">
+                                    <i class="fas fa-money-bill-wave text-3xl text-green-500 mb-2"></i>
+                                    <div class="font-bold text-gray-900">Efectivo</div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">Es solo para que quede registrado, el precio no cambia.</p>
+                        </div>
 
                         <!-- 6. Observaciones -->
                         <div>
@@ -1203,14 +1213,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     let estado = {
         tipoPedido: 'simple',
         carrito: {},   // { productoId: {nombre, cantidad, precioEf, precioTr} }
-        elegidosCantidad: 0,
         sabores: {},
         precioCalculadoEf: 0,
         precioCalculadoTr: 0,
         pedidosAcumulados: [], // { tipo:'combo'|'personalizado', ... } — se puede combinar varios antes de confirmar
         turno: '',
         modalidad: 'Retiro',
-        formaPago: '',
+        formaPago: 'Transferencia',
         fechaPedido: '',
         pasoActual: 1,
         disponibilidad: null,
@@ -1290,38 +1299,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function agregarPersonalizadoAlPedido() {
-        if (!estado.elegidosCantidad) {
-            alert('Por favor seleccioná la cantidad de sándwiches');
-            return;
-        }
         const totalSabores = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
         if (totalSabores === 0) {
             alert('Por favor elegí al menos un sabor');
             return;
         }
-        if (totalSabores !== estado.elegidosCantidad) {
-            const planchasActuales  = totalSabores / 8;
-            const planchasNecesarias = estado.elegidosCantidad / 8;
-            alert(`Tenés ${planchasActuales} plancha${planchasActuales !== 1 ? 's' : ''} elegida${planchasActuales !== 1 ? 's' : ''} pero necesitás ${planchasNecesarias}. Ajustá los sabores.`);
-            return;
-        }
 
         estado.pedidosAcumulados.push({
             tipo: 'personalizado',
-            elegidos_cantidad: estado.elegidosCantidad,
+            elegidos_cantidad: totalSabores,
             sabores: { ...estado.sabores }
         });
 
         // Reset selector de sabores
-        estado.elegidosCantidad = 0;
         estado.sabores = {};
-        historialSabores = [];
-        document.querySelectorAll('.elegido-qty-btn').forEach(b => {
-            b.classList.remove('border-orange-500', 'bg-orange-50');
-            b.classList.add('border-gray-300');
-        });
         document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
-        document.getElementById('bloque-sabores')?.classList.add('hidden');
+        document.getElementById('contador-planchas').textContent = '0';
         document.getElementById('precio-elegidos-preview')?.classList.add('hidden');
 
         mostrarResumenAcumulado();
@@ -1513,7 +1506,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Mostrar preview de precio
         const preview = document.getElementById('precio-elegidos-preview');
-        if (estado.elegidosCantidad > 0 && (planchasComun + planchasPremium) > 0) {
+        if ((planchasComun + planchasPremium) > 0) {
             preview.classList.remove('hidden');
             document.getElementById('precio-elegidos-display').textContent = formatPrecio(precio);
             document.getElementById('precio-elegidos-trans').textContent   = '';
@@ -1523,67 +1516,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         actualizarDisplayResumen();
     }
 
-    let historialSabores = [];
+    const MAX_PLANCHAS_PERSONALIZADO = 6;
 
-    function seleccionarElegidos(cantidad) {
-        estado.elegidosCantidad = cantidad;
-        estado.sabores = {};
-        estado.precioCalculadoEf = 0;
-        estado.precioCalculadoTr = 0;
-        historialSabores = [];
+    function cambiarSabor(saborId, delta) {
+        const paso = 8; // 1 plancha = 8 sándwiches
+        const maxTotal = MAX_PLANCHAS_PERSONALIZADO * 8;
+        const actual = estado.sabores[saborId] || 0;
+        const totalActual = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
 
-        document.querySelectorAll('.elegido-qty-btn').forEach(b => {
-            b.classList.remove('border-orange-500', 'bg-orange-50');
-            b.classList.add('border-gray-300');
-        });
-        event.currentTarget.classList.add('border-orange-500', 'bg-orange-50');
-        event.currentTarget.classList.remove('border-gray-300');
+        if (delta > 0 && totalActual + paso > maxTotal) {
+            alert(`Máximo ${MAX_PLANCHAS_PERSONALIZADO} planchas (${maxTotal} sándwiches) por pedido personalizado`);
+            return;
+        }
 
-        document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => el.textContent = '0');
+        const nuevo = Math.max(0, actual + delta * paso);
+        estado.sabores[saborId] = nuevo;
 
-        document.getElementById('max-planchas').textContent = cantidad / 8;
-        document.getElementById('contador-planchas').textContent = 0;
-        document.getElementById('precio-elegidos-preview')?.classList.add('hidden');
+        const el = document.getElementById('cant-sabor-' + saborId);
+        if (el) el.textContent = nuevo / 8;
 
-        document.getElementById('bloque-sabores').classList.remove('hidden');
-        actualizarDisplayResumen();
-    }
-
-    function actualizarContadoresSabores() {
-        document.querySelectorAll('[id^="cant-sabor-"]').forEach(el => {
-            const saborId = el.id.replace('cant-sabor-', '');
-            el.textContent = (estado.sabores[saborId] || 0) / 8;
-        });
         const total = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
         document.getElementById('contador-planchas').textContent = total / 8;
         calcularPrecioElegidos();
-    }
-
-    function agregarSaborPlancha(saborId) {
-        const paso = 8; // 1 plancha = 8 sándwiches
-        const maxTotal = estado.elegidosCantidad;
-        if (!maxTotal) {
-            alert('Elegí primero cuántos sándwiches querés');
-            return;
-        }
-        const totalActual = Object.values(estado.sabores).reduce((a, b) => a + b, 0);
-
-        if (totalActual + paso > maxTotal) {
-            const maxPlanchas = maxTotal / 8;
-            alert(`Máximo ${maxPlanchas} plancha${maxPlanchas > 1 ? 's' : ''} (${maxTotal} sándwiches) en total`);
-            return;
-        }
-
-        historialSabores.push(JSON.parse(JSON.stringify(estado.sabores)));
-        estado.sabores[saborId] = (estado.sabores[saborId] || 0) + paso;
-        actualizarContadoresSabores();
-    }
-
-    function deshacerPlanchaSabor() {
-        if (historialSabores.length > 0) {
-            estado.sabores = historialSabores.pop();
-            actualizarContadoresSabores();
-        }
     }
 
     // ============================================================
@@ -1639,11 +1593,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         cargarDisponibilidad(estado.fechaPedido);
     }
 
-    function seleccionarPago(tipo) {
+    function seleccionarPago(tipo, el) {
         estado.formaPago = tipo;
         document.getElementById('campo_forma_pago').value = tipo;
         document.querySelectorAll('.pago-card').forEach(c => c.classList.remove('seleccionado'));
-        event.currentTarget.classList.add('seleccionado');
+        el.classList.add('seleccionado');
         actualizarDisplayResumen();
     }
 
@@ -1670,7 +1624,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             resumen.classList.remove('hidden');
             document.getElementById('resumen-producto').textContent  = nombre;
             document.getElementById('resumen-turno').textContent     = estado.turno;
-            document.getElementById('resumen-pago').textContent      = 'Transferencia';
+            document.getElementById('resumen-pago').textContent      = estado.formaPago;
             document.getElementById('resumen-modalidad').textContent = estado.modalidad;
 
             const filaFecha = document.getElementById('resumen-fila-fecha');
