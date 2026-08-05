@@ -414,7 +414,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $wamsg .= "*Pedido nº #$pedido_id*\n\n";
         $wamsg .= "*$nombre $apellido*\n";
         $wamsg .= "$fecha_str - Turno $turno\n";
-        $wamsg .= "$modalidad";
+        $wamsg .= ($modalidad === 'Delivery' ? 'Reparto' : $modalidad);
         if ($modalidad === 'Delivery' && !empty($direccion)) {
             $wamsg .= "\n$direccion";
         }
@@ -567,7 +567,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                     <div class="flex justify-between items-center">
                         <span class="text-gray-600 font-medium">Modalidad</span>
-                        <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['modalidad']) ?></span>
+                        <span class="font-bold"><?= htmlspecialchars($pedido_confirmado['modalidad'] === 'Delivery' ? 'Reparto' : $pedido_confirmado['modalidad']) ?></span>
                     </div>
                     <?php if ($pedido_confirmado['modalidad'] === 'Delivery' && !empty($pedido_confirmado['fecha_pedido'])): ?>
                     <div class="flex justify-between items-center">
@@ -870,7 +870,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                                 <div class="modalidad-card p-4 text-center" onclick="seleccionarModalidad('Delivery')">
                                     <i class="fas fa-motorcycle text-3xl text-blue-500 mb-2"></i>
-                                    <div class="font-bold text-gray-900">Delivery</div>
+                                    <div class="font-bold text-gray-900">Reparto</div>
                                     <div class="text-xs text-gray-500 mt-1">Te lo llevamos</div>
                                 </div>
                             </div>
@@ -1623,7 +1623,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             document.getElementById('resumen-producto').textContent  = nombre;
             document.getElementById('resumen-turno').textContent     = estado.turno;
             document.getElementById('resumen-pago').textContent      = estado.formaPago;
-            document.getElementById('resumen-modalidad').textContent = estado.modalidad;
+            document.getElementById('resumen-modalidad').textContent = estado.modalidad === 'Delivery' ? 'Reparto' : estado.modalidad;
 
             const filaFecha = document.getElementById('resumen-fila-fecha');
             if (estado.fechaPedido) {
