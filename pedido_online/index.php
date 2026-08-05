@@ -258,8 +258,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $prod = $stmt->fetch();
                 if (!$prod) continue;
 
-                // La forma de pago elegida es solo informativa: el precio siempre es el de transferencia
-                $precio_unit = (float)$prod['precio_transferencia'];
+                $precio_unit = ($forma_pago === 'Efectivo')
+                    ? (float)$prod['precio_efectivo']
+                    : (float)$prod['precio_transferencia'];
 
                 // Sándwiches por caja: primer número que aparece en el nombre del producto (ej: "24 Jamón y Queso" -> 24)
                 preg_match('/(\d+)/', $prod['nombre'], $m_unid);
@@ -294,6 +295,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($planchas_comun > 0) {
                     $precio_item += $tabla_personalizado['elegidos'][$planchas_comun]
                         ?? ($planchas_comun * ($tabla_personalizado['elegidos'][1] ?? 5400));
+                }
+
+                // Descuento efectivo: $1.000 cada 3 planchas
+                if ($forma_pago === 'Efectivo') {
+                    $planchas_totales_item = $planchas_premium + $planchas_comun;
+                    $precio_item = max(0, $precio_item - floor($planchas_totales_item / 3) * 1000);
                 }
 
                 $precio              += $precio_item;
@@ -945,7 +952,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <div class="font-bold text-gray-900">Efectivo</div>
                                 </div>
                             </div>
-                            <p class="text-xs text-gray-400 mt-2">Es solo para que quede registrado, el precio no cambia.</p>
                         </div>
 
                         <!-- 6. Observaciones -->
@@ -1320,7 +1326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mostrarResumenAcumulado();
     }
 
-    function precioDeSabores(sabores) {
+    function precioDeSabores(sabores, formaPago) {
         let planchasComun = 0, planchasPremium = 0;
         for (const [id, cant] of Object.entries(sabores)) {
             if (cant > 0) {
@@ -1331,6 +1337,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         let precio = 0;
         if (planchasPremium > 0) precio += TABLA_PERSONALIZADO.premium[planchasPremium] ?? planchasPremium * (TABLA_PERSONALIZADO.premium[1] ?? 9000);
         if (planchasComun  > 0) precio += TABLA_PERSONALIZADO.elegidos[planchasComun]  ?? planchasComun  * (TABLA_PERSONALIZADO.elegidos[1] ?? 5400);
+        if (formaPago === 'Efectivo') {
+            const descuento = Math.floor((planchasPremium + planchasComun) / 3) * 1000;
+            precio = Math.max(0, precio - descuento);
+        }
         return precio;
     }
 
@@ -1346,8 +1356,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             .map(([id, c]) => `${c / 8}pl ${NOMBRES_SABORES[id] || id}`).join(', ');
     }
 
-    function itemPrecio(item) {
-        return item.tipo === 'combo' ? item.cantidad * item.precioTr : precioDeSabores(item.sabores);
+    function itemPrecio(item, formaPago) {
+        formaPago = formaPago || 'Transferencia';
+        if (item.tipo === 'combo') {
+            const precioUnit = formaPago === 'Efectivo' ? item.precioEf : item.precioTr;
+            return item.cantidad * precioUnit;
+        }
+        return precioDeSabores(item.sabores, formaPago);
     }
 
     function itemNombre(item) {
@@ -1482,31 +1497,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     const SABORES_PREMIUM = ['anana','atun','berenjena','jamon_crudo','morron','palmito','panceta','pollo','roquefort','salame'];
 
     function calcularPrecioElegidos() {
-        let planchasComun = 0, planchasPremium = 0;
-        for (const [id, cant] of Object.entries(estado.sabores)) {
-            if (cant > 0) {
-                const p = cant / 8;
-                if (SABORES_PREMIUM.includes(id)) planchasPremium += p;
-                else                              planchasComun    += p;
-            }
-        }
-
-        // Precio por tabla: premium → tabla premium, comunes → tabla elegidos
-        let precio = 0;
-        if (planchasPremium > 0) {
-            precio += TABLA_PERSONALIZADO.premium[planchasPremium]
-                   ?? planchasPremium * (TABLA_PERSONALIZADO.premium[1] ?? 9000);
-        }
-        if (planchasComun > 0) {
-            precio += TABLA_PERSONALIZADO.elegidos[planchasComun]
-                   ?? planchasComun * (TABLA_PERSONALIZADO.elegidos[1] ?? 5400);
-        }
+        const totalPlanchas = Object.values(estado.sabores).reduce((a, b) => a + b, 0) / 8;
+        const precio = precioDeSabores(estado.sabores, estado.formaPago);
         estado.precioCalculadoEf = precio;
         estado.precioCalculadoTr = precio;
 
         // Mostrar preview de precio
         const preview = document.getElementById('precio-elegidos-preview');
-        if ((planchasComun + planchasPremium) > 0) {
+        if (totalPlanchas > 0) {
             preview.classList.remove('hidden');
             document.getElementById('precio-elegidos-display').textContent = formatPrecio(precio);
             document.getElementById('precio-elegidos-trans').textContent   = '';
@@ -1617,7 +1615,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     function actualizarDisplayResumen() {
         const items = estado.pedidosAcumulados;
         const nombre = items.map(itemNombre).join(' + ');
-        const precio = items.reduce((s, item) => s + itemPrecio(item), 0);
+        const precio = items.reduce((s, item) => s + itemPrecio(item, estado.formaPago), 0);
 
         const resumen = document.getElementById('resumen-pedido');
         if (nombre && estado.turno) {
