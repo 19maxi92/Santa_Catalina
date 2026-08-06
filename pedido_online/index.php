@@ -212,6 +212,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('¡Lo sentimos! No hay cupos disponibles para ese turno y fecha. Elegí otro.');
         }
 
+        // Los lunes, el local cierra a las 18hs: para Retiro no hay turno Tarde ese día
+        if ($modalidad === 'Retiro' && $turno === 'Tarde' && $dia_semana === 1) {
+            throw new Exception('Los lunes cerramos a las 18hs, elegí Mañana o Siesta para retirar.');
+        }
+
         // Validar corte de horario server-side solo para Delivery (Retiro no tiene corte)
         if ($modalidad === 'Delivery') {
             $tz_ar = new DateTimeZone('America/Argentina/Buenos_Aires');
@@ -1084,6 +1089,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function turnoDisponibleDeDisp(turno, fechaISO) {
+        // Los lunes, el local cierra a las 18hs: para Retiro no hay turno Tarde ese día
+        const diaSemana = new Date(fechaISO + 'T12:00:00').getDay(); // 1 = Lunes
+        if (diaSemana === 1 && estado.modalidad === 'Retiro' && turno === 'Tarde') return false;
+
         const disp = estado.disponibilidad?.[turno];
         if (!disp || !disp.activo || disp.disponible <= 0) return false;
         const cfg = turnosConfig.find(t => t.turno === turno);
@@ -1107,6 +1116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     function turnoMotivoBloqueo(turno, fechaISO) {
+        const diaSemana = new Date(fechaISO + 'T12:00:00').getDay();
+        if (diaSemana === 1 && estado.modalidad === 'Retiro' && turno === 'Tarde') return 'Lunes cerramos a las 18hs';
+
         const disp = estado.disponibilidad?.[turno];
         if (!disp || !disp.activo) return 'No disponible';
         if (disp.disponible <= 0) return 'Sin cupos';
