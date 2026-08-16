@@ -7,23 +7,25 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
     exit;
 }
 
+$mi_ubicacion = $_SESSION['empleado_ubicacion'] ?? 'Local 1';
+
 $pdo = getConnection();
 
-// Procesar acciones
+// Procesar acciones (siempre limitadas a la sucursal del empleado)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     switch ($_POST['accion']) {
         case 'cambiar_estado':
             $id = (int)$_POST['id'];
             $estado = htmlspecialchars(trim($_POST['estado']));
-            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ?");
-            $stmt->execute([$estado, $id]);
+            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ? AND ubicacion = ?");
+            $stmt->execute([$estado, $id, $mi_ubicacion]);
             header('Location: pedidos.php');
             exit;
-            
+
         case 'marcar_impreso':
             $id = (int)$_POST['id'];
-            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion = ?");
+            $stmt->execute([$id, $mi_ubicacion]);
             header('Location: pedidos.php');
             exit;
     }
@@ -41,7 +43,7 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
                created_at, fecha_entrega, fecha_display,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
         FROM pedidos
-        WHERE ubicacion = 'Local 1'
+        WHERE ubicacion = :mi_ubicacion
         AND (tomado = 1 OR tomado IS NULL)
         AND (
             DATE(created_at) BETWEEN :fecha_desde AND :fecha_hasta
@@ -49,6 +51,7 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
         )";
 
 $params = [
+    'mi_ubicacion' => $mi_ubicacion,
     'fecha_desde' => $filtro_fecha_desde,
     'fecha_hasta' => $filtro_fecha_hasta
 ];
@@ -82,7 +85,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ver Pedidos - Local 1</title>
+    <title>Ver Pedidos - <?= htmlspecialchars($mi_ubicacion) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -175,7 +178,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
     <header class="bg-green-600 text-white p-3 shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-bold">📋 VER PEDIDOS - LOCAL 1</h1>
+                <h1 class="text-xl font-bold">📋 VER PEDIDOS - <?= mb_strtoupper(htmlspecialchars($mi_ubicacion)) ?></h1>
             </div>
             
             <!-- STATS COMPACTOS -->
