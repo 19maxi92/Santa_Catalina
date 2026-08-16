@@ -608,9 +608,20 @@ $cambio_ventas_mes = $mes_pasado['ventas_mes_pasado'] > 0 ? (($este_mes['ventas_
                 'pen_ctr' => (int)  ($pendientes_mapa['Fábrica']['Transferencia']['cantidad']?? 0),
                 'pen_cef' => (int)  ($pendientes_mapa['Fábrica']['Efectivo']['cantidad']    ?? 0),
             ],
+            'villa_elisa' => [
+                'nombre' => 'Villa Elisa', 'icon' => '🏬',
+                'ent_tr'  => (float)($ingresos_reales['Villa Elisa']['Transferencia']['total']  ?? 0),
+                'ent_ef'  => (float)($ingresos_reales['Villa Elisa']['Efectivo']['total']       ?? 0),
+                'ent_ctr' => (int)  ($ingresos_reales['Villa Elisa']['Transferencia']['cantidad']?? 0),
+                'ent_cef' => (int)  ($ingresos_reales['Villa Elisa']['Efectivo']['cantidad']    ?? 0),
+                'pen_tr'  => (float)($pendientes_mapa['Villa Elisa']['Transferencia']['total']  ?? 0),
+                'pen_ef'  => (float)($pendientes_mapa['Villa Elisa']['Efectivo']['total']       ?? 0),
+                'pen_ctr' => (int)  ($pendientes_mapa['Villa Elisa']['Transferencia']['cantidad']?? 0),
+                'pen_cef' => (int)  ($pendientes_mapa['Villa Elisa']['Efectivo']['cantidad']    ?? 0),
+            ],
         ];
         ?>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
         <?php foreach ($ubs_data as $slug => $d):
             $ent_tot = $d['ent_tr'] + $d['ent_ef'];
             $pen_tot = $d['pen_tr'] + $d['pen_ef'];

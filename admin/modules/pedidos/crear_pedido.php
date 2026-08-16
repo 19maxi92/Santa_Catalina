@@ -347,7 +347,7 @@ try {
                         <!-- Ubicación (ADMIN selecciona ubicación) -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-3">Ubicación / Local *</label>
-                            <div class="grid grid-cols-2 gap-4">
+                            <div class="grid grid-cols-3 gap-4">
                                 <label class="pago-card">
                                     <input type="radio" name="ubicacion" value="Local 1" class="hidden" checked>
                                     <div class="text-4xl mb-2">🏪</div>
@@ -357,6 +357,11 @@ try {
                                     <input type="radio" name="ubicacion" value="Fábrica" class="hidden">
                                     <div class="text-4xl mb-2">🏭</div>
                                     <div class="font-bold">Fábrica</div>
+                                </label>
+                                <label class="pago-card">
+                                    <input type="radio" name="ubicacion" value="Villa Elisa" class="hidden">
+                                    <div class="text-4xl mb-2">🏬</div>
+                                    <div class="font-bold">Villa Elisa</div>
                                 </label>
                             </div>
                         </div>

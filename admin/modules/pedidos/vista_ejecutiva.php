@@ -353,6 +353,7 @@ unset($_SESSION['mensaje'], $_SESSION['error']);
                 <option value="">Todas ubicaciones</option>
                 <option value="Local 1" <?= $filtro_ubicacion === 'Local 1' ? 'selected' : '' ?>>🏪 Local 1</option>
                 <option value="Fábrica" <?= $filtro_ubicacion === 'Fábrica' ? 'selected' : '' ?>>🏭 Fábrica</option>
+                <option value="Villa Elisa" <?= $filtro_ubicacion === 'Villa Elisa' ? 'selected' : '' ?>>🏬 Villa Elisa</option>
             </select>
             
             <input type="date" name="fecha_desde" value="<?= htmlspecialchars($fecha_desde) ?>" 
