@@ -24,9 +24,12 @@ function sendSuccess($data) {
 
 try {
     $pdo = getConnection();
-    
+
     // Verificar qué acción se solicita
     $action = $_GET['action'] ?? 'get_orders';
+
+    // Ubicación objetivo (por defecto Local 1, para no romper integraciones ya conectadas)
+    $ubicacion_api = $_GET['ubicacion'] ?? 'Local 1';
     
     switch ($action) {
         case 'get_orders':
@@ -43,15 +46,15 @@ try {
                     created_at,
                     estado,
                     ubicacion
-                FROM pedidos 
-                WHERE ubicacion = 'Local 1' 
-                AND estado = 'Pendiente' 
+                FROM pedidos
+                WHERE ubicacion = ?
+                AND estado = 'Pendiente'
                 AND DATE(created_at) = CURDATE()
                 AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)
                 ORDER BY created_at DESC
             ");
-            
-            $stmt->execute();
+
+            $stmt->execute([$ubicacion_api]);
             $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
             
             // Agregar información adicional
@@ -83,11 +86,11 @@ try {
             
             // Marcar como impreso
             $stmt = $pdo->prepare("
-                UPDATE pedidos 
-                SET impreso_auto = 1, fecha_impreso = NOW() 
-                WHERE id = ? AND ubicacion = 'Local 1'
+                UPDATE pedidos
+                SET impreso_auto = 1, fecha_impreso = NOW()
+                WHERE id = ? AND ubicacion = ?
             ");
-            $success = $stmt->execute([$order_id]);
+            $success = $stmt->execute([$order_id, $ubicacion_api]);
             
             if ($success && $stmt->rowCount() > 0) {
                 sendSuccess(['order_id' => $order_id, 'marked' => true]);

@@ -71,4 +71,26 @@ function requireLogin() {
         exit;
     }
 }
+
+// Login de "staff": admin O empleado (para páginas compartidas como crear pedido)
+function isStaffLoggedIn() {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    return (isset($_SESSION['admin_logged']) && $_SESSION['admin_logged'] === true)
+        || (isset($_SESSION['empleado_logged']) && $_SESSION['empleado_logged'] === true);
+}
+
+// Si es empleado (no admin), devuelve su sucursal asignada; si es admin, null (sin restricción)
+function staffUbicacionRestringida() {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    if (!empty($_SESSION['admin_logged'])) return null;
+    if (!empty($_SESSION['empleado_logged'])) return $_SESSION['empleado_ubicacion'] ?? 'Local 1';
+    return null;
+}
+
+function requireStaffLogin() {
+    if (!isStaffLoggedIn()) {
+        header('Location: /admin/login.php');
+        exit;
+    }
+}
 ?>

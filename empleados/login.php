@@ -16,11 +16,14 @@ if ($_POST) {
     
     try {
         $pdo = getConnection();
-        
+
+        // Columna de sucursal asignada al usuario (self-healing, no rompe si ya existe)
+        try { $pdo->exec("ALTER TABLE usuarios ADD COLUMN ubicacion VARCHAR(50) DEFAULT 'Local 1'"); } catch (PDOException $e) {}
+
         $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE usuario = ? AND activo = 1");
         $stmt->execute([$usuario]);
         $user = $stmt->fetch();
-        
+
         if ($user) {
             // Verificar password contra la DB
             if ($password === $user['password']) {
@@ -28,7 +31,8 @@ if ($_POST) {
                 $_SESSION['empleado_user'] = $user['usuario'];
                 $_SESSION['empleado_name'] = $user['nombre'];
                 $_SESSION['empleado_id'] = $user['id'];
-                
+                $_SESSION['empleado_ubicacion'] = $user['ubicacion'] ?: 'Local 1';
+
                 // CAMBIO: Redirigir directo al dashboard
                 header('Location: dashboard.php');
                 exit;

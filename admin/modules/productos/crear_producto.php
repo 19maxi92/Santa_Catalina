@@ -286,6 +286,11 @@ if ($_POST) {
                                    <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Fábrica') ? 'checked' : '' ?>>
                             <i class="fas fa-industry mr-2 text-orange-500"></i>Fábrica
                         </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="ubicacion" value="Villa Elisa" required class="mr-2" onchange="updateResumen()"
+                                   <?= (isset($_POST['ubicacion']) && $_POST['ubicacion'] === 'Villa Elisa') ? 'checked' : '' ?>>
+                            <i class="fas fa-warehouse mr-2 text-teal-500"></i>Villa Elisa
+                        </label>
                     </div>
                 </div>
             </div>

@@ -105,7 +105,12 @@ if ($minutos_transcurridos > 60) {
             background: #ff6600;
             color: white;
         }
-        
+
+        .villaelisa {
+            background: #0d9488;
+            color: white;
+        }
+
         .pedido-numero {
             font-size: 16px; /* Aumentado de 12px a 16px */
             font-weight: bold;
@@ -268,8 +273,8 @@ if ($minutos_transcurridos > 60) {
         <p>Tel: 11 5981-3546</p>
         <p>Camino Gral. Belgrano 7241</p>
         
-        <div class="ubicacion-badge <?= $ubicacion === 'Local 1' ? 'local1' : 'fabrica' ?>">
-            <?= $ubicacion === 'Local 1' ? '🏪 LOCAL 1' : '🏭 FÁBRICA' ?>
+        <div class="ubicacion-badge <?= $ubicacion === 'Local 1' ? 'local1' : ($ubicacion === 'Villa Elisa' ? 'villaelisa' : 'fabrica') ?>">
+            <?= $ubicacion === 'Local 1' ? '🏪 LOCAL 1' : ($ubicacion === 'Villa Elisa' ? '🏬 VILLA ELISA' : '🏭 FÁBRICA') ?>
         </div>
     </div>
 
@@ -378,7 +383,7 @@ if ($minutos_transcurridos > 60) {
         <?php endif; ?>
         <div class="separador">════════════════════════════════</div>
         <p style="font-size: 8px; margin-top: 3px;"> <!-- Aumentado de 6px a 8px -->
-            <?= $ubicacion === 'Local 1' ? '🏪 LOCAL 1' : '🏭 FÁBRICA' ?> - Sistema Santa Catalina v2.0<br>
+            <?= $ubicacion === 'Local 1' ? '🏪 LOCAL 1' : ($ubicacion === 'Villa Elisa' ? '🏬 VILLA ELISA' : '🏭 FÁBRICA') ?> - Sistema Santa Catalina v2.0<br>
             Comanda optimizada para impresión 80mm
         </p>
     </div>

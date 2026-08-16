@@ -1,6 +1,10 @@
 <?php
 require_once '../../config.php';
-requireLogin();
+requireStaffLogin();
+
+// Si es un empleado (no admin), su sucursal queda fija
+$ubicacion_fija = staffUbicacionRestringida();
+$volver_url = $ubicacion_fija ? '../../../empleados/dashboard.php' : '../../index.php';
 
 $pdo = getConnection();
 
@@ -209,7 +213,7 @@ try {
     <header class="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center">
-                <a href="../../index.php" class="text-gray-600 hover:text-gray-800 mr-4">
+                <a href="<?= $volver_url ?>" class="text-gray-600 hover:text-gray-800 mr-4">
                     <i class="fas fa-arrow-left text-xl"></i>
                 </a>
                 <h1 class="text-xl font-bold text-gray-800">
@@ -217,7 +221,7 @@ try {
                 </h1>
             </div>
             <div class="text-sm text-gray-600">
-                <i class="fas fa-user-shield mr-1"></i>Admin
+                <i class="fas fa-user-shield mr-1"></i><?= $ubicacion_fija ? htmlspecialchars($_SESSION['empleado_name'] ?? 'Empleado') : 'Admin' ?>
             </div>
         </div>
     </header>
@@ -344,10 +348,21 @@ try {
                             <input type="hidden" id="direccion">
                         </div>
 
-                        <!-- Ubicación (ADMIN selecciona ubicación) -->
+                        <!-- Ubicación -->
                         <div class="mb-6">
                             <label class="block text-sm font-medium text-gray-700 mb-3">Ubicación / Local *</label>
-                            <div class="grid grid-cols-2 gap-4">
+                            <?php if ($ubicacion_fija): ?>
+                                <!-- Empleado: sucursal fija, no seleccionable -->
+                                <div class="pago-card" style="border-color:#2563eb;background:#eff6ff;">
+                                    <input type="radio" name="ubicacion" value="<?= htmlspecialchars($ubicacion_fija) ?>" class="hidden" checked>
+                                    <div class="text-4xl mb-2">
+                                        <?= $ubicacion_fija === 'Local 1' ? '🏪' : ($ubicacion_fija === 'Villa Elisa' ? '🏬' : '🏭') ?>
+                                    </div>
+                                    <div class="font-bold"><?= htmlspecialchars($ubicacion_fija) ?></div>
+                                    <div class="text-xs text-gray-500 mt-1">Tu sucursal asignada</div>
+                                </div>
+                            <?php else: ?>
+                            <div class="grid grid-cols-3 gap-4">
                                 <label class="pago-card">
                                     <input type="radio" name="ubicacion" value="Local 1" class="hidden" checked>
                                     <div class="text-4xl mb-2">🏪</div>
@@ -358,7 +373,13 @@ try {
                                     <div class="text-4xl mb-2">🏭</div>
                                     <div class="font-bold">Fábrica</div>
                                 </label>
+                                <label class="pago-card">
+                                    <input type="radio" name="ubicacion" value="Villa Elisa" class="hidden">
+                                    <div class="text-4xl mb-2">🏬</div>
+                                    <div class="font-bold">Villa Elisa</div>
+                                </label>
                             </div>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Fecha de Entrega -->
@@ -474,7 +495,7 @@ try {
                                     class="px-6 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-semibold">
                                 <i class="fas fa-arrow-left mr-2"></i>VOLVER
                             </button>
-                            <a href="../../index.php"
+                            <a href="<?= $volver_url ?>"
                                class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold inline-block">
                                 <i class="fas fa-times mr-2"></i>CANCELAR
                             </a>
@@ -708,7 +729,7 @@ try {
                                     class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xl">
                                 <i class="fas fa-check-circle mr-2"></i>FINALIZAR Y CREAR PEDIDOS
                             </button>
-                            <a href="../../index.php"
+                            <a href="<?= $volver_url ?>"
                                class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold text-center">
                                 <i class="fas fa-times-circle mr-2"></i>CANCELAR TODO
                             </a>
@@ -1425,11 +1446,11 @@ function finalizarYCrearPedidos() {
 
                     // Redirigir después de abrir las ventanas
                     setTimeout(() => {
-                        window.location.href = '../../index.php';
+                        window.location.href = '<?= $volver_url ?>';
                     }, resultados.length * 500 + 1000);
                 } else {
                     alert(msg);
-                    window.location.href = '../../index.php';
+                    window.location.href = '<?= $volver_url ?>';
                 }
             } else {
                 // Mostrar errores específicos

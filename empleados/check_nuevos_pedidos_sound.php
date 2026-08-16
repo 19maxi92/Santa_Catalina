@@ -1,6 +1,6 @@
 <?php
 /**
- * API para detectar nuevos pedidos en Local 1
+ * API para detectar nuevos pedidos en la sucursal del empleado logueado
  * Devuelve true si hay pedidos nuevos desde la ultima verificacion
  */
 session_start();
@@ -13,15 +13,21 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
     exit;
 }
 
+$mi_ubicacion = $_SESSION['empleado_ubicacion'] ?? 'Local 1';
+
 $pdo = getConnection();
 
-// Obtener el ID del ultimo pedido visto
-$ultimo_id_visto = isset($_SESSION['ultimo_pedido_visto_local1']) ? (int)$_SESSION['ultimo_pedido_visto_local1'] : 0;
+// Clave de sesión por sucursal (para no mezclar el "último visto" entre sucursales)
+$session_key = 'ultimo_pedido_visto_' . preg_replace('/[^a-z0-9]/i', '', $mi_ubicacion);
+
+$ultimo_id_visto = isset($_SESSION[$session_key]) ? (int)$_SESSION[$session_key] : 0;
 
 // Si es la primera vez, inicializar con el maximo actual para no notificar pedidos viejos
 if ($ultimo_id_visto === 0) {
-    $max_actual = $pdo->query("SELECT MAX(id) FROM pedidos WHERE ubicacion = 'Local 1' AND (tomado = 1 OR tomado IS NULL)")->fetchColumn();
-    $_SESSION['ultimo_pedido_visto_local1'] = $max_actual ?: 0;
+    $stmt = $pdo->prepare("SELECT MAX(id) FROM pedidos WHERE ubicacion = ? AND (tomado = 1 OR tomado IS NULL)");
+    $stmt->execute([$mi_ubicacion]);
+    $max_actual = $stmt->fetchColumn();
+    $_SESSION[$session_key] = $max_actual ?: 0;
     echo json_encode([
         'success' => true,
         'hay_nuevos' => false,
@@ -31,23 +37,22 @@ if ($ultimo_id_visto === 0) {
     exit;
 }
 
-// Buscar pedidos mas recientes para Local 1
+// Buscar pedidos mas recientes para la sucursal
 $stmt = $pdo->prepare("
     SELECT MAX(id) as max_id, COUNT(*) as nuevos
     FROM pedidos
-    WHERE ubicacion = 'Local 1'
+    WHERE ubicacion = ?
     AND (tomado = 1 OR tomado IS NULL)
     AND id > ?
 ");
-$stmt->execute([$ultimo_id_visto]);
+$stmt->execute([$mi_ubicacion, $ultimo_id_visto]);
 $resultado = $stmt->fetch();
 
 $hay_nuevos = $resultado['nuevos'] > 0;
 $max_id = $resultado['max_id'] ?? $ultimo_id_visto;
 
-// Actualizar el ultimo ID visto
 if ($hay_nuevos) {
-    $_SESSION['ultimo_pedido_visto_local1'] = $max_id;
+    $_SESSION[$session_key] = $max_id;
 }
 
 echo json_encode([

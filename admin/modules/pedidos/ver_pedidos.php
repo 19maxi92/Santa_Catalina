@@ -710,6 +710,10 @@ arsort($productos_unicos); // más pedidos primero
                    class="filter-tab <?= $filtro_ubicacion === 'Fábrica' ? 'active' : 'bg-orange-100 text-orange-800' ?>">
                     🏭 Fábrica
                 </a>
+                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Villa Elisa&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
+                   class="filter-tab <?= $filtro_ubicacion === 'Villa Elisa' ? 'active' : 'bg-teal-100 text-teal-800' ?>">
+                    🏬 Villa Elisa
+                </a>
                 <a href="?estado=<?= $filtro_estado ?>&modalidad=Delivery&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
                     🛵 Delivery
@@ -1071,7 +1075,7 @@ arsort($productos_unicos); // más pedidos primero
                                                     </span>
                                                 <?php endif; ?>
                                                 <span title="<?= $pedido['ubicacion'] ?>">
-                                                    <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : '🏭' ?>
+                                                    <?= $pedido['ubicacion'] === 'Local 1' ? '🏪' : ($pedido['ubicacion'] === 'Villa Elisa' ? '🏬' : '🏭') ?>
                                                 </span>
                                                 <?php if ($pedido['observaciones']): ?>
                                                     <i class="fas fa-sticky-note text-yellow-600" title="<?= htmlspecialchars($pedido['observaciones']) ?>"></i>
@@ -1422,8 +1426,8 @@ arsort($productos_unicos); // más pedidos primero
                         <i class="fas fa-store mr-2"></i>Ubicación
                     </div>
                     <div class="detalle-valor">
-                        <span class="badge ${pedido.ubicacion === 'Local 1' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'}">
-                            ${pedido.ubicacion === 'Local 1' ? '🏪' : '🏭'} ${pedido.ubicacion}
+                        <span class="badge ${pedido.ubicacion === 'Local 1' ? 'bg-purple-100 text-purple-800' : (pedido.ubicacion === 'Villa Elisa' ? 'bg-teal-100 text-teal-800' : 'bg-orange-100 text-orange-800')}">
+                            ${pedido.ubicacion === 'Local 1' ? '🏪' : (pedido.ubicacion === 'Villa Elisa' ? '🏬' : '🏭')} ${pedido.ubicacion}
                         </span>
                     </div>
                 </div>
