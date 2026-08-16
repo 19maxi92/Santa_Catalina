@@ -8,11 +8,14 @@ Procesa pedidos rápidos creados desde el dashboard de administración
 header('Content-Type: application/json');
 require_once '../../config.php';
 
-// Verificar autenticación de admin
-if (!isLoggedIn()) {
+// Verificar autenticación de staff (admin o empleado)
+if (!isStaffLoggedIn()) {
     echo json_encode(['success' => false, 'error' => 'No autorizado']);
     exit;
 }
+
+// Si es empleado, forzar su ubicación asignada (no confiar en lo que mande el cliente)
+$ubicacion_fija_staff = staffUbicacionRestringida();
 
 // Solo aceptar POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -36,6 +39,11 @@ try {
         $jsonError = json_last_error_msg();
         error_log("ERROR: JSON inválido - " . $jsonError);
         throw new Exception('Datos JSON inválidos: ' . $jsonError);
+    }
+
+    // Si es empleado, forzar su ubicación asignada (no confiar en lo que mande el cliente)
+    if ($ubicacion_fija_staff) {
+        $data['ubicacion'] = $ubicacion_fija_staff;
     }
 
     error_log("DEBUG: Datos decodificados correctamente");
@@ -130,11 +138,14 @@ try {
         }
     }
 
-    // Agregar información del admin a observaciones
+    // Agregar información del admin/empleado a observaciones
+    $usuario_creador = $_SESSION['admin_user'] ?? $_SESSION['empleado_user'] ?? 'desconocido';
     $admin_info = "\n\n--- Info del Sistema ---";
-    $admin_info .= "\nPedido Express - Admin: " . $_SESSION['admin_user'];
+    $admin_info .= "\nPedido Express - Usuario: " . $usuario_creador;
     if (isset($_SESSION['admin_name'])) {
         $admin_info .= " (" . $_SESSION['admin_name'] . ")";
+    } elseif (isset($_SESSION['empleado_name'])) {
+        $admin_info .= " (" . $_SESSION['empleado_name'] . ")";
     }
     // Usar DateTime con timezone explícito
     $dt_info = new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires'));
