@@ -250,7 +250,7 @@ $es_personalizado = strpos($pedido['producto'], 'Personalizado') !== false;
             <!-- FECHA Y TURNO -->
             <div class="fecha-turno">
                 <?php if (!empty($pedido['fecha_entrega']) && $pedido['fecha_entrega'] != date('Y-m-d')): ?>
-                    <span style="background:#9c27b0;color:white;padding:2px 6px;border-radius:3px;">
+                    <span style="border:2px solid #000;color:#000;font-weight:900;padding:2px 6px;border-radius:3px;">
                         ENTREGA: <?= $fecha_formatted ?>
                     </span>
                 <?php else: ?>
