@@ -61,14 +61,16 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
         WHERE ubicacion = :mi_ubicacion
         AND (tomado = 1 OR tomado IS NULL)
         AND (
-            DATE(created_at) BETWEEN :fecha_desde AND :fecha_hasta
-            OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN :fecha_desde AND :fecha_hasta)
+            DATE(created_at) BETWEEN :fecha_desde1 AND :fecha_hasta1
+            OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN :fecha_desde2 AND :fecha_hasta2)
         )";
 
 $params = [
     'mi_ubicacion' => $mi_ubicacion,
-    'fecha_desde' => $filtro_fecha_desde,
-    'fecha_hasta' => $filtro_fecha_hasta
+    'fecha_desde1' => $filtro_fecha_desde,
+    'fecha_hasta1' => $filtro_fecha_hasta,
+    'fecha_desde2' => $filtro_fecha_desde,
+    'fecha_hasta2' => $filtro_fecha_hasta
 ];
 
 if ($filtro_estado) {
