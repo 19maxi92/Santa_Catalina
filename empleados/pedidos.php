@@ -178,7 +178,7 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
     <header class="bg-green-600 text-white p-3 shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-bold">📋 VER PEDIDOS - <?= mb_strtoupper(htmlspecialchars($mi_ubicacion)) ?></h1>
+                <h1 class="text-xl font-bold">📋 VER PEDIDOS - <span style="text-transform:uppercase"><?= htmlspecialchars($mi_ubicacion) ?></span></h1>
             </div>
             
             <!-- STATS COMPACTOS -->
