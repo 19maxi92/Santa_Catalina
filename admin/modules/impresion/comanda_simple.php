@@ -1,7 +1,10 @@
 <?php
 // admin/modules/impresion/comanda_simple.php - VERSIÓN FINAL
 require_once '../../config.php';
-requireLogin();
+requireStaffLogin();
+
+// Si es empleado, solo puede imprimir pedidos de su propia sucursal
+$ubicacion_fija_comanda = staffUbicacionRestringida();
 
 $pedido_id = isset($_GET['pedido']) ? (int)$_GET['pedido'] : 0;
 
@@ -22,6 +25,10 @@ $pedido = $stmt->fetch();
 
 if (!$pedido) {
     die('Pedido no encontrado');
+}
+
+if ($ubicacion_fija_comanda && $pedido['ubicacion'] !== $ubicacion_fija_comanda) {
+    die('No tenés permiso para imprimir este pedido');
 }
 
 $es_cliente_fijo = !empty($pedido['cliente_fijo_nombre']);
