@@ -1,4 +1,19 @@
 <?php
+// Manejador temporal de errores: muestra el error real en pantalla en vez de un 500 en blanco
+set_error_handler(function ($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) return false;
+    echo '<pre style="background:#fee;color:#900;padding:20px;font-size:14px;white-space:pre-wrap;">';
+    echo "ERROR EN VER PEDIDOS:\n\n" . htmlspecialchars($errstr) . "\n\n" . htmlspecialchars($errfile) . ':' . $errline;
+    echo '</pre>';
+    exit;
+});
+set_exception_handler(function ($e) {
+    echo '<pre style="background:#fee;color:#900;padding:20px;font-size:14px;white-space:pre-wrap;">';
+    echo "ERROR EN VER PEDIDOS:\n\n" . htmlspecialchars($e->getMessage()) . "\n\n" . htmlspecialchars($e->getFile()) . ':' . $e->getLine();
+    echo '</pre>';
+    exit;
+});
+
 require_once '../admin/config.php';
 session_start();
 
@@ -46,14 +61,16 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
         WHERE ubicacion = :mi_ubicacion
         AND (tomado = 1 OR tomado IS NULL)
         AND (
-            DATE(created_at) BETWEEN :fecha_desde AND :fecha_hasta
-            OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN :fecha_desde AND :fecha_hasta)
+            DATE(created_at) BETWEEN :fecha_desde1 AND :fecha_hasta1
+            OR (fecha_entrega IS NOT NULL AND DATE(fecha_entrega) BETWEEN :fecha_desde2 AND :fecha_hasta2)
         )";
 
 $params = [
     'mi_ubicacion' => $mi_ubicacion,
-    'fecha_desde' => $filtro_fecha_desde,
-    'fecha_hasta' => $filtro_fecha_hasta
+    'fecha_desde1' => $filtro_fecha_desde,
+    'fecha_hasta1' => $filtro_fecha_hasta,
+    'fecha_desde2' => $filtro_fecha_desde,
+    'fecha_hasta2' => $filtro_fecha_hasta
 ];
 
 if ($filtro_estado) {
@@ -62,8 +79,12 @@ if ($filtro_estado) {
 }
 
 if ($filtro_buscar) {
-    $sql .= " AND (nombre LIKE :buscar OR apellido LIKE :buscar OR producto LIKE :buscar OR CAST(id AS CHAR) LIKE :buscar)";
-    $params['buscar'] = "%$filtro_buscar%";
+    $sql .= " AND (nombre LIKE :buscar1 OR apellido LIKE :buscar2 OR producto LIKE :buscar3 OR CAST(id AS CHAR) LIKE :buscar4)";
+    $like = "%$filtro_buscar%";
+    $params['buscar1'] = $like;
+    $params['buscar2'] = $like;
+    $params['buscar3'] = $like;
+    $params['buscar4'] = $like;
 }
 
 $sql .= " ORDER BY created_at DESC";
