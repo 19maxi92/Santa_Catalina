@@ -639,7 +639,7 @@ arsort($productos_unicos); // más pedidos primero
                 <div class="flex items-center space-x-4">
                     <h1 class="text-2xl font-bold flex items-center gap-2">
                         <i class="fas fa-clipboard-list"></i>
-                        ADMIN - PEDIDOS
+                        <?= $ubicacion_fija ? 'PEDIDOS - ' . htmlspecialchars($ubicacion_fija) : 'ADMIN - PEDIDOS' ?>
                     </h1>
                     <?php if ($urgentes > 0): ?>
                         <span class="badge bg-red-500 text-white animate-pulse">
