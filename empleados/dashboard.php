@@ -111,7 +111,7 @@ $icono_mi_ubicacion = $ICONO_UBICACION[$mi_ubicacion] ?? '🏪';
 
         <!-- Ver Pedidos -->
         <div class="mb-6 sm:mb-8">
-            <a href="pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center">
+            <a href="../admin/modules/pedidos/ver_pedidos.php" class="bg-white p-4 sm:p-6 rounded-lg shadow hover:shadow-lg transition-all block text-center">
                 <i class="fas fa-list text-2xl sm:text-3xl text-orange-500 mb-2 sm:mb-3"></i>
                 <h3 class="text-sm sm:text-base md:text-lg font-semibold text-gray-800">Ver Pedidos</h3>
                 <p class="text-xs sm:text-sm text-gray-600">Listado completo de <?= htmlspecialchars($mi_ubicacion) ?></p>

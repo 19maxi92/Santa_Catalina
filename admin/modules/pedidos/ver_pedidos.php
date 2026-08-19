@@ -2,7 +2,10 @@
 // admin/modules/pedidos/ver_pedidos.php - VERSIÓN COMPLETA MEJORADA
 ob_start();
 require_once '../../config.php';
-requireLogin();
+requireStaffLogin();
+
+// Si es empleado, su sucursal queda fija y no puede eliminar pedidos
+$ubicacion_fija = staffUbicacionRestringida();
 
 $pdo = getConnection();
 
@@ -13,10 +16,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $accion = $_POST['accion'] ?? '';
     $id = (int)($_POST['id'] ?? 0);
     
+    // Empleados: no pueden eliminar pedidos, bajo ningún caso
+    if ($ubicacion_fija && in_array($accion, ['eliminar'], true)) {
+        $_SESSION['error'] = "❌ No tenés permiso para eliminar pedidos";
+        header('Location: ' . $_SERVER['REQUEST_URI']);
+        exit;
+    }
+    if ($ubicacion_fija && $accion === 'accion_masiva' && ($_POST['tipo_accion'] ?? '') === 'eliminar') {
+        $_SESSION['error'] = "❌ No tenés permiso para eliminar pedidos";
+        header('Location: ' . $_SERVER['REQUEST_URI']);
+        exit;
+    }
+
     try {
         switch ($accion) {
             case 'cambiar_estado':
                 $estado = $_POST['estado'] ?? '';
+                if ($id && $ubicacion_fija) {
+                    // Verificar que el pedido sea de la sucursal del empleado
+                    $stmtChk = $pdo->prepare("SELECT ubicacion FROM pedidos WHERE id = ?");
+                    $stmtChk->execute([$id]);
+                    if ($stmtChk->fetchColumn() !== $ubicacion_fija) {
+                        $_SESSION['error'] = "❌ Ese pedido no pertenece a tu sucursal";
+                        header('Location: ' . $_SERVER['REQUEST_URI']);
+                        exit;
+                    }
+                }
                 if ($id && $estado) {
                     $forma_pago_nueva = $_POST['forma_pago'] ?? null;
 
@@ -81,8 +106,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             case 'marcar_impreso':
                 if ($id) {
-                    $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
-                    $stmt->execute([$id]);
+                    if ($ubicacion_fija) {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion = ?");
+                        $stmt->execute([$id, $ubicacion_fija]);
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
+                        $stmt->execute([$id]);
+                    }
                     $_SESSION['mensaje'] = "✅ Marcado como impreso";
                 }
                 break;
@@ -90,8 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'marcar_pagado':
                 if ($id) {
                     $pagado = (int)($_POST['pagado'] ?? 1);
-                    $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$pagado, $id]);
+                    if ($ubicacion_fija) {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ? AND ubicacion = ?");
+                        $stmt->execute([$pagado, $id, $ubicacion_fija]);
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ?");
+                        $stmt->execute([$pagado, $id]);
+                    }
                     echo json_encode(['success' => true, 'pagado' => $pagado]);
                     exit;
                 }
@@ -102,8 +137,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $items  = json_decode($_POST['bebidas_json'] ?? '[]', true) ?: [];
                     $precio = (int)($_POST['bebidas_precio'] ?? 0);
                     $json   = count($items) ? json_encode($items, JSON_UNESCAPED_UNICODE) : null;
-                    $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ?");
-                    $stmt->execute([$json, $precio ?: null, $id]);
+                    if ($ubicacion_fija) {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ? AND ubicacion = ?");
+                        $stmt->execute([$json, $precio ?: null, $id, $ubicacion_fija]);
+                    } else {
+                        $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ?");
+                        $stmt->execute([$json, $precio ?: null, $id]);
+                    }
                     echo json_encode(['success' => true, 'tiene_bebidas' => !empty($items)]);
                     exit;
                 }
@@ -113,7 +153,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'accion_masiva':
                 $pedidos = $_POST['pedidos'] ?? [];
                 $tipo_accion = $_POST['tipo_accion'] ?? '';
-                
+
+                // Empleados: descartar cualquier ID que no sea de su sucursal
+                if ($ubicacion_fija && !empty($pedidos)) {
+                    $ph = str_repeat('?,', count($pedidos) - 1) . '?';
+                    $stmtOwn = $pdo->prepare("SELECT id FROM pedidos WHERE id IN ($ph) AND ubicacion = ?");
+                    $stmtOwn->execute(array_merge($pedidos, [$ubicacion_fija]));
+                    $pedidos = array_map('strval', $stmtOwn->fetchAll(PDO::FETCH_COLUMN));
+                }
+
                 if (!empty($pedidos)) {
                     $placeholders = str_repeat('?,', count($pedidos) - 1) . '?';
                     
@@ -224,7 +272,8 @@ try {
 // ============================================
 $filtro_estado = $_GET['estado'] ?? '';
 $filtro_modalidad = $_GET['modalidad'] ?? '';
-$filtro_ubicacion = $_GET['ubicacion'] ?? '';
+// Empleados: la ubicación queda fija a su sucursal, no se puede cambiar por GET
+$filtro_ubicacion = $ubicacion_fija ?: ($_GET['ubicacion'] ?? '');
 $fecha_desde = $_GET['fecha_desde'] ?? '';
 $fecha_hasta = $_GET['fecha_hasta'] ?? '';
 $busqueda = $_GET['buscar'] ?? '';
@@ -240,8 +289,9 @@ try {
     }
 } catch (Exception $e) {}
 
-// Por defecto: pedidos de hoy
-if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion) {
+// Por defecto: pedidos de hoy (la ubicación fija de un empleado no cuenta como "filtro activo" para esto)
+$filtro_ubicacion_manual = $ubicacion_fija ? '' : $filtro_ubicacion;
+if (!$fecha_desde && !$fecha_hasta && !$busqueda && !$filtro_estado && !$filtro_modalidad && !$filtro_ubicacion_manual) {
     $fecha_desde = date('Y-m-d');
     $fecha_hasta = date('Y-m-d');
 }
@@ -625,6 +675,7 @@ arsort($productos_unicos); // más pedidos primero
                 
                 <!-- BOTONES -->
                 <div class="flex items-center space-x-2">
+                    <?php if (!$ubicacion_fija): ?>
                     <a href="delivery_simple.php" class="btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                         <i class="fas fa-motorcycle"></i>
                         🏍️ Delivery
@@ -633,14 +684,15 @@ arsort($productos_unicos); // más pedidos primero
                         <i class="fas fa-table"></i>
                         Vista Ejecutiva
                     </a>
+                    <?php endif; ?>
                     <a href="crear_pedido.php" class="btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm">
                         <i class="fas fa-plus"></i>
                         Nuevo
                     </a>
-                    <a href="../../index.php" class="btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
+                    <a href="<?= $ubicacion_fija ? '../../../empleados/dashboard.php' : '../../index.php' ?>" class="btn bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
                         <i class="fas fa-home"></i>
                     </a>
-                    <a href="../../logout.php" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm">
+                    <a href="<?= $ubicacion_fija ? '../../../empleados/logout.php' : '../../logout.php' ?>" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm">
                         <i class="fas fa-sign-out-alt"></i>
                     </a>
                 </div>
@@ -696,7 +748,8 @@ arsort($productos_unicos); // más pedidos primero
             <!-- TABS DE UBICACIÓN / MODALIDAD -->
             <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
 
-                <!-- TODAS -->
+                <?php if (!$ubicacion_fija): ?>
+                <!-- TODAS (solo admin: un empleado ya está fijo en su sucursal) -->
                 <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= empty($filtro_ubicacion) && empty($filtro_modalidad) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
                     <i class="fas fa-map-marked-alt"></i>
@@ -714,6 +767,7 @@ arsort($productos_unicos); // más pedidos primero
                    class="filter-tab <?= $filtro_ubicacion === 'Villa Elisa' ? 'active' : 'bg-teal-100 text-teal-800' ?>">
                     🏬 Villa Elisa
                 </a>
+                <?php endif; ?>
                 <a href="?estado=<?= $filtro_estado ?>&modalidad=Delivery&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
                     🛵 Delivery
@@ -890,11 +944,13 @@ arsort($productos_unicos); // más pedidos primero
                             Marcar Impreso
                         </button>
                         
-                        <!-- ELIMINAR -->
+                        <?php if (!$ubicacion_fija): ?>
+                        <!-- ELIMINAR (solo admin) -->
                         <button type="button" onclick="eliminarMasivo()" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                             <i class="fas fa-trash-alt"></i>
                             Eliminar
                         </button>
+                        <?php endif; ?>
                     </div>
                 </div>
             </form>
@@ -1156,7 +1212,8 @@ arsort($productos_unicos); // más pedidos primero
                                             </a>
                                         <?php endif; ?>
 
-                                        <!-- ELIMINAR -->
+                                        <?php if (!$ubicacion_fija): ?>
+                                        <!-- ELIMINAR (solo admin) -->
                                         <form method="POST" class="inline" onsubmit="return confirm('⚠️ ¿ELIMINAR #<?= $pedido['id'] ?>?')">
                                             <input type="hidden" name="accion" value="eliminar">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
@@ -1164,6 +1221,7 @@ arsort($productos_unicos); // más pedidos primero
                                                 <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
                                     
                                 </div>
