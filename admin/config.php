@@ -93,4 +93,13 @@ function requireStaffLogin() {
         exit;
     }
 }
+
+// Ubicaciones cuyos pedidos debe ver/gestionar un empleado, según su sucursal asignada.
+// Local 1 también arma los pedidos de reparto que se cargan como Fábrica.
+function ubicacionesVisibles($mi_ubicacion) {
+    if ($mi_ubicacion === 'Local 1') {
+        return ['Local 1', 'Fábrica'];
+    }
+    return [$mi_ubicacion];
+}
 ?>

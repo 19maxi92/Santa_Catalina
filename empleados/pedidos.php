@@ -23,24 +23,26 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 }
 
 $mi_ubicacion = $_SESSION['empleado_ubicacion'] ?? 'Local 1';
+$ubicaciones_visibles = ubicacionesVisibles($mi_ubicacion);
+$placeholders_ubicacion = implode(',', array_fill(0, count($ubicaciones_visibles), '?'));
 
 $pdo = getConnection();
 
-// Procesar acciones (siempre limitadas a la sucursal del empleado)
+// Procesar acciones (limitadas a las sucursales que puede ver el empleado)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
     switch ($_POST['accion']) {
         case 'cambiar_estado':
             $id = (int)$_POST['id'];
             $estado = htmlspecialchars(trim($_POST['estado']));
-            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ? AND ubicacion = ?");
-            $stmt->execute([$estado, $id, $mi_ubicacion]);
+            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ? AND ubicacion IN ($placeholders_ubicacion)");
+            $stmt->execute(array_merge([$estado, $id], $ubicaciones_visibles));
             header('Location: pedidos.php');
             exit;
 
         case 'marcar_impreso':
             $id = (int)$_POST['id'];
-            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion = ?");
-            $stmt->execute([$id, $mi_ubicacion]);
+            $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion IN ($placeholders_ubicacion)");
+            $stmt->execute(array_merge([$id], $ubicaciones_visibles));
             header('Location: pedidos.php');
             exit;
     }
@@ -53,12 +55,14 @@ $filtro_fecha_hasta = $_GET['fecha_hasta'] ?? date('Y-m-d');
 $filtro_buscar = $_GET['buscar'] ?? '';
 
 // Query base
-$sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
+$placeholders_ubicacion_named = implode(',', array_map(fn($i) => ":ubicacion$i", array_keys($ubicaciones_visibles)));
+
+$sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad, ubicacion,
                observaciones, telefono, forma_pago, cantidad, impreso,
                created_at, fecha_entrega, fecha_display,
                TIMESTAMPDIFF(MINUTE, created_at, NOW()) as minutos_transcurridos
         FROM pedidos
-        WHERE ubicacion = :mi_ubicacion
+        WHERE ubicacion IN ($placeholders_ubicacion_named)
         AND (tomado = 1 OR tomado IS NULL)
         AND (
             DATE(created_at) BETWEEN :fecha_desde1 AND :fecha_hasta1
@@ -66,12 +70,14 @@ $sql = "SELECT id, nombre, apellido, producto, precio, estado, modalidad,
         )";
 
 $params = [
-    'mi_ubicacion' => $mi_ubicacion,
     'fecha_desde1' => $filtro_fecha_desde,
     'fecha_hasta1' => $filtro_fecha_hasta,
     'fecha_desde2' => $filtro_fecha_desde,
     'fecha_hasta2' => $filtro_fecha_hasta
 ];
+foreach ($ubicaciones_visibles as $i => $ubicacion) {
+    $params["ubicacion$i"] = $ubicacion;
+}
 
 if ($filtro_estado) {
     $sql .= " AND estado = :estado";
@@ -324,6 +330,9 @@ $sin_imprimir = count(array_filter($pedidos, fn($p) => $p['impreso'] == 0));
                                 <div>
                                     <div class="font-bold text-sm text-gray-800 mb-1">
                                         #<?= $pedido['id'] ?> - <?= htmlspecialchars($pedido['nombre'] . ' ' . $pedido['apellido']) ?>
+                                        <?php if ($pedido['ubicacion'] === 'Fábrica'): ?>
+                                            <span class="badge bg-purple-600 text-white ml-1">🚚 REPARTO</span>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="text-xs text-gray-600">
                                         <i class="fas fa-phone"></i> <?= htmlspecialchars($pedido['telefono']) ?>
