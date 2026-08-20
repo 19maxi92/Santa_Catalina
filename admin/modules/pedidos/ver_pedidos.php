@@ -6,6 +6,8 @@ requireStaffLogin();
 
 // Si es empleado, su sucursal queda fija y no puede eliminar pedidos
 $ubicacion_fija = staffUbicacionRestringida();
+// Ubicaciones cuyos pedidos puede ver/gestionar el empleado (Local 1 también arma los de reparto, cargados como Fábrica)
+$ubicaciones_permitidas = $ubicacion_fija ? ubicacionesVisibles($ubicacion_fija) : null;
 
 $pdo = getConnection();
 
@@ -33,10 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'cambiar_estado':
                 $estado = $_POST['estado'] ?? '';
                 if ($id && $ubicacion_fija) {
-                    // Verificar que el pedido sea de la sucursal del empleado
+                    // Verificar que el pedido sea de una sucursal que el empleado puede gestionar
                     $stmtChk = $pdo->prepare("SELECT ubicacion FROM pedidos WHERE id = ?");
                     $stmtChk->execute([$id]);
-                    if ($stmtChk->fetchColumn() !== $ubicacion_fija) {
+                    if (!in_array($stmtChk->fetchColumn(), $ubicaciones_permitidas, true)) {
                         $_SESSION['error'] = "❌ Ese pedido no pertenece a tu sucursal";
                         header('Location: ' . $_SERVER['REQUEST_URI']);
                         exit;
@@ -107,8 +109,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'marcar_impreso':
                 if ($id) {
                     if ($ubicacion_fija) {
-                        $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion = ?");
-                        $stmt->execute([$id, $ubicacion_fija]);
+                        $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
+                        $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ? AND ubicacion IN ($ph)");
+                        $stmt->execute(array_merge([$id], $ubicaciones_permitidas));
                     } else {
                         $stmt = $pdo->prepare("UPDATE pedidos SET impreso = 1 WHERE id = ?");
                         $stmt->execute([$id]);
@@ -121,8 +124,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($id) {
                     $pagado = (int)($_POST['pagado'] ?? 1);
                     if ($ubicacion_fija) {
-                        $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ? AND ubicacion = ?");
-                        $stmt->execute([$pagado, $id, $ubicacion_fija]);
+                        $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
+                        $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ? AND ubicacion IN ($ph)");
+                        $stmt->execute(array_merge([$pagado, $id], $ubicaciones_permitidas));
                     } else {
                         $stmt = $pdo->prepare("UPDATE pedidos SET pagado = ?, updated_at = NOW() WHERE id = ?");
                         $stmt->execute([$pagado, $id]);
@@ -138,8 +142,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $precio = (int)($_POST['bebidas_precio'] ?? 0);
                     $json   = count($items) ? json_encode($items, JSON_UNESCAPED_UNICODE) : null;
                     if ($ubicacion_fija) {
-                        $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ? AND ubicacion = ?");
-                        $stmt->execute([$json, $precio ?: null, $id, $ubicacion_fija]);
+                        $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
+                        $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ? AND ubicacion IN ($ph)");
+                        $stmt->execute(array_merge([$json, $precio ?: null, $id], $ubicaciones_permitidas));
                     } else {
                         $stmt = $pdo->prepare("UPDATE pedidos SET bebidas_json = ?, bebidas_precio = ?, updated_at = NOW() WHERE id = ?");
                         $stmt->execute([$json, $precio ?: null, $id]);
@@ -154,11 +159,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pedidos = $_POST['pedidos'] ?? [];
                 $tipo_accion = $_POST['tipo_accion'] ?? '';
 
-                // Empleados: descartar cualquier ID que no sea de su sucursal
+                // Empleados: descartar cualquier ID que no sea de una sucursal que puedan gestionar
                 if ($ubicacion_fija && !empty($pedidos)) {
-                    $ph = str_repeat('?,', count($pedidos) - 1) . '?';
-                    $stmtOwn = $pdo->prepare("SELECT id FROM pedidos WHERE id IN ($ph) AND ubicacion = ?");
-                    $stmtOwn->execute(array_merge($pedidos, [$ubicacion_fija]));
+                    $ph_ids = str_repeat('?,', count($pedidos) - 1) . '?';
+                    $ph_ubi = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
+                    $stmtOwn = $pdo->prepare("SELECT id FROM pedidos WHERE id IN ($ph_ids) AND ubicacion IN ($ph_ubi)");
+                    $stmtOwn->execute(array_merge($pedidos, $ubicaciones_permitidas));
                     $pedidos = array_map('strval', $stmtOwn->fetchAll(PDO::FETCH_COLUMN));
                 }
 
@@ -322,7 +328,11 @@ if ($filtro_modalidad) {
     $params[] = $filtro_modalidad;
 }
 
-if ($filtro_ubicacion) {
+if ($ubicaciones_permitidas) {
+    $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
+    $sql .= " AND p.ubicacion IN ($ph)";
+    $params = array_merge($params, $ubicaciones_permitidas);
+} elseif ($filtro_ubicacion) {
     $sql .= " AND p.ubicacion = ?";
     $params[] = $filtro_ubicacion;
 }
@@ -639,7 +649,11 @@ arsort($productos_unicos); // más pedidos primero
                 <div class="flex items-center space-x-4">
                     <h1 class="text-2xl font-bold flex items-center gap-2">
                         <i class="fas fa-clipboard-list"></i>
-                        <?= $ubicacion_fija ? 'PEDIDOS - ' . htmlspecialchars($ubicacion_fija) : 'ADMIN - PEDIDOS' ?>
+                        <?php if ($ubicacion_fija): ?>
+                            PEDIDOS - <?= htmlspecialchars($ubicacion_fija) ?><?= count($ubicaciones_permitidas) > 1 ? ' + Reparto' : '' ?>
+                        <?php else: ?>
+                            ADMIN - PEDIDOS
+                        <?php endif; ?>
                     </h1>
                     <?php if ($urgentes > 0): ?>
                         <span class="badge bg-red-500 text-white animate-pulse">
