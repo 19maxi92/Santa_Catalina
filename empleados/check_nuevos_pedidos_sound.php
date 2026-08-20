@@ -14,6 +14,8 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 }
 
 $mi_ubicacion = $_SESSION['empleado_ubicacion'] ?? 'Local 1';
+$ubicaciones_visibles = ubicacionesVisibles($mi_ubicacion);
+$placeholders_ubicacion = implode(',', array_fill(0, count($ubicaciones_visibles), '?'));
 
 $pdo = getConnection();
 
@@ -24,8 +26,8 @@ $ultimo_id_visto = isset($_SESSION[$session_key]) ? (int)$_SESSION[$session_key]
 
 // Si es la primera vez, inicializar con el maximo actual para no notificar pedidos viejos
 if ($ultimo_id_visto === 0) {
-    $stmt = $pdo->prepare("SELECT MAX(id) FROM pedidos WHERE ubicacion = ? AND (tomado = 1 OR tomado IS NULL)");
-    $stmt->execute([$mi_ubicacion]);
+    $stmt = $pdo->prepare("SELECT MAX(id) FROM pedidos WHERE ubicacion IN ($placeholders_ubicacion) AND (tomado = 1 OR tomado IS NULL)");
+    $stmt->execute($ubicaciones_visibles);
     $max_actual = $stmt->fetchColumn();
     $_SESSION[$session_key] = $max_actual ?: 0;
     echo json_encode([
@@ -41,11 +43,11 @@ if ($ultimo_id_visto === 0) {
 $stmt = $pdo->prepare("
     SELECT MAX(id) as max_id, COUNT(*) as nuevos
     FROM pedidos
-    WHERE ubicacion = ?
+    WHERE ubicacion IN ($placeholders_ubicacion)
     AND (tomado = 1 OR tomado IS NULL)
     AND id > ?
 ");
-$stmt->execute([$mi_ubicacion, $ultimo_id_visto]);
+$stmt->execute(array_merge($ubicaciones_visibles, [$ultimo_id_visto]));
 $resultado = $stmt->fetch();
 
 $hay_nuevos = $resultado['nuevos'] > 0;

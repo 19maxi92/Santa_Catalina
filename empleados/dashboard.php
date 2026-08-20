@@ -9,31 +9,33 @@ if (!isset($_SESSION['empleado_logged']) || $_SESSION['empleado_logged'] !== tru
 
 $mi_ubicacion = $_SESSION['empleado_ubicacion'] ?? 'Local 1';
 $mi_nombre    = $_SESSION['empleado_name'] ?? 'Empleado';
+$ubicaciones_visibles = ubicacionesVisibles($mi_ubicacion);
+$placeholders_ubicacion = implode(',', array_fill(0, count($ubicaciones_visibles), '?'));
 
 $pdo = getConnection();
 
 $stats = [
-    'pedidos_hoy' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion = ? AND DATE(created_at) = CURDATE() AND (tomado = 1 OR tomado IS NULL)"),
-    'pedidos_pendientes' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion = ? AND estado = 'Pendiente' AND (tomado = 1 OR tomado IS NULL)"),
-    'pedidos_online_hoy' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion = ? AND DATE(created_at) = CURDATE() AND observaciones LIKE '%PEDIDO ONLINE%'"),
-    'pedidos_online_pendientes' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion = ? AND estado = 'Pendiente' AND observaciones LIKE '%PEDIDO ONLINE%'"),
+    'pedidos_hoy' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion IN ($placeholders_ubicacion) AND DATE(created_at) = CURDATE() AND (tomado = 1 OR tomado IS NULL)"),
+    'pedidos_pendientes' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion IN ($placeholders_ubicacion) AND estado = 'Pendiente' AND (tomado = 1 OR tomado IS NULL)"),
+    'pedidos_online_hoy' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion IN ($placeholders_ubicacion) AND DATE(created_at) = CURDATE() AND observaciones LIKE '%PEDIDO ONLINE%'"),
+    'pedidos_online_pendientes' => $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ubicacion IN ($placeholders_ubicacion) AND estado = 'Pendiente' AND observaciones LIKE '%PEDIDO ONLINE%'"),
 ];
 foreach ($stats as $key => $stmt) {
-    $stmt->execute([$mi_ubicacion]);
+    $stmt->execute($ubicaciones_visibles);
     $stats[$key] = (int)$stmt->fetchColumn();
 }
 
-// Últimos pedidos de la sucursal
+// Últimos pedidos de la sucursal (incluye reparto si corresponde)
 $stmt = $pdo->prepare("
-    SELECT id, nombre, apellido, producto, precio, estado,
+    SELECT id, nombre, apellido, producto, precio, estado, ubicacion,
            fecha_display, created_at, observaciones
     FROM pedidos
-    WHERE ubicacion = ?
+    WHERE ubicacion IN ($placeholders_ubicacion)
     AND (tomado = 1 OR tomado IS NULL)
     ORDER BY created_at DESC
     LIMIT 5
 ");
-$stmt->execute([$mi_ubicacion]);
+$stmt->execute($ubicaciones_visibles);
 $ultimos_pedidos = $stmt->fetchAll();
 
 $ICONO_UBICACION = ['Local 1' => '🏪', 'Fábrica' => '🏭', 'Villa Elisa' => '🏬'];
@@ -182,6 +184,9 @@ $icono_mi_ubicacion = $ICONO_UBICACION[$mi_ubicacion] ?? '🏪';
                                         #<?= $pedido['id'] ?>
                                         <?php if (strpos($pedido['observaciones'] ?? '', 'PEDIDO ONLINE') !== false): ?>
                                             <span class="ml-1 px-1.5 py-0.5 bg-teal-100 text-teal-700 text-xs rounded-full font-bold hidden sm:inline">🌐</span>
+                                        <?php endif; ?>
+                                        <?php if ($pedido['ubicacion'] === 'Fábrica'): ?>
+                                            <span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-bold hidden sm:inline">🚚 Reparto</span>
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-900">
