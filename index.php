@@ -92,7 +92,7 @@ function fmt($n) {
 function precioDisplay($key, $precios) {
     $ef = $precios[$key]['ef'];
     $tr = $precios[$key]['tr'];
-    $html = '<span class="precio-efectivo">' . fmt($ef) . '</span>';
+    $html = '<span class="precio-efectivo js-count-price" data-count-to="' . (int)$ef . '">' . fmt($ef) . '</span>';
     if ($ef !== $tr) {
         $html .= '<div class="text-sm text-gray-500 mt-1">Transferencia: ' . fmt($tr) . '</div>';
     }
@@ -116,8 +116,12 @@ function wa($n) {
     <!-- Open Graph para redes sociales -->
     <meta property="og:title" content="Sandwichería Santa Catalina">
     <meta property="og:description" content="Los mejores sándwiches triples de La Plata">
-    <meta property="og:image" content="https://santacatalina.online/icon-512.png">
+    <meta property="og:image" content="https://santacatalina.online/img/logo-icon-512.png">
     <meta property="og:url" content="https://santacatalina.online">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/assets/img/logo-sello.svg">
+    <link rel="icon" type="image/png" href="/img/logo-icon-192.png">
 
     <!-- PWA: apunta al pedido online como app -->
     <meta name="theme-color" content="#ea580c">
@@ -125,7 +129,7 @@ function wa($n) {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Pedí Online">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/img/icon-192.png">
+    <link rel="apple-touch-icon" href="/img/logo-icon-192.png">
     
     <!-- Tailwind CSS: compilado localmente (sin depender del CDN en tiempo real) -->
     <link rel="stylesheet" href="/assets/css/tailwind.css">
@@ -349,10 +353,10 @@ function wa($n) {
         <div class="absolute inset-0 bg-black opacity-10"></div>
         <div class="container mx-auto px-3 sm:px-4 py-8 sm:py-12 md:py-16 relative z-10">
             <div class="text-center">
-                <!-- Logo placeholder -->
+                <!-- Logo -->
                 <div class="floating mb-4 sm:mb-6 md:mb-8">
-                    <div class="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl">
-                        <i class="fas fa-hamburger text-4xl sm:text-5xl md:text-6xl text-orange-500"></i>
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl p-1.5">
+                        <img src="/assets/img/logo-sello.svg" alt="Sandwichería Santa Catalina" class="w-full h-full">
                     </div>
                 </div>
 
@@ -421,7 +425,7 @@ function wa($n) {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-20">
             
             <!-- 24 JAMÓN Y QUESO -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
+            <div class="sandwich-card reveal-target bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-orange-400 to-orange-500 p-6">
                     <h3 class="text-2xl font-bold text-white">24 Jamón y Queso</h3>
                     <p class="text-orange-100">El clásico que nunca falla</p>
@@ -447,7 +451,7 @@ function wa($n) {
             </div>
 
             <!-- 48 JAMÓN Y QUESO -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-red-200">
+            <div class="sandwich-card reveal-target bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-red-200">
                 <div class="bg-gradient-to-r from-red-500 to-red-600 p-6 relative">
                     <div class="absolute top-2 right-2 bg-yellow-400 text-red-800 px-3 py-1 rounded-full text-xs font-bold">
                         ¡OFERTA!
@@ -476,7 +480,7 @@ function wa($n) {
             </div>
 
             <!-- 48 SURTIDOS CLÁSICOS -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
+            <div class="sandwich-card reveal-target bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
                     <h3 class="text-2xl font-bold text-white">48 Surtidos Clásicos</h3>
                     <p class="text-blue-100">Pack grande clásico</p>
@@ -498,7 +502,7 @@ function wa($n) {
             </div>
 
             <!-- 48 SURTIDOS ESPECIALES -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
+            <div class="sandwich-card reveal-target bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-purple-600 to-purple-700 p-6">
                     <h3 class="text-2xl font-bold text-white">48 Surtidos Especiales</h3>
                     <p class="text-purple-100">Pack completo especial</p>
@@ -558,7 +562,7 @@ function wa($n) {
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 
                 <!-- 48 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center border-2 border-red-200">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center border-2 border-red-200">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">48 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg48', $precios); ?></div>
@@ -572,7 +576,7 @@ function wa($n) {
                 </div>
 
                 <!-- 40 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">40 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg40', $precios); ?></div>
@@ -586,7 +590,7 @@ function wa($n) {
                 </div>
 
                 <!-- 32 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">32 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg32', $precios); ?></div>
@@ -600,7 +604,7 @@ function wa($n) {
                 </div>
 
                 <!-- 24 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">24 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg24', $precios); ?></div>
@@ -614,7 +618,7 @@ function wa($n) {
                 </div>
 
                 <!-- 16 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">16 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg16', $precios); ?></div>
@@ -628,7 +632,7 @@ function wa($n) {
                 </div>
 
                 <!-- 8 ELEGIDOS -->
-                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="reveal-target bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">8 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg8', $precios); ?></div>
@@ -748,7 +752,7 @@ function wa($n) {
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
+                <div class="reveal-target bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
                     <div class="text-6xl mb-4">🌅</div>
                     <h3 class="text-2xl font-bold text-blue-600 mb-2">Mañana</h3>
                     <p class="text-lg text-gray-600 mb-4">9:00 - 11:30</p>
@@ -761,7 +765,7 @@ function wa($n) {
                     </a>
                 </div>
                 
-                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-200">
+                <div class="reveal-target bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-200">
                     <div class="text-6xl mb-4">☕</div>
                     <h3 class="text-2xl font-bold text-orange-600 mb-2">Merienda</h3>
                     <p class="text-lg text-gray-600 mb-4">15:00 - 17:00</p>
@@ -774,7 +778,7 @@ function wa($n) {
                     </a>
                 </div>
                 
-                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
+                <div class="reveal-target bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
                     <div class="text-6xl mb-4">🌆</div>
                     <h3 class="text-2xl font-bold text-purple-600 mb-2">Tarde</h3>
                     <p class="text-lg text-gray-600 mb-4">18:00 - 20:00</p>
@@ -1232,6 +1236,89 @@ function wa($n) {
         if (!isMobile) {
             document.getElementById('seccion-app')?.remove();
         }
+    });
+    </script>
+
+    <!-- Animaciones (anime.js): scroll-reveal, contador de precios y micro-interacción de botones -->
+    <script src="/assets/vendor/animejs/anime.umd.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Si la librería no cargó por algún motivo, no pasa nada: el contenido ya es
+        // visible por defecto (nunca dependemos de JS para mostrarlo).
+        if (typeof anime === 'undefined') return;
+
+        // ── Scroll-reveal: fade + slide sutil al entrar en pantalla ──────────
+        var revealEls = document.querySelectorAll('.reveal-target');
+        if (revealEls.length) {
+            revealEls.forEach(function (el) {
+                el.style.opacity = '0';
+            });
+
+            var reveal = function (el) {
+                if (el.dataset.revealed === '1') return;
+                el.dataset.revealed = '1';
+
+                anime.animate(el, {
+                    opacity: [0, 1],
+                    translateY: [24, 0],
+                    duration: 700,
+                    ease: 'outQuad'
+                });
+
+                // Contador animado del precio (si esta card tiene uno)
+                var priceEl = el.querySelector('.js-count-price');
+                if (priceEl) {
+                    var target = parseInt(priceEl.dataset.countTo, 10) || 0;
+                    var counter = { value: 0 };
+                    anime.animate(counter, {
+                        value: target,
+                        duration: 900,
+                        ease: 'outExpo',
+                        onUpdate: function () {
+                            priceEl.textContent = '$' + Math.round(counter.value).toLocaleString('es-AR');
+                        }
+                    });
+                }
+            };
+
+            if ('IntersectionObserver' in window) {
+                var revealObserver = new IntersectionObserver(function (entries, obs) {
+                    entries.forEach(function (entry) {
+                        if (!entry.isIntersecting) return;
+                        reveal(entry.target);
+                        obs.unobserve(entry.target);
+                    });
+                }, { threshold: 0.1, rootMargin: '0px 0px -5% 0px' });
+
+                revealEls.forEach(function (el) { revealObserver.observe(el); });
+            } else {
+                // Navegadores sin soporte: mostrar todo directo, sin animación
+                revealEls.forEach(reveal);
+            }
+
+            // Red de seguridad: si por lo que sea el observer no llegó a "tocar"
+            // alguna card (scroll muy rápido, momentum en mobile, etc.), nunca
+            // debe quedar contenido oculto para siempre.
+            window.addEventListener('load', function () {
+                setTimeout(function () {
+                    revealEls.forEach(function (el) {
+                        if (el.dataset.revealed !== '1') reveal(el);
+                    });
+                }, 2500);
+            });
+        }
+
+        // ── Micro-interacción: pulso al tocar los botones de pedido ──────────
+        var pedidoBtns = document.querySelectorAll('.sandwich-card a.w-full, .reveal-target a.w-full');
+        pedidoBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                anime.animate(btn, {
+                    scale: [1, 0.94, 1],
+                    duration: 350,
+                    ease: 'outQuad'
+                });
+            });
+        });
     });
     </script>
 
