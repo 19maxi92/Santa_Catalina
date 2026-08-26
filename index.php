@@ -30,31 +30,62 @@ try {
     ");
     $productos_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Mapear por nombre exacto (key = nombre en BD)
+    // Mapear por nombre exacto (key = nombre en BD, sin espacios de más)
     $map = [];
     foreach ($productos_db as $p) {
-        $map[$p['nombre']] = ['ef' => (float)$p['precio_efectivo'], 'tr' => (float)$p['precio_transferencia']];
+        $map[trim($p['nombre'])] = ['ef' => (float)$p['precio_efectivo'], 'tr' => (float)$p['precio_transferencia']];
     }
 
     // Asignar según nombre exacto del producto en la BD
-    if (isset($map['24 Jamón y Queso']))      $precios['jyq24']  = $map['24 Jamón y Queso'];
-    if (isset($map['48 Jamón y Queso']))      $precios['jyq48']  = $map['48 Jamón y Queso'];
-    if (isset($map['24 Surtidos Clásicos']))  $precios['clas24'] = $map['24 Surtidos Clásicos'];
-    if (isset($map['48 Surtidos Clásicos']))  $precios['clas48'] = $map['48 Surtidos Clásicos'];
-    if (isset($map['24 Surtidos Especiales']))$precios['esp24']  = $map['24 Surtidos Especiales'];
-    if (isset($map['48 Surtidos Especiales']))$precios['esp48']  = $map['48 Surtidos Especiales'];
-    if (isset($map['24 Surtidos Premium']))   $precios['prem24'] = $map['24 Surtidos Premium'];
-    if (isset($map['48 Surtidos Premium']))   $precios['prem48'] = $map['48 Surtidos Premium'];
-    if (isset($map['8 Surtidos Elegidos']))   $precios['eleg8']  = $map['8 Surtidos Elegidos'];
-    if (isset($map['16 Surtidos Elegidos']))  $precios['eleg16'] = $map['16 Surtidos Elegidos'];
-    if (isset($map['24 Surtidos Elegidos']))  $precios['eleg24'] = $map['24 Surtidos Elegidos'];
-    if (isset($map['32 Surtidos Elegidos']))  $precios['eleg32'] = $map['32 Surtidos Elegidos'];
-    if (isset($map['40 Surtidos Elegidos']))  $precios['eleg40'] = $map['40 Surtidos Elegidos'];
-    if (isset($map['48 Surtidos Elegidos']))  $precios['eleg48'] = $map['48 Surtidos Elegidos'];
+    $nombres_esperados = [
+        'jyq24'  => '24 Jamón y Queso',
+        'jyq48'  => '48 Jamón y Queso',
+        'clas24' => '24 Surtidos Clásicos',
+        'clas48' => '48 Surtidos Clásicos',
+        'esp24'  => '24 Surtidos Especiales',
+        'esp48'  => '48 Surtidos Especiales',
+        'prem24' => '24 Surtidos Premium',
+        'prem48' => '48 Surtidos Premium',
+        'eleg8'  => '8 Surtidos Elegidos',
+        'eleg16' => '16 Surtidos Elegidos',
+        'eleg24' => '24 Surtidos Elegidos',
+        'eleg32' => '32 Surtidos Elegidos',
+        'eleg40' => '40 Surtidos Elegidos',
+        'eleg48' => '48 Surtidos Elegidos',
+    ];
+
+    $no_encontrados = [];
+    foreach ($nombres_esperados as $key => $nombre) {
+        if (isset($map[$nombre])) {
+            $precios[$key] = $map[$nombre];
+        } else {
+            $no_encontrados[] = $nombre;
+        }
+    }
+
+    // Si algún nombre esperado no está activo/existe en la BD, se queda con el precio
+    // de respaldo (puede estar desactualizado) — quede registrado para poder detectarlo
+    if ($no_encontrados) {
+        error_log('index.php: producto(s) no encontrados en la BD (usando precio de respaldo): ' . implode(', ', $no_encontrados));
+    }
 
 } catch (Exception $e) {
     // Si falla la BD, se usan los fallbacks definidos arriba
     error_log('index.php: no se pudieron cargar los precios desde la BD – ' . $e->getMessage());
+    $no_encontrados = ['ERROR DE CONEXIÓN/QUERY: ' . $e->getMessage()];
+}
+
+// Diagnóstico rápido de precios: solo visible logueado como admin, vía ?debug_precios=1
+if (isset($_GET['debug_precios']) && isLoggedIn()) {
+    echo '<pre style="background:#111;color:#0f0;padding:20px;font-size:13px;">';
+    echo "PRODUCTOS ENCONTRADOS EN LA BD (nombre => precios):\n";
+    foreach ($map ?? [] as $nombre => $p) {
+        echo "  '" . $nombre . "' => efectivo \$" . $p['ef'] . " / transferencia \$" . $p['tr'] . "\n";
+    }
+    echo "\nNOMBRES ESPERADOS QUE NO SE ENCONTRARON (usan precio de respaldo, puede estar desactualizado):\n";
+    echo empty($no_encontrados) ? "  (ninguno, todo OK)\n" : "  - " . implode("\n  - ", $no_encontrados) . "\n";
+    echo '</pre>';
+    exit;
 }
 
 // Helper: formatea número como precio argentino  →  $12.500
