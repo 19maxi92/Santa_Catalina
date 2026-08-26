@@ -132,87 +132,111 @@ function wa($n) {
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/img/icon-192.png">
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS: compilado localmente (sin depender del CDN en tiempo real) -->
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
+
+    <!-- Font Awesome: alojado localmente -->
+    <link rel="stylesheet" href="/assets/vendor/fontawesome/css/all.min.css">
+
+    <!-- Google Fonts (Poppins): alojado localmente -->
+    <link rel="stylesheet" href="/assets/css/poppins.css">
     
     <style>
+        :root {
+            --sc-orange-1: #ff7a3d;
+            --sc-orange-2: #f7931e;
+            --sc-coral: #ff5f6d;
+            --sc-ink: #1f2430;
+        }
+
         body {
             font-family: 'Poppins', sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
-        
+
+        h1, h2, h3, h4, h5 {
+            letter-spacing: -0.02em;
+        }
+
         .sandwich-card {
-            transition: all 0.3s ease;
+            transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease;
+            box-shadow: 0 1px 2px rgba(17, 17, 17, 0.04), 0 8px 24px rgba(17, 17, 17, 0.06);
         }
-        
+
         .sandwich-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transform: translateY(-6px);
+            box-shadow: 0 24px 48px -12px rgba(31, 36, 48, 0.18);
         }
-        
+
         .hero-bg {
-            background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+            background:
+                radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.16), transparent 40%),
+                radial-gradient(circle at 85% 0%, rgba(255, 255, 255, 0.12), transparent 45%),
+                linear-gradient(135deg, var(--sc-coral) 0%, var(--sc-orange-1) 55%, var(--sc-orange-2) 100%);
         }
-        
+
         .pulse-button {
-            animation: pulse 2s infinite;
+            animation: pulse 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
         }
-        
+
         @keyframes pulse {
             0%, 100% {
                 transform: scale(1);
+                box-shadow: 0 8px 24px rgba(255, 122, 61, 0.35);
             }
             50% {
-                transform: scale(1.05);
+                transform: scale(1.035);
+                box-shadow: 0 12px 32px rgba(255, 95, 109, 0.4);
             }
         }
-        
+
         .gradient-text {
-            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            background: linear-gradient(135deg, var(--sc-coral), var(--sc-orange-2));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         .floating {
-            animation: floating 3s ease-in-out infinite;
+            animation: floating 4s ease-in-out infinite;
         }
-        
+
         @keyframes floating {
             0%, 100% {
                 transform: translateY(0px);
             }
             50% {
-                transform: translateY(-10px);
+                transform: translateY(-8px);
             }
         }
-        
+
         /* Estilos para el botón de WhatsApp fijo */
         .whatsapp-fixed {
             position: fixed;
             bottom: 20px;
             right: 20px;
             z-index: 1000;
-            animation: bounce 2s infinite;
+            box-shadow: 0 10px 30px rgba(37, 211, 102, 0.45);
+            animation: gentle-bounce 2.8s ease-in-out infinite;
         }
-        
-        @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% {
-                transform: translateY(0);
-            }
-            40% {
-                transform: translateY(-10px);
-            }
-            60% {
-                transform: translateY(-5px);
-            }
+
+        @keyframes gentle-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
         }
-        
+
+        /* Botones de acción: look unificado más suave y "premium" */
+        .sandwich-card a.w-full,
+        .bg-white a.w-full {
+            transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+
+        .sandwich-card a.w-full:hover,
+        .bg-white a.w-full:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.04);
+        }
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .hero-title {
@@ -333,7 +357,7 @@ function wa($n) {
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
             
             <!-- 24 JAMÓN Y QUESO -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-orange-400 to-orange-500 p-6">
                     <h3 class="text-2xl font-bold text-white">24 Jamón y Queso</h3>
                     <p class="text-orange-100">El clásico que nunca falla</p>
@@ -351,7 +375,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20de%20jam%C3%B3n%20y%20queso%20por%20<?php echo wa($precios['jyq24']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -359,7 +383,7 @@ function wa($n) {
             </div>
 
             <!-- 48 JAMÓN Y QUESO -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg border-2 border-red-200">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-red-200">
                 <div class="bg-gradient-to-r from-red-500 to-red-600 p-6 relative">
                     <div class="absolute top-2 right-2 bg-yellow-400 text-red-800 px-3 py-1 rounded-full text-xs font-bold">
                         ¡OFERTA!
@@ -380,7 +404,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20de%20jam%C3%B3n%20y%20queso%20por%20<?php echo wa($precios['jyq48']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -388,7 +412,7 @@ function wa($n) {
             </div>
 
             <!-- 24 SURTIDOS CLÁSICOS -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
                     <h3 class="text-2xl font-bold text-white">24 Surtidos Clásicos</h3>
                     <p class="text-blue-100">Variedad tradicional</p>
@@ -411,7 +435,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas24']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -419,7 +443,7 @@ function wa($n) {
             </div>
 
             <!-- 48 SURTIDOS CLÁSICOS -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
                     <h3 class="text-2xl font-bold text-white">48 Surtidos Clásicos</h3>
                     <p class="text-blue-100">Pack grande clásico</p>
@@ -433,7 +457,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas48']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -441,7 +465,7 @@ function wa($n) {
             </div>
 
             <!-- 24 SURTIDOS ESPECIALES -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-purple-500 to-purple-600 p-6">
                     <h3 class="text-2xl font-bold text-white">24 Surtidos Especiales</h3>
                     <p class="text-purple-100">Con choclo y aceitunas</p>
@@ -466,7 +490,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20especiales%20por%20<?php echo wa($precios['esp24']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -474,7 +498,7 @@ function wa($n) {
             </div>
 
             <!-- 48 SURTIDOS ESPECIALES -->
-            <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-purple-600 to-purple-700 p-6">
                     <h3 class="text-2xl font-bold text-white">48 Surtidos Especiales</h3>
                     <p class="text-purple-100">Pack completo especial</p>
@@ -488,7 +512,7 @@ function wa($n) {
                     </div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20surtidos%20especiales%20por%20<?php echo wa($precios['esp48']['ef']); ?>"
                        target="_blank" 
-                       class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -506,7 +530,7 @@ function wa($n) {
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- 24 PREMIUM -->
-                <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg">
+                <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                     <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 p-6">
                         <h3 class="text-2xl font-bold text-white">24 Premium</h3>
                         <p class="text-yellow-100">Sabores gourmet selectos</p>
@@ -536,7 +560,7 @@ function wa($n) {
                         </div>
                         <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem24']['ef']); ?>%20-%20Sabores%3A"
                            target="_blank" 
-                           class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                           class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                             <i class="fab fa-whatsapp mr-2"></i>
                             Elegir Sabores
                         </a>
@@ -544,7 +568,7 @@ function wa($n) {
                 </div>
 
                 <!-- 48 PREMIUM -->
-                <div class="sandwich-card bg-white rounded-2xl overflow-hidden shadow-lg border-2 border-yellow-200">
+                <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-yellow-200">
                     <div class="bg-gradient-to-r from-yellow-600 to-orange-500 p-6 relative">
                         <div class="absolute top-2 right-2 bg-white text-orange-800 px-3 py-1 rounded-full text-xs font-bold">
                             PREMIUM
@@ -565,7 +589,7 @@ function wa($n) {
                         </div>
                         <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem48']['ef']); ?>%20-%20Sabores%3A"
                            target="_blank" 
-                           class="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                           class="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                             <i class="fab fa-whatsapp mr-2"></i>
                             Elegir Sabores Premium
                         </a>
@@ -587,84 +611,84 @@ function wa($n) {
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 
                 <!-- 48 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center border-2 border-red-200">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center border-2 border-red-200">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">48 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg48', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 15-20 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg48']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
                 </div>
 
                 <!-- 40 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">40 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg40', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 12-15 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2040%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg40']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
                 </div>
 
                 <!-- 32 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">32 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg32', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 10-12 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2032%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg32']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
                 </div>
 
                 <!-- 24 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">24 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg24', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 8-10 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg24']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
                 </div>
 
                 <!-- 16 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">16 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg16', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 5-6 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2016%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg16']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
                 </div>
 
                 <!-- 8 ELEGIDOS -->
-                <div class="bg-white rounded-2xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
+                <div class="bg-white rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 text-center">
                     <div class="text-4xl mb-3">🥪</div>
                     <h3 class="text-2xl font-bold text-red-600 mb-2">8 Elegidos</h3>
                     <div class="text-3xl font-bold text-red-600 mb-3"><?php echo precioDisplay('eleg8', $precios); ?></div>
                     <div class="text-sm text-gray-500 mb-4">Para 2-3 personas</div>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%208%20s%C3%A1ndwiches%20elegidos%20por%20<?php echo wa($precios['eleg8']['ef']); ?>%20-%20Sabores%3A"
                        target="_blank" 
-                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-red-500 hover:bg-red-600 text-white px-4 py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Personalizar
                     </a>
@@ -673,7 +697,7 @@ function wa($n) {
             </div>
 
             <!-- Lista de sabores disponibles -->
-            <div class="bg-white rounded-2xl p-8 shadow-lg">
+            <div class="bg-white rounded-3xl p-8 shadow-lg">
                 <h4 class="text-2xl font-bold text-gray-800 mb-6 text-center">🥪 Todos los sabores disponibles</h4>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
@@ -777,40 +801,40 @@ function wa($n) {
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="bg-white rounded-2xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
+                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
                     <div class="text-6xl mb-4">🌅</div>
                     <h3 class="text-2xl font-bold text-blue-600 mb-2">Mañana</h3>
                     <p class="text-lg text-gray-600 mb-4">9:00 - 11:30</p>
                     <p class="text-sm text-gray-500 mb-6">Perfecto para el desayuno o almuerzo temprano</p>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido%20para%20el%20turno%20MAÑANA%20(9:00-11:30)" 
                        target="_blank" 
-                       class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir para Mañana
                     </a>
                 </div>
                 
-                <div class="bg-white rounded-2xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-200">
+                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300 border-2 border-orange-200">
                     <div class="text-6xl mb-4">☕</div>
                     <h3 class="text-2xl font-bold text-orange-600 mb-2">Merienda</h3>
                     <p class="text-lg text-gray-600 mb-4">15:00 - 17:00</p>
                     <p class="text-sm text-gray-500 mb-6">Ideal para la merienda o reuniones de tarde</p>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido%20para%20el%20turno%20MERIENDA%20(15:00-17:00)" 
                        target="_blank" 
-                       class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-orange-500 hover:bg-orange-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir para Merienda
                     </a>
                 </div>
                 
-                <div class="bg-white rounded-2xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
+                <div class="bg-white rounded-3xl p-8 text-center shadow-lg hover:shadow-xl transition-all duration-300">
                     <div class="text-6xl mb-4">🌆</div>
                     <h3 class="text-2xl font-bold text-purple-600 mb-2">Tarde</h3>
                     <p class="text-lg text-gray-600 mb-4">18:00 - 20:00</p>
                     <p class="text-sm text-gray-500 mb-6">Perfecto para la cena o eventos nocturnos</p>
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido%20para%20el%20turno%20TARDE%20(18:00-20:00)" 
                        target="_blank" 
-                       class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-semibold transition-all duration-300 flex items-center justify-center">
+                       class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir para Tarde
                     </a>
@@ -908,14 +932,14 @@ function wa($n) {
                 </a>
             </div>
             <!-- Instrucciones por sistema -->
-            <div id="instrucciones-ios" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+            <div id="instrucciones-ios" class="hidden mt-6 bg-white bg-opacity-20 rounded-3xl p-4 text-sm">
                 <p class="font-bold mb-2">📱 En iPhone/iPad:</p>
                 <p>1. Abrí <strong>pedido_online</strong> en Safari</p>
                 <p>2. Tocá el botón <strong>Compartir</strong> (□↑)</p>
                 <p>3. Elegí <strong>"Agregar a pantalla de inicio"</strong></p>
                 <p>4. ¡Listo! Ya tenés tu app 🎉</p>
             </div>
-            <div id="instrucciones-android" class="hidden mt-6 bg-white bg-opacity-20 rounded-2xl p-4 text-sm">
+            <div id="instrucciones-android" class="hidden mt-6 bg-white bg-opacity-20 rounded-3xl p-4 text-sm">
                 <p class="font-bold mb-2">🤖 En Android:</p>
                 <p>Tocá <strong>"Instalar App Gratis"</strong> arriba o abrí el link y usá el menú del navegador → <strong>"Agregar a pantalla de inicio"</strong></p>
             </div>
@@ -925,17 +949,17 @@ function wa($n) {
         <div class="text-center mb-16">
             <h2 class="text-4xl font-bold gradient-text mb-12">Lo que dicen nuestros clientes</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <div class="bg-white p-6 rounded-3xl shadow-lg">
                     <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
                     <p class="text-gray-600 mb-4 italic">"Los mejores triples de La Plata! Siempre frescos y con ingredientes de primera calidad."</p>
                     <p class="font-semibold text-gray-800">- María González</p>
                 </div>
-                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <div class="bg-white p-6 rounded-3xl shadow-lg">
                     <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
                     <p class="text-gray-600 mb-4 italic">"El delivery siempre puntual y los sabores premium son increíbles. Recomendadísimos!"</p>
                     <p class="font-semibold text-gray-800">- Carlos Pérez</p>
                 </div>
-                <div class="bg-white p-6 rounded-2xl shadow-lg">
+                <div class="bg-white p-6 rounded-3xl shadow-lg">
                     <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
                     <p class="text-gray-600 mb-4 italic">"Para eventos son perfectos. Gran variedad y precios accesibles. Los elegidos son geniales!"</p>
                     <p class="font-semibold text-gray-800">- Ana Martínez</p>
@@ -1001,7 +1025,7 @@ function wa($n) {
             </div>
             
             <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2024 Sandwichería Santa Catalina. Todos los derechos reservados.</p>
+                <p>&copy; <?= date('Y') ?> Sandwichería Santa Catalina. Todos los derechos reservados.</p>
                 <p class="text-sm mt-2">Hecho con ❤️ en Juan María Gutiérrez, Buenos Aires</p>
             </div>
         </div>
