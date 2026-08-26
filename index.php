@@ -330,6 +330,13 @@ function wa($n) {
                         <i class="fab fa-whatsapp mr-2 text-lg sm:text-xl"></i>
                         <span>WhatsApp</span>
                     </a>
+                    <!-- PedidosYa como alternativa -->
+                    <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu"
+                       target="_blank"
+                       class="inline-flex items-center bg-[#e6284d] hover:bg-[#c91f3f] text-white text-sm sm:text-base font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-full transition-all duration-300 shadow">
+                        <i class="fas fa-motorcycle mr-2 text-lg sm:text-xl"></i>
+                        <span>PedidosYa</span>
+                    </a>
                 </div>
                 <!-- Indicador "Instalá como app" -->
                 <div id="hint-app" class="mt-3 text-white text-xs opacity-70 hidden">
@@ -721,10 +728,17 @@ function wa($n) {
             
             <div class="text-center mt-8">
                 <div class="bg-white rounded-xl p-6 shadow-md">
-                    <p class="text-lg text-gray-600 mb-2">
+                    <p class="text-lg text-gray-600 mb-3">
                         <i class="fas fa-map-marker-alt text-green-500 mr-2"></i>
-                        <strong>Zona de delivery:</strong> La Plata y alrededores
+                        <strong>Localidades con delivery habilitado:</strong>
                     </p>
+                    <div class="flex flex-wrap justify-center gap-2 mb-3">
+                        <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium">Juan María Gutiérrez</span>
+                        <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium">Villa Elisa</span>
+                        <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium">Berazategui</span>
+                        <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium">Florencio Varela</span>
+                        <span class="bg-green-100 text-green-800 px-3 py-1.5 rounded-full text-sm font-medium">Hudson</span>
+                    </div>
                     <p class="text-sm text-gray-500">
                         Coordinamos el horario exacto por WhatsApp según tu ubicación y disponibilidad
                     </p>
@@ -756,10 +770,9 @@ function wa($n) {
                 
                 <div class="text-center">
                     <div class="text-5xl mb-4">🏪</div>
-                    <h3 class="text-xl font-bold mb-4">Retirá en Nuestros Locales</h3>
+                    <h3 class="text-xl font-bold mb-4">Retiro en Local</h3>
                     <div class="text-gray-300 space-y-2">
-                        <p><strong>🏪 Local 1:</strong><br>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</p>
-                        <p><strong>🏭 Fábrica</strong> y <strong>🏬 Villa Elisa:</strong><br>Coordinamos la dirección exacta por WhatsApp según tu cercanía</p>
+                        <p><strong>Dirección:</strong><br>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</p>
                         <p><strong>Horarios:</strong><br>Lunes a Domingo<br>9:00 a 21:00hs</p>
                         <p class="text-sm bg-gray-700 p-2 rounded">
                             💡 Coordiná tu horario de retiro por WhatsApp
@@ -860,6 +873,9 @@ function wa($n) {
                     <div class="flex space-x-4">
                         <a href="https://wa.me/541159813546" target="_blank" class="text-green-400 hover:text-green-300 text-2xl">
                             <i class="fab fa-whatsapp"></i>
+                        </a>
+                        <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu" target="_blank" class="text-[#e6284d] hover:text-[#ff5c78] text-2xl">
+                            <i class="fas fa-motorcycle"></i>
                         </a>
                         <a href="https://instagram.com/sandwicheriasantacatalina" target="_blank" class="text-pink-400 hover:text-pink-300 text-2xl">
                             <i class="fab fa-instagram"></i>
