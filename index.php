@@ -215,6 +215,17 @@ function wa($n) {
             animation: gentle-bounce 2.8s ease-in-out infinite;
         }
 
+        /* Botón flotante de PedidosYa, apilado arriba del de WhatsApp */
+        .pedidosya-fixed {
+            position: fixed;
+            bottom: 92px;
+            right: 20px;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(230, 40, 77, 0.45);
+            animation: gentle-bounce 2.8s ease-in-out infinite;
+            animation-delay: 0.3s;
+        }
+
         @keyframes gentle-bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-6px); }
@@ -249,6 +260,16 @@ function wa($n) {
             }
 
             .whatsapp-fixed i {
+                font-size: 24px;
+            }
+
+            .pedidosya-fixed {
+                bottom: 78px;
+                right: 15px;
+                padding: 12px;
+            }
+
+            .pedidosya-fixed i {
                 font-size: 24px;
             }
         }
@@ -926,9 +947,16 @@ function wa($n) {
         </div>
     </footer>
 
+    <!-- Botón flotante de PedidosYa -->
+    <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu"
+       target="_blank"
+       class="pedidosya-fixed bg-[#e6284d] hover:bg-[#c91f3f] text-white rounded-full p-4 shadow-2xl">
+        <i class="fas fa-motorcycle text-3xl"></i>
+    </a>
+
     <!-- Botón flotante de WhatsApp -->
-    <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido" 
-       target="_blank" 
+    <a href="https://wa.me/541159813546?text=Hola%20quiero%20hacer%20un%20pedido"
+       target="_blank"
        class="whatsapp-fixed bg-green-500 hover:bg-green-600 text-white rounded-full p-4 shadow-2xl">
         <i class="fab fa-whatsapp text-3xl"></i>
     </a>
