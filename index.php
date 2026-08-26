@@ -3,15 +3,14 @@
 require_once __DIR__ . '/config.php';
 
 // Fallbacks: se usan si la BD no responde
+// Los 4 combos fijos son los que hoy existen en pedido_online (24/48 Jamón y Queso,
+// 48 Surtidos Clásicos, 48 Surtidos Especiales). El resto de tamaños/sabores
+// (Elegidos, Premium) se arman a medida y el precio se calcula, no son combo fijo.
 $precios = [
-    'jyq24'       => ['ef' => 12500,  'tr' => 12500],
-    'jyq48'       => ['ef' => 22000,  'tr' => 24000],
-    'clas24'      => ['ef' => 12500,  'tr' => 12500],
-    'clas48'      => ['ef' => 20000,  'tr' => 22000],
-    'esp24'       => ['ef' => 12500,  'tr' => 12500],
-    'esp48'       => ['ef' => 22000,  'tr' => 24000],
-    'prem24'      => ['ef' => 22500,  'tr' => 22500],
-    'prem48'      => ['ef' => 44000,  'tr' => 44000],
+    'jyq24'       => ['ef' => 15000,  'tr' => 16000],
+    'jyq48'       => ['ef' => 28000,  'tr' => 30000],
+    'clas48'      => ['ef' => 25000,  'tr' => 27000],
+    'esp48'       => ['ef' => 28000,  'tr' => 30000],
     'eleg8'       => ['ef' => 4200,   'tr' => 4200],
     'eleg16'      => ['ef' => 8400,   'tr' => 8400],
     'eleg24'      => ['ef' => 12500,  'tr' => 12500],
@@ -40,12 +39,8 @@ try {
     $nombres_esperados = [
         'jyq24'  => '24 Jamón y Queso',
         'jyq48'  => '48 Jamón y Queso',
-        'clas24' => '24 Surtidos Clásicos',
         'clas48' => '48 Surtidos Clásicos',
-        'esp24'  => '24 Surtidos Especiales',
         'esp48'  => '48 Surtidos Especiales',
-        'prem24' => '24 Surtidos Premium',
-        'prem48' => '48 Surtidos Premium',
         'eleg8'  => '8 Surtidos Elegidos',
         'eleg16' => '16 Surtidos Elegidos',
         'eleg24' => '24 Surtidos Elegidos',
@@ -353,8 +348,8 @@ function wa($n) {
             <p class="text-base sm:text-lg md:text-xl text-gray-600 px-4">Triples frescos hechos al momento con los mejores ingredientes</p>
         </div>
 
-        <!-- Grid de productos principales -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
+        <!-- Grid de productos principales: los 4 combos fijos que hoy arma pedido_online -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-20">
             
             <!-- 24 JAMÓN Y QUESO -->
             <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
@@ -411,37 +406,6 @@ function wa($n) {
                 </div>
             </div>
 
-            <!-- 24 SURTIDOS CLÁSICOS -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
-                <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-6">
-                    <h3 class="text-2xl font-bold text-white">24 Surtidos Clásicos</h3>
-                    <p class="text-blue-100">Variedad tradicional</p>
-                </div>
-                <div class="p-6">
-                    <p class="text-gray-600 mb-4">Jamón y queso, lechuga, tomate, huevo. Los sabores de siempre que nunca pasan de moda.</p>
-                    <div class="mb-4">
-                        <h5 class="font-semibold text-gray-700 mb-2">Sabores incluidos:</h5>
-                        <div class="flex flex-wrap gap-1">
-                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">Jamón y Queso</span>
-                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">Lechuga</span>
-                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">Tomate</span>
-                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">Huevo</span>
-                        </div>
-                    </div>
-                    <div class="flex items-end justify-between mb-6">
-                        <div>
-                            <div class="text-3xl font-bold text-blue-600"><?php echo precioDisplay('clas24', $precios); ?></div>
-                        </div>
-                    </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas24']['ef']); ?>"
-                       target="_blank" 
-                       class="w-full bg-blue-500 hover:bg-blue-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
-                        <i class="fab fa-whatsapp mr-2"></i>
-                        Pedir Ahora
-                    </a>
-                </div>
-            </div>
-
             <!-- 48 SURTIDOS CLÁSICOS -->
             <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
                 <div class="bg-gradient-to-r from-blue-600 to-blue-700 p-6">
@@ -458,39 +422,6 @@ function wa($n) {
                     <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20surtidos%20cl%C3%A1sicos%20por%20<?php echo wa($precios['clas48']['ef']); ?>"
                        target="_blank" 
                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
-                        <i class="fab fa-whatsapp mr-2"></i>
-                        Pedir Ahora
-                    </a>
-                </div>
-            </div>
-
-            <!-- 24 SURTIDOS ESPECIALES -->
-            <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
-                <div class="bg-gradient-to-r from-purple-500 to-purple-600 p-6">
-                    <h3 class="text-2xl font-bold text-white">24 Surtidos Especiales</h3>
-                    <p class="text-purple-100">Con choclo y aceitunas</p>
-                </div>
-                <div class="p-6">
-                    <p class="text-gray-600 mb-4">Clásicos + choclo y aceitunas. Más variedad de sabores para los que buscan algo diferente.</p>
-                    <div class="mb-4">
-                        <h5 class="font-semibold text-gray-700 mb-2">Sabores incluidos:</h5>
-                        <div class="flex flex-wrap gap-1">
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Jamón y Queso</span>
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Lechuga</span>
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Tomate</span>
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Huevo</span>
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Choclo</span>
-                            <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">Aceitunas</span>
-                        </div>
-                    </div>
-                    <div class="flex items-end justify-between mb-6">
-                        <div>
-                            <div class="text-3xl font-bold text-purple-600"><?php echo precioDisplay('esp24', $precios); ?></div>
-                        </div>
-                    </div>
-                    <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20surtidos%20especiales%20por%20<?php echo wa($precios['esp24']['ef']); ?>"
-                       target="_blank" 
-                       class="w-full bg-purple-500 hover:bg-purple-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
                         <i class="fab fa-whatsapp mr-2"></i>
                         Pedir Ahora
                     </a>
@@ -521,91 +452,38 @@ function wa($n) {
 
         </div>
 
-        <!-- Sección Premium -->
-        <div class="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-3xl p-8 mb-20">
-            <div class="text-center mb-12">
-                <h2 class="text-4xl font-bold text-gray-800 mb-4">🌟 Premium Gourmet</h2>
-                <p class="text-xl text-gray-600">Sabores únicos y sofisticados para paladares exigentes</p>
+        <!-- Sección Premium: los sabores premium se piden armando el combo en Surtidos Elegidos -->
+        <div class="bg-gradient-to-r from-yellow-100 to-orange-100 rounded-3xl p-8 mb-20 text-center">
+            <h2 class="text-4xl font-bold text-gray-800 mb-4">🌟 Premium Gourmet</h2>
+            <p class="text-xl text-gray-600 mb-6">Sabores únicos y sofisticados para paladares exigentes</p>
+            <div class="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto mb-8">
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Ananá</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Atún</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Berenjena</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Durazno</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Jamón Crudo</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Morrón</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Palmito</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Panceta</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Pollo</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Roquefort</span>
+                <span class="bg-yellow-200 text-yellow-900 px-3 py-1.5 rounded-full text-sm font-medium">Salame</span>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- 24 PREMIUM -->
-                <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg">
-                    <div class="bg-gradient-to-r from-yellow-500 to-yellow-600 p-6">
-                        <h3 class="text-2xl font-bold text-white">24 Premium</h3>
-                        <p class="text-yellow-100">Sabores gourmet selectos</p>
-                    </div>
-                    <div class="p-6">
-                        <p class="text-gray-600 mb-4">Sabores gourmet únicos que no encontrarás en otro lado. Ingredientes premium cuidadosamente seleccionados.</p>
-                        <div class="mb-4">
-                            <h5 class="font-semibold text-gray-700 mb-2">Sabores premium disponibles:</h5>
-                            <div class="grid grid-cols-2 gap-1 text-xs">
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Ananá</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Atún</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Berenjena</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Durazno</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Jamón Crudo</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Morrón</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Palmito</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Panceta</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Pollo</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Roquefort</span>
-                                <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Salame</span>
-                            </div>
-                        </div>
-                        <div class="flex items-end justify-between mb-6">
-                            <div>
-                                <div class="text-3xl font-bold text-yellow-600"><?php echo precioDisplay('prem24', $precios); ?></div>
-                            </div>
-                        </div>
-                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2024%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem24']['ef']); ?>%20-%20Sabores%3A"
-                           target="_blank" 
-                           class="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
-                            <i class="fab fa-whatsapp mr-2"></i>
-                            Elegir Sabores
-                        </a>
-                    </div>
-                </div>
-
-                <!-- 48 PREMIUM -->
-                <div class="sandwich-card bg-white rounded-3xl overflow-hidden shadow-lg border-2 border-yellow-200">
-                    <div class="bg-gradient-to-r from-yellow-600 to-orange-500 p-6 relative">
-                        <div class="absolute top-2 right-2 bg-white text-orange-800 px-3 py-1 rounded-full text-xs font-bold">
-                            PREMIUM
-                        </div>
-                        <h3 class="text-2xl font-bold text-white">48 Premium</h3>
-                        <p class="text-yellow-100">Pack grande gourmet</p>
-                    </div>
-                    <div class="p-6">
-                        <p class="text-gray-600 mb-6">Pack grande de sabores gourmet. Perfecto para eventos especiales. Podés elegir hasta 6 sabores premium diferentes.</p>
-                        <div class="flex items-end justify-between mb-6">
-                            <div>
-                                <div class="text-3xl font-bold text-orange-600"><?php echo precioDisplay('prem48', $precios); ?></div>
-                            </div>
-                            <div class="text-right">
-                                <div class="text-sm text-gray-500">Hasta 6 sabores</div>
-                                <div class="text-xs text-gray-400">8 de cada sabor</div>
-                            </div>
-                        </div>
-                        <a href="https://wa.me/541159813546?text=Hola%20quiero%20pedir%2048%20s%C3%A1ndwiches%20premium%20por%20<?php echo wa($precios['prem48']['ef']); ?>%20-%20Sabores%3A"
-                           target="_blank" 
-                           class="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white py-3.5 rounded-2xl font-semibold transition-all duration-300 flex items-center justify-center">
-                            <i class="fab fa-whatsapp mr-2"></i>
-                            Elegir Sabores Premium
-                        </a>
-                    </div>
-                </div>
-            </div>
+            <a href="#surtidos-elegidos"
+               class="inline-flex items-center bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white px-8 py-3.5 rounded-2xl font-semibold transition-all duration-300 shadow-lg">
+                <i class="fas fa-arrow-down mr-2"></i>
+                Armar mi combo con sabores premium
+            </a>
         </div>
 
         <!-- NUEVA SECCIÓN: SURTIDOS ELEGIDOS -->
-        <div class="bg-gradient-to-r from-red-50 via-pink-50 to-red-100 rounded-3xl p-8 mb-20">
+        <div id="surtidos-elegidos" class="bg-gradient-to-r from-red-50 via-pink-50 to-red-100 rounded-3xl p-8 mb-20 scroll-mt-24">
             <div class="text-center mb-12">
                 <h2 class="text-4xl font-bold text-gray-800 mb-4">
                     🎯 Surtidos Elegidos
                 </h2>
                 <p class="text-xl text-gray-600 mb-4">¡Vos elegís exactamente lo que querés!</p>
-                <p class="text-lg text-red-600 font-medium">Personalizá tu pedido con los sabores que más te gustan</p>
+                <p class="text-lg text-red-600 font-medium">Personalizá tu pedido con los sabores clásicos y premium que más te gustan</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -878,9 +756,10 @@ function wa($n) {
                 
                 <div class="text-center">
                     <div class="text-5xl mb-4">🏪</div>
-                    <h3 class="text-xl font-bold mb-4">Retiro en Local</h3>
+                    <h3 class="text-xl font-bold mb-4">Retirá en Nuestros Locales</h3>
                     <div class="text-gray-300 space-y-2">
-                        <p><strong>Dirección:</strong><br>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</p>
+                        <p><strong>🏪 Local 1:</strong><br>Cno. Gral. Belgrano 7287, B1890 Juan María Gutiérrez, Provincia de Buenos Aires</p>
+                        <p><strong>🏭 Fábrica</strong> y <strong>🏬 Villa Elisa:</strong><br>Coordinamos la dirección exacta por WhatsApp según tu cercanía</p>
                         <p><strong>Horarios:</strong><br>Lunes a Domingo<br>9:00 a 21:00hs</p>
                         <p class="text-sm bg-gray-700 p-2 rounded">
                             💡 Coordiná tu horario de retiro por WhatsApp
@@ -1115,7 +994,7 @@ function wa($n) {
             }
             
             // Contador de productos más populares
-            const popularProducts = ['48 Jamón y Queso', '24 Surtidos Clásicos', '48 Surtidos Premium'];
+            const popularProducts = ['48 Jamón y Queso', '48 Surtidos Clásicos'];
             popularProducts.forEach(product => {
                 const cards = document.querySelectorAll('.sandwich-card h3');
                 cards.forEach(title => {
