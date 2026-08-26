@@ -221,7 +221,7 @@ function wa($n) {
             bottom: 92px;
             right: 20px;
             z-index: 1000;
-            box-shadow: 0 10px 30px rgba(230, 40, 77, 0.45);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
             animation: gentle-bounce 2.8s ease-in-out infinite;
             animation-delay: 0.3s;
         }
@@ -229,6 +229,46 @@ function wa($n) {
         @keyframes gentle-bounce {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-6px); }
+        }
+
+        /* Ticker de testimonios: cinta continua, sin clicks */
+        .ticker-wrap {
+            overflow: hidden;
+            -webkit-mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+            mask-image: linear-gradient(to right, transparent, black 6%, black 94%, transparent);
+        }
+
+        .ticker-track {
+            display: flex;
+            width: max-content;
+            gap: 1rem;
+            animation: ticker-scroll 55s linear infinite;
+        }
+
+        .ticker-wrap:hover .ticker-track {
+            animation-play-state: paused;
+        }
+
+        .ticker-item {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border-radius: 999px;
+            padding: 0.6rem 1.25rem;
+            box-shadow: 0 2px 10px rgba(17, 17, 17, 0.06);
+            white-space: nowrap;
+        }
+
+        @keyframes ticker-scroll {
+            from { transform: translateX(0); }
+            to { transform: translateX(-50%); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ticker-track {
+                animation: none;
+            }
         }
 
         /* Botones de acción: look unificado más suave y "premium" */
@@ -269,8 +309,9 @@ function wa($n) {
                 padding: 12px;
             }
 
-            .pedidosya-fixed i {
-                font-size: 24px;
+            .pedidosya-fixed svg {
+                width: 24px;
+                height: 24px;
             }
         }
 
@@ -355,7 +396,7 @@ function wa($n) {
                     <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu"
                        target="_blank"
                        class="inline-flex items-center bg-[#e6284d] hover:bg-[#c91f3f] text-white text-sm sm:text-base font-semibold px-5 sm:px-6 py-2.5 sm:py-3 rounded-full transition-all duration-300 shadow">
-                        <i class="fas fa-motorcycle mr-2 text-lg sm:text-xl"></i>
+                        <svg class="w-5 h-5 sm:w-6 sm:h-6 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
                         <span>PedidosYa</span>
                     </a>
                 </div>
@@ -858,24 +899,41 @@ function wa($n) {
             </div>
         </div>
 
-        <!-- Testimonios -->
-        <div class="text-center mb-16">
-            <h2 class="text-4xl font-bold gradient-text mb-12">Lo que dicen nuestros clientes</h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div class="bg-white p-6 rounded-3xl shadow-lg">
-                    <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
-                    <p class="text-gray-600 mb-4 italic">"Los mejores triples de La Plata! Siempre frescos y con ingredientes de primera calidad."</p>
-                    <p class="font-semibold text-gray-800">- María González</p>
-                </div>
-                <div class="bg-white p-6 rounded-3xl shadow-lg">
-                    <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
-                    <p class="text-gray-600 mb-4 italic">"El delivery siempre puntual y los sabores premium son increíbles. Recomendadísimos!"</p>
-                    <p class="font-semibold text-gray-800">- Carlos Pérez</p>
-                </div>
-                <div class="bg-white p-6 rounded-3xl shadow-lg">
-                    <div class="text-yellow-400 text-3xl mb-4">⭐⭐⭐⭐⭐</div>
-                    <p class="text-gray-600 mb-4 italic">"Para eventos son perfectos. Gran variedad y precios accesibles. Los elegidos son geniales!"</p>
-                    <p class="font-semibold text-gray-800">- Ana Martínez</p>
+        <!-- Testimonios: ticker en loop, sin nombres -->
+        <div class="mb-16">
+            <h2 class="text-4xl font-bold gradient-text mb-10 text-center">Lo que dicen nuestros clientes</h2>
+            <div class="ticker-wrap">
+                <div class="ticker-track">
+                    <?php
+                    $testimonios = [
+                        'Pedido a tiempo y riquísimo, como siempre 🥪',
+                        'Los triples más frescos de la zona, se nota el pan del día',
+                        'Ideal para juntadas grandes, todos repiten',
+                        'El sabor premium con jamón crudo es una locura',
+                        'Rápido, prolijo y el precio está bien',
+                        'Pedí para un cumple y sobró casi nada',
+                        'Los Surtidos Elegidos son la mejor opción para grupos',
+                        'Llegó todo bien empaquetado y a horario',
+                        'El de jamón y queso nunca falla',
+                        'Buena atención por WhatsApp, coordinaron todo rápido',
+                        'Para la oficina pedimos siempre acá',
+                        'Los sabores clásicos y los especiales, mezcla perfecta',
+                        'Excelente relación precio-cantidad para eventos',
+                        'El delivery llegó antes de lo esperado',
+                        'Se nota que arman todo al momento',
+                    ];
+                    $render_testimonios = function () use ($testimonios) {
+                        foreach ($testimonios as $t) {
+                            echo '<div class="ticker-item">';
+                            echo '<span class="text-yellow-400 text-sm mr-2">★★★★★</span>';
+                            echo '<span class="text-gray-700 text-sm">' . htmlspecialchars($t) . '</span>';
+                            echo '</div>';
+                        }
+                    };
+                    // Se duplica la lista para que el loop sea continuo (sin salto visible)
+                    $render_testimonios();
+                    $render_testimonios();
+                    ?>
                 </div>
             </div>
         </div>
@@ -895,8 +953,8 @@ function wa($n) {
                         <a href="https://wa.me/541159813546" target="_blank" class="text-green-400 hover:text-green-300 text-2xl">
                             <i class="fab fa-whatsapp"></i>
                         </a>
-                        <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu" target="_blank" class="text-[#e6284d] hover:text-[#ff5c78] text-2xl">
-                            <i class="fas fa-motorcycle"></i>
+                        <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu" target="_blank" class="text-[#e6284d] hover:text-[#ff5c78]">
+                            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
                         </a>
                         <a href="https://instagram.com/sandwicheriasantacatalina" target="_blank" class="text-pink-400 hover:text-pink-300 text-2xl">
                             <i class="fab fa-instagram"></i>
@@ -950,8 +1008,8 @@ function wa($n) {
     <!-- Botón flotante de PedidosYa -->
     <a href="https://www.pedidosya.com.ar/restaurantes/berazategui/sandwicheria-santa-catalina-menu"
        target="_blank"
-       class="pedidosya-fixed bg-[#e6284d] hover:bg-[#c91f3f] text-white rounded-full p-4 shadow-2xl">
-        <i class="fas fa-motorcycle text-3xl"></i>
+       class="pedidosya-fixed bg-[#e6284d] hover:bg-[#c91f3f] text-white rounded-full p-4 shadow-2xl ring-2 ring-white">
+        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l1 12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
     </a>
 
     <!-- Botón flotante de WhatsApp -->
