@@ -116,8 +116,12 @@ function wa($n) {
     <!-- Open Graph para redes sociales -->
     <meta property="og:title" content="Sandwichería Santa Catalina">
     <meta property="og:description" content="Los mejores sándwiches triples de La Plata">
-    <meta property="og:image" content="https://santacatalina.online/icon-512.png">
+    <meta property="og:image" content="https://santacatalina.online/img/icon-512.png">
     <meta property="og:url" content="https://santacatalina.online">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/assets/img/logo-sello.svg">
+    <link rel="icon" type="image/png" href="/img/icon-192.png">
 
     <!-- PWA: apunta al pedido online como app -->
     <meta name="theme-color" content="#ea580c">
@@ -349,10 +353,10 @@ function wa($n) {
         <div class="absolute inset-0 bg-black opacity-10"></div>
         <div class="container mx-auto px-3 sm:px-4 py-8 sm:py-12 md:py-16 relative z-10">
             <div class="text-center">
-                <!-- Logo placeholder -->
+                <!-- Logo -->
                 <div class="floating mb-4 sm:mb-6 md:mb-8">
-                    <div class="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl">
-                        <i class="fas fa-hamburger text-4xl sm:text-5xl md:text-6xl text-orange-500"></i>
+                    <div class="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 mx-auto bg-white rounded-full flex items-center justify-center shadow-2xl p-1.5">
+                        <img src="/assets/img/logo-sello.svg" alt="Sandwichería Santa Catalina" class="w-full h-full">
                     </div>
                 </div>
 
