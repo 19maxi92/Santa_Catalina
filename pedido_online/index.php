@@ -457,7 +457,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Santa Catalina">
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="/img/icon-192.png">
+    <link rel="icon" type="image/svg+xml" href="/assets/img/logo-sello.svg">
+    <link rel="icon" type="image/png" href="/img/logo-icon-192.png">
+    <link rel="apple-touch-icon" href="/img/logo-icon-192.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -528,8 +530,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <header class="bg-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center">
-                <div class="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center mr-3 shadow">
-                    <i class="fas fa-hamburger text-white text-lg"></i>
+                <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center mr-3 shadow p-1">
+                    <img src="/assets/img/logo-sello.svg" alt="Santa Catalina" class="w-full h-full">
                 </div>
                 <div>
                     <h1 class="text-lg font-black text-gray-900 leading-tight">Santa Catalina</h1>

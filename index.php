@@ -116,12 +116,12 @@ function wa($n) {
     <!-- Open Graph para redes sociales -->
     <meta property="og:title" content="Sandwichería Santa Catalina">
     <meta property="og:description" content="Los mejores sándwiches triples de La Plata">
-    <meta property="og:image" content="https://santacatalina.online/img/icon-512.png">
+    <meta property="og:image" content="https://santacatalina.online/img/logo-icon-512.png">
     <meta property="og:url" content="https://santacatalina.online">
 
     <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/assets/img/logo-sello.svg">
-    <link rel="icon" type="image/png" href="/img/icon-192.png">
+    <link rel="icon" type="image/png" href="/img/logo-icon-192.png">
 
     <!-- PWA: apunta al pedido online como app -->
     <meta name="theme-color" content="#ea580c">
@@ -129,7 +129,7 @@ function wa($n) {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Pedí Online">
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/img/icon-192.png">
+    <link rel="apple-touch-icon" href="/img/logo-icon-192.png">
     
     <!-- Tailwind CSS: compilado localmente (sin depender del CDN en tiempo real) -->
     <link rel="stylesheet" href="/assets/css/tailwind.css">
