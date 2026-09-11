@@ -1,0 +1,121 @@
+* { box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  margin: 0;
+  background: #f5f5f7;
+  color: #1f2430;
+}
+header {
+  background: linear-gradient(135deg, #ff5f6d, #ff7a3d);
+  color: white;
+  padding: 16px 20px;
+}
+header h1 { margin: 0; font-size: 18px; }
+.subtitulo { margin: 2px 0 0; font-size: 12px; opacity: .9; }
+main { padding: 18px 20px; }
+
+label { display: block; font-size: 12px; font-weight: 600; margin: 12px 0 4px; color: #555; }
+input[type="text"] {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.ayuda { font-size: 12px; color: #666; margin: 4px 0 10px; }
+.ayuda-chica { font-size: 11px; color: #888; margin: 4px 0 0; }
+
+.botones-ubicacion { display: flex; gap: 8px; margin-top: 4px; }
+.botones-ubicacion button {
+  flex: 1;
+  padding: 10px 6px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+}
+.botones-ubicacion button.activo {
+  border-color: #ff5f6d;
+  background: #fff0ee;
+  font-weight: bold;
+}
+
+.btn-primario {
+  width: 100%;
+  margin-top: 18px;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #ff5f6d;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-primario:hover { background: #e6284d; }
+
+.error { color: #c0392b; font-size: 12px; margin-top: 8px; }
+
+.tarjeta-estado {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.etiqueta { font-size: 11px; color: #888; }
+.valor { font-size: 16px; font-weight: 700; }
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #888;
+}
+.badge.ok { background: #e6f7ee; color: #1a9d5c; }
+.badge.mal { background: #fdecea; color: #c0392b; }
+
+.fila-impresora { margin-top: 16px; }
+.fila-botones { display: flex; gap: 8px; margin-top: 10px; }
+.fila-botones button {
+  flex: 1;
+  padding: 9px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+#resultado-prueba { font-size: 12px; margin-top: 6px; }
+
+h3 { margin: 20px 0 8px; font-size: 13px; color: #555; }
+.lista-eventos {
+  background: white;
+  border-radius: 10px;
+  padding: 8px 10px;
+  height: 180px;
+  overflow-y: auto;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.evento { padding: 5px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 6px; }
+.evento .hora { color: #999; flex-shrink: 0; }
+.evento.impreso { color: #1a9d5c; }
+.evento.error { color: #c0392b; }
+.evento.imprimiendo { color: #ff7a3d; }
+
+.btn-link {
+  display: block;
+  margin: 16px auto 0;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}

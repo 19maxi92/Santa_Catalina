@@ -1,0 +1,41 @@
+{
+  "name": "santa-catalina-estacion-impresion",
+  "version": "1.0.0",
+  "description": "Estación de impresión automática de comandas - Sandwichería Santa Catalina",
+  "main": "main.js",
+  "author": "Santa Catalina",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0",
+    "node-thermal-printer": "^4.6.1"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.santacatalina.estacionimpresion",
+    "productName": "Santa Catalina - Estación de Impresión",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}
