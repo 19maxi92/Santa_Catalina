@@ -1,4 +1,5 @@
 <?php
+// deploy-check 2026-09-12 19:56 (comentario solo, no afecta al código)
 require_once '../../config.php';
 requireStaffLogin();
 
