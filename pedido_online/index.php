@@ -122,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $forma_pago    = trim($_POST['forma_pago'] ?? '');
         $modalidad     = trim($_POST['modalidad'] ?? 'Retiro');
         $direccion     = trim($_POST['direccion'] ?? '');
+        $localidad     = trim($_POST['localidad'] ?? '');
         $fecha_pedido  = trim($_POST['fecha_pedido'] ?? '');
         $observaciones = trim($_POST['observaciones'] ?? '');
 
@@ -351,6 +352,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Insertar pedido ($fecha_entrega ya fue definida arriba)
         $fecha_display = date('d/m H:i');
 
+        // La sucursal que prepara el pedido depende de la localidad de entrega
+        // (delivery a Villa Elisa lo prepara la sucursal Villa Elisa; el resto,
+        // como siempre, Local 1). Retiro en local siempre es Local 1.
+        $ubicacion_pedido = ($modalidad === 'Delivery' && $localidad === 'Villa Elisa')
+            ? 'Villa Elisa'
+            : 'Local 1';
+
         $stmt = $pdo->prepare("
             INSERT INTO pedidos (
                 nombre, apellido, telefono, direccion,
@@ -361,7 +369,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?,
-                ?, ?, 'Local 1',
+                ?, ?, ?,
                 'Pendiente', ?, ?, ?,
                 NOW(), ?, 0
             )
@@ -370,7 +378,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([
             $nombre, $apellido, $telefono, $direccion,
             $nombre_producto, $cantidad_sandwiches, $precio,
-            $modalidad, $forma_pago,
+            $modalidad, $forma_pago, $ubicacion_pedido,
             $obs_interna, $fecha_entrega, $turno,
             $fecha_display
         ]);
@@ -389,7 +397,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'precio'        => $precio,
             'forma_pago'    => $forma_pago,
             'modalidad'     => $modalidad,
-            'ubicacion'     => 'Local 1',
+            'ubicacion'     => $ubicacion_pedido,
             'estado'        => 'Pendiente',
             'direccion'     => $direccion,
             'observaciones' => $obs_interna,
@@ -645,6 +653,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <input type="hidden" name="forma_pago" id="campo_forma_pago" value="Transferencia">
                 <input type="hidden" name="modalidad" id="campo_modalidad" value="Retiro">
                 <input type="hidden" name="direccion" id="campo_direccion" value="">
+                <input type="hidden" name="localidad" id="campo_localidad" value="">
                 <input type="hidden" name="fecha_pedido" id="campo_fecha_pedido" value="">
 
                 <div class="p-5 sm:p-6">
@@ -1595,6 +1604,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (el) el.value = '';
             });
             document.getElementById('campo_direccion').value = '';
+            document.getElementById('campo_localidad').value = '';
             document.getElementById('hint-fecha').innerHTML =
                 '<i class="fas fa-info-circle mr-1"></i>Los turnos disponibles se actualizan según el día seleccionado';
         }
@@ -1693,6 +1703,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             let dirCompuesta = `${calle} ${numero}, ${localidad} (entre ${entrecalles})`;
             document.getElementById('campo_direccion').value = dirCompuesta;
+            document.getElementById('campo_localidad').value = localidad;
         }
 
         // Armar el payload combinado con todos los ítems acumulados

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Estación de Impresión</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>🖨️ Santa Catalina</h1>
+    <p class="subtitulo">Estación de impresión</p>
+  </header>
+
+  <main>
+    <!-- Pantalla: sin configurar -->
+    <section id="pantalla-config">
+      <h2>Configurar esta PC</h2>
+      <p class="ayuda">Pegá el token que te dio el admin y elegí para qué sucursal imprime esta computadora.</p>
+
+      <label>Servidor</label>
+      <input type="text" id="input-servidor" value="https://santacatalina.online">
+
+      <label>Nombre de esta estación</label>
+      <input type="text" id="input-nombre" placeholder="Ej: PC Mostrador">
+
+      <label>Token</label>
+      <input type="text" id="input-token" placeholder="Pegá acá el token">
+
+      <label>Sucursal</label>
+      <div class="botones-ubicacion" id="botones-ubicacion">
+        <button data-ubicacion="Local 1">🏪 Local 1</button>
+        <button data-ubicacion="Fábrica">🏭 Fábrica</button>
+        <button data-ubicacion="Villa Elisa">🏬 Villa Elisa</button>
+      </div>
+
+      <button id="btn-guardar-config" class="btn-primario">Guardar y activar</button>
+      <p id="error-config" class="error"></p>
+    </section>
+
+    <!-- Pantalla: ya configurada -->
+    <section id="pantalla-estado" hidden>
+      <div class="tarjeta-estado">
+        <div>
+          <div class="etiqueta">Esta PC imprime para</div>
+          <div class="valor" id="estado-ubicacion">—</div>
+        </div>
+        <span class="badge" id="badge-conexion">● conectando...</span>
+      </div>
+
+      <div class="fila-impresora">
+        <div style="flex:1">
+          <label>Interfaz de la impresora</label>
+          <input type="text" id="input-impresora" placeholder="Ej: tcp://192.168.1.41">
+          <p class="ayuda-chica">Impresora en red: tcp://IP &nbsp;·&nbsp; Impresora instalada en Windows: printer:NombreDeLaImpresora</p>
+        </div>
+      </div>
+      <div class="fila-botones">
+        <button id="btn-guardar-impresora">Guardar impresora</button>
+        <button id="btn-prueba">Imprimir prueba</button>
+      </div>
+      <p id="resultado-prueba"></p>
+
+      <h3>Cola de impresión</h3>
+      <div id="lista-eventos" class="lista-eventos"></div>
+
+      <button id="btn-reconfigurar" class="btn-link">Reconfigurar esta PC</button>
+    </section>
+  </main>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
