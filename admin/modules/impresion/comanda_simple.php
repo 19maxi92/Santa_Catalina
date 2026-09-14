@@ -27,7 +27,7 @@ if (!$pedido) {
     die('Pedido no encontrado');
 }
 
-if ($ubicacion_fija_comanda && $pedido['ubicacion'] !== $ubicacion_fija_comanda) {
+if ($ubicacion_fija_comanda && !in_array($pedido['ubicacion'], ubicacionesVisibles($ubicacion_fija_comanda))) {
     die('No tenés permiso para imprimir este pedido');
 }
 
