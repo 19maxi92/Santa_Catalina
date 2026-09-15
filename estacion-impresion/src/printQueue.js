@@ -7,9 +7,9 @@ const os = require('os');
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
-const { ThermalPrinter, PrinterTypes } = require('node-thermal-printer');
+const { ThermalPrinter, PrinterTypes, CharacterSet } = require('node-thermal-printer');
 const config = require('./config');
-const { armarComanda } = require('./ticket');
+const { armarComanda, armarPrueba } = require('./ticket');
 
 const execAsync = promisify(exec);
 
@@ -71,6 +71,11 @@ function crearPrinter() {
     type: PrinterTypes.EPSON,
     interface: interfazReal,
     width: 42,
+    // CP850 (multilingüe): tiene los acentos del español (á é í ó ú ñ Ó...) y
+    // los caracteres de caja (┌ ─ │ ═ ║) con los que ticket.js dibuja los
+    // recuadros de la comanda. Es la página de códigos 2 en cualquier
+    // impresora compatible con Epson (ESC t 2).
+    characterSet: CharacterSet.PC850_MULTILINGUAL,
     removeSpecialCharacters: false,
     options: { timeout: 8000 },
   });
@@ -119,7 +124,15 @@ async function abrirCajon() {
     throw new Error(`No se pudo conectar a la impresora (${config.get('impresoraInterfaz')})`);
   }
 
-  printer.openCashDrawer();
+  // Pulso al cajón: ESC p m t1 t2 (m = pin del conector RJ11, t1/t2 = tiempos
+  // de encendido/apagado en unidades de 2 ms). Se manda a los dos pines (2 y 5)
+  // porque según el cable/cajón puede estar conectado a cualquiera de los dos,
+  // con un pulso de 100 ms que es lo que piden cajones como el Gadnic RUHF65.
+  // No se usa printer.openCashDrawer() porque la librería manda ESC p sin
+  // los tiempos, y la impresora los toma de los bytes que siguen (queda un
+  // pulso demasiado corto y el segundo pin nunca recibe nada).
+  printer.add(Buffer.from([0x1b, 0x70, 0x00, 0x32, 0xfa]));
+  printer.add(Buffer.from([0x1b, 0x70, 0x01, 0x32, 0xfa]));
   await enviarAlaImpresora(printer);
 }
 
@@ -206,12 +219,7 @@ async function imprimirDePrueba() {
   const printer = crearPrinter();
   const conectada = await verificarConectada(printer);
   if (!conectada) throw new Error('No se pudo conectar a la impresora');
-  printer.alignCenter();
-  printer.bold(true);
-  printer.println('PRUEBA DE IMPRESIÓN');
-  printer.bold(false);
-  printer.println(new Date().toLocaleString('es-AR'));
-  printer.cut();
+  armarPrueba(printer);
   await enviarAlaImpresora(printer);
 }
 
