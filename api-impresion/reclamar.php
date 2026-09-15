@@ -19,13 +19,16 @@ if ($codigo === '') {
     jsonError('Falta código del trabajo');
 }
 
-// Claim atómico: solo afecta la fila si sigue "pendiente" y es de esta ubicación.
+// Claim atómico: solo afecta la fila si sigue "pendiente" y es de una ubicación
+// que esta estación puede manejar (Local 1 también arma los de Fábrica).
+$ubicaciones = ubicacionesVisibles($estacion['ubicacion']);
+$ph = implode(',', array_fill(0, count($ubicaciones), '?'));
 $stmt = $pdo->prepare("
     UPDATE cola_impresion
     SET estado = 'reservado', estacion_id = ?, reservado_en = NOW()
-    WHERE codigo = ? AND ubicacion = ? AND estado = 'pendiente'
+    WHERE codigo = ? AND ubicacion IN ($ph) AND estado = 'pendiente'
 ");
-$stmt->execute([$estacion['id'], $codigo, $estacion['ubicacion']]);
+$stmt->execute(array_merge([$estacion['id'], $codigo], $ubicaciones));
 
 if ($stmt->rowCount() === 0) {
     // No es error: otra estación ya lo tomó, o ya no existe. La app simplemente lo descarta.
