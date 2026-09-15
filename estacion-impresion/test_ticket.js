@@ -8,6 +8,7 @@ const mock = {
   setTextDoubleHeight: () => console.log('[doble alto]'),
   setTextNormal: () => console.log('[normal]'),
   println: (t) => console.log('  ' + t),
+  leftRight: (l, r) => console.log('  ' + l + ' '.repeat(Math.max(1, 40 - l.length - r.length)) + r),
   drawLine: () => console.log('----------------------------------------'),
   newLine: () => console.log(''),
   cut: () => console.log('[CORTE]'),

@@ -1,6 +1,12 @@
-// Arma el texto de la comanda a partir de un pedido (mismo criterio que
-// admin/modules/impresion/comanda_simple.php, pero para imprimir directo
-// por ESC/POS en vez de un HTML para el navegador).
+// Arma el texto de la comanda a partir de un pedido (mismo criterio y mismo
+// orden de campos que admin/modules/impresion/comanda_simple.php, pero
+// "dibujado" con líneas en vez de bordes CSS, para imprimir directo por
+// ESC/POS en vez de un HTML para el navegador.
+
+const MESES = {
+  Jan: 'ene', Feb: 'feb', Mar: 'mar', Apr: 'abr', May: 'may', Jun: 'jun',
+  Jul: 'jul', Aug: 'ago', Sep: 'sep', Oct: 'oct', Nov: 'nov', Dec: 'dic',
+};
 
 function limpiarObservaciones(obs) {
   if (!obs) return '';
@@ -35,6 +41,77 @@ function formatearPrecio(precio) {
   return '$' + n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+// Igual criterio que comanda_simple.php: fecha_entrega si existe, si no created_at.
+function formatearFechaCorta(pedido) {
+  const fechaBase = pedido.fecha_entrega || pedido.created_at;
+  if (!fechaBase) return '';
+  const d = new Date(fechaBase);
+  if (Number.isNaN(d.getTime())) return '';
+  const dia = String(d.getDate()).padStart(2, '0');
+  const mesIngles = d.toLocaleString('en-US', { month: 'short' });
+  const mes = MESES[mesIngles] || mesIngles.toLowerCase();
+  return `${dia}-${mes}`;
+}
+
+function esEntregaFutura(pedido) {
+  if (!pedido.fecha_entrega) return false;
+  const hoy = new Date().toISOString().slice(0, 10);
+  return String(pedido.fecha_entrega).slice(0, 10) !== hoy;
+}
+
+// Mismo cálculo que comanda_simple.php: "x48" en el nombre del producto,
+// o el número inicial ("24 Surtidos Elegidos").
+function extraerTotalSandwiches(producto) {
+  const p = producto || '';
+  let m = p.match(/x(\d+)/i);
+  if (m) return m[1];
+  m = p.match(/^(\d+)/);
+  if (m) return m[1];
+  return '?';
+}
+
+function extraerSabores(pedido) {
+  const obs = pedido.observaciones || '';
+  const lineas = [];
+
+  const bloque = obs.match(/===\s*SABORES PERSONALIZADOS\s*===[\s\n]*([\s\S]*?)(?:---|$)/);
+  if (bloque) {
+    const matches = [...bloque[1].matchAll(/•\s*([^:]+):\s*(\d+)\s*plancha/gi)];
+    matches.forEach((m) => {
+      const sabor = m[1].trim();
+      const planchas = parseInt(m[2], 10);
+      lineas.push(`${planchas}pl ${sabor} (${planchas * 8})`);
+    });
+  }
+
+  if (lineas.length === 0) {
+    const bloqueOnline = obs.match(/Sabores:\s*(.+?)(?:\n\[|\n\n|$)/s);
+    if (bloqueOnline) {
+      const matches = [...bloqueOnline[1].matchAll(/(\d+)\s*x\s*([^,]+)/gi)];
+      matches.forEach((m) => {
+        const cant = parseInt(m[1], 10);
+        const sabor = m[2].trim();
+        lineas.push(`${Math.ceil(cant / 8)}pl ${sabor} (${cant})`);
+      });
+    }
+  }
+
+  return lineas;
+}
+
+// "Caja": línea, contenido centrado en negrita, línea — la aproximación de
+// un recuadro que puede dibujar una impresora térmica con texto plano.
+function caja(printer, lineas, { doble = false } = {}) {
+  printer.drawLine();
+  printer.alignCenter();
+  printer.bold(true);
+  if (doble) printer.setTextDoubleHeight();
+  lineas.forEach((l) => printer.println(l));
+  if (doble) printer.setTextNormal();
+  printer.bold(false);
+  printer.drawLine();
+}
+
 /**
  * Escribe la comanda en el objeto `printer` de node-thermal-printer.
  * No imprime todavía (eso lo hace quien llama, con printer.execute()).
@@ -51,22 +128,26 @@ function armarComanda(printer, pedido) {
     (pedido.producto || '').includes('Surtidos Elegidos') ||
     (pedido.observaciones || '').includes('Sabores:');
 
-  printer.alignCenter();
-  printer.setTextDoubleHeight();
+  // 1) UBICACIÓN
+  caja(printer, [pedido.ubicacion || ''], { doble: true });
+
+  // 2) FECHA + TURNO (misma línea, como en comanda_simple.php)
+  const fechaTexto = esEntregaFutura(pedido)
+    ? `ENTREGA: ${formatearFechaCorta(pedido)}`
+    : formatearFechaCorta(pedido);
+  printer.alignLeft();
   printer.bold(true);
-  printer.println(pedido.ubicacion || '');
+  printer.leftRight(fechaTexto, turno);
   printer.bold(false);
-  printer.setTextNormal();
   printer.drawLine();
 
-  printer.alignLeft();
-  printer.println(`Turno: ${turno}`);
-
+  // 3) NOMBRE CLIENTE
   printer.alignCenter();
   printer.bold(true);
   printer.println(nombreCompleto.toUpperCase());
   printer.bold(false);
 
+  // 4) OBSERVACIONES (si existen)
   if (obsLimpia) {
     printer.drawLine();
     printer.alignCenter();
@@ -78,54 +159,35 @@ function armarComanda(printer, pedido) {
     printer.bold(false);
   }
 
-  printer.drawLine();
-
+  // 5) SABORES + TOTAL, o PRODUCTO
   if (esPersonalizado) {
-    // Sabores: mismo parseo que hace comanda_simple.php, versión simplificada
+    printer.drawLine();
     printer.alignLeft();
-    const obs = pedido.observaciones || '';
-    const bloque = obs.match(/===\s*SABORES PERSONALIZADOS\s*===[\s\n]*([\s\S]*?)(?:---|$)/);
-    let huboSabores = false;
-    if (bloque) {
-      const matches = [...bloque[1].matchAll(/•\s*([^:]+):\s*(\d+)\s*plancha/gi)];
-      matches.forEach((m) => {
-        const sabor = m[1].trim();
-        const planchas = parseInt(m[2], 10);
-        printer.println(`${planchas}pl ${sabor} (${planchas * 8})`);
-        huboSabores = true;
-      });
-    }
-    if (!huboSabores) {
-      const bloqueOnline = obs.match(/Sabores:\s*(.+?)(?:\n\[|\n\n|$)/s);
-      if (bloqueOnline) {
-        const matches = [...bloqueOnline[1].matchAll(/(\d+)\s*x\s*([^,]+)/gi)];
-        matches.forEach((m) => {
-          const cant = parseInt(m[1], 10);
-          const sabor = m[2].trim();
-          printer.println(`${Math.ceil(cant / 8)}pl ${sabor} (${cant})`);
-        });
-      }
-    }
+    extraerSabores(pedido).forEach((linea) => printer.println(linea));
     printer.alignCenter();
-  } else {
     printer.bold(true);
-    printer.println(pedido.producto || '');
+    printer.println(`TOTAL: ${extraerTotalSandwiches(pedido.producto)} sándwiches`);
     printer.bold(false);
+  } else {
+    caja(printer, [pedido.producto || '']);
   }
 
-  printer.drawLine();
-  printer.setTextDoubleHeight();
-  printer.bold(true);
-  printer.println(formatearPrecio(pedido.precio));
-  printer.bold(false);
-  printer.setTextNormal();
+  // 6) PRECIO
+  caja(printer, [formatearPrecio(pedido.precio)], { doble: true });
 
+  // 7) INFO ADMINISTRATIVA (pie)
   printer.alignLeft();
-  printer.newLine();
   printer.println(`Modalidad: ${pedido.modalidad || ''} | Pago: ${pedido.forma_pago || ''}`);
   printer.println(`Pedido #${pedido.id}`);
 
   printer.cut();
 }
 
-module.exports = { armarComanda, limpiarObservaciones, extraerTurno, formatearPrecio };
+module.exports = {
+  armarComanda,
+  limpiarObservaciones,
+  extraerTurno,
+  formatearPrecio,
+  formatearFechaCorta,
+  extraerTotalSandwiches,
+};
