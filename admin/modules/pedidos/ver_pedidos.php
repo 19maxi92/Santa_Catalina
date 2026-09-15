@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Si se marca como Entregado y viene forma de pago, actualizar precio y forma_pago
                     if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia'])) {
                         // Obtener datos actuales del pedido
-                        $stmtP = $pdo->prepare("SELECT producto, precio FROM pedidos WHERE id = ?");
+                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion FROM pedidos WHERE id = ?");
                         $stmtP->execute([$id]);
                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
 
@@ -85,6 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         } else {
                             $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?");
                             $stmt->execute([$estado, $forma_pago_nueva, $id]);
+                        }
+
+                        // Cobro en efectivo en Local 1: pedir a la estación que abra el cajón (no imprime nada)
+                        if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && $pedidoActual['ubicacion'] === 'Local 1') {
+                            try {
+                                $codigo = 'cajon_' . $id . '_' . time();
+                                $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
+                                    ->execute([$id, $codigo]);
+                            } catch (\Throwable $_e) {}
                         }
                     } else {
                         $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
