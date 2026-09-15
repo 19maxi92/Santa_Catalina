@@ -35,37 +35,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
             case 'cambiar_estado':
                 $pedido_id = (int)$_POST['pedido_id'];
                 $nuevo_estado = $_POST['nuevo_estado'];
-                
+
                 // Verificar que el pedido pertenece a Local 1
-                $verify_stmt = $pdo->prepare("SELECT ubicacion FROM pedidos WHERE id = ?");
+                $verify_stmt = $pdo->prepare("SELECT ubicacion, forma_pago FROM pedidos WHERE id = ?");
                 $verify_stmt->execute([$pedido_id]);
-                $pedido_ubicacion = $verify_stmt->fetchColumn();
-                
-                if ($pedido_ubicacion === 'Local 1') {
+                $pedido_actual = $verify_stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($pedido_actual && $pedido_actual['ubicacion'] === 'Local 1') {
                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ? WHERE id = ?");
                     $stmt->execute([$nuevo_estado, $pedido_id]);
                     $mensaje = "Estado actualizado a: $nuevo_estado";
-                    
+
                     // Log del cambio
                     error_log("LOCAL1: Estado pedido #$pedido_id cambiado a $nuevo_estado por usuario #{$_SESSION['empleado_id']}");
+
+                    if ($nuevo_estado === 'Entregado' && $pedido_actual['forma_pago'] === 'Efectivo') {
+                        try {
+                            $codigo = 'cajon_' . $pedido_id . '_' . time();
+                            $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
+                                ->execute([$pedido_id, $codigo]);
+                        } catch (\Throwable $_e) {}
+                    }
                 } else {
                     $error = "No tiene permisos para modificar este pedido";
                 }
                 break;
-                
+
             case 'marcar_entregado':
                 $pedido_id = (int)$_POST['pedido_id'];
-                
-                $verify_stmt = $pdo->prepare("SELECT ubicacion FROM pedidos WHERE id = ?");
+
+                $verify_stmt = $pdo->prepare("SELECT ubicacion, forma_pago FROM pedidos WHERE id = ?");
                 $verify_stmt->execute([$pedido_id]);
-                $pedido_ubicacion = $verify_stmt->fetchColumn();
-                
-                if ($pedido_ubicacion === 'Local 1') {
+                $pedido_actual = $verify_stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($pedido_actual && $pedido_actual['ubicacion'] === 'Local 1') {
                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = 'Entregado' WHERE id = ?");
                     $stmt->execute([$pedido_id]);
                     $mensaje = "Pedido marcado como entregado";
-                    
+
                     error_log("LOCAL1: Pedido #$pedido_id entregado por usuario #{$_SESSION['empleado_id']}");
+
+                    if ($pedido_actual['forma_pago'] === 'Efectivo') {
+                        try {
+                            $codigo = 'cajon_' . $pedido_id . '_' . time();
+                            $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
+                                ->execute([$pedido_id, $codigo]);
+                        } catch (\Throwable $_e) {}
+                    }
                 } else {
                     $error = "No tiene permisos para modificar este pedido";
                 }
