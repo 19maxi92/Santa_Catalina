@@ -40,13 +40,22 @@ function crearPrinter() {
   if (!interfaz) {
     throw new Error('No hay una impresora configurada en esta estación');
   }
-  return new ThermalPrinter({
+
+  const opciones = {
     type: PrinterTypes.EPSON,
     interface: interfaz,
     width: 42,
     removeSpecialCharacters: false,
     options: { timeout: 8000 },
-  });
+  };
+
+  // Impresora instalada en Windows por nombre (típicamente USB): necesita
+  // el driver del sistema operativo, node-thermal-printer no lo trae solo.
+  if (interfaz.startsWith('printer:')) {
+    opciones.driver = require('printer');
+  }
+
+  return new ThermalPrinter(opciones);
 }
 
 async function imprimirPedido(pedido) {
