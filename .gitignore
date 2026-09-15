@@ -2,3 +2,6 @@ node_modules/
 
 # Instalador compilado de la app de impresión (se genera, no se versiona)
 estacion-impresion/dist/
+
+# Archivos temporales de trabajo (diagramas, borradores), no son código del proyecto
+scratchpad/
