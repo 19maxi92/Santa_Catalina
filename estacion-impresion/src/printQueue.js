@@ -35,26 +35,39 @@ async function llamarApi(ruta, opciones = {}) {
   return data;
 }
 
-async function imprimirPedido(pedido) {
+function crearPrinter() {
   const interfaz = config.get('impresoraInterfaz');
   if (!interfaz) {
     throw new Error('No hay una impresora configurada en esta estación');
   }
-
-  const printer = new ThermalPrinter({
+  return new ThermalPrinter({
     type: PrinterTypes.EPSON,
     interface: interfaz,
     width: 42,
     removeSpecialCharacters: false,
     options: { timeout: 8000 },
   });
+}
 
+async function imprimirPedido(pedido) {
+  const printer = crearPrinter();
   const conectada = await printer.isPrinterConnected().catch(() => false);
   if (!conectada) {
-    throw new Error(`No se pudo conectar a la impresora (${interfaz})`);
+    throw new Error(`No se pudo conectar a la impresora (${config.get('impresoraInterfaz')})`);
   }
 
   armarComanda(printer, pedido);
+  await printer.execute();
+}
+
+async function abrirCajon() {
+  const printer = crearPrinter();
+  const conectada = await printer.isPrinterConnected().catch(() => false);
+  if (!conectada) {
+    throw new Error(`No se pudo conectar a la impresora (${config.get('impresoraInterfaz')})`);
+  }
+
+  printer.openCashDrawer();
   await printer.execute();
 }
 
@@ -72,15 +85,23 @@ async function procesarUnPendiente(item) {
   }
 
   const pedido = reclamo.pedido;
-  log('imprimiendo', `Imprimiendo pedido #${pedido.id}...`, { pedidoId: pedido.id });
+  const esCajon = pedido.accion === 'abrir_cajon';
+
+  log(esCajon ? 'imprimiendo' : 'imprimiendo',
+      esCajon ? `Abriendo cajón (pedido #${pedido.id})...` : `Imprimiendo pedido #${pedido.id}...`,
+      { pedidoId: pedido.id });
 
   try {
-    await imprimirPedido(pedido);
+    if (esCajon) {
+      await abrirCajon();
+    } else {
+      await imprimirPedido(pedido);
+    }
     await llamarApi('confirmar.php', {
       method: 'POST',
       body: JSON.stringify({ codigo: item.codigo }),
     });
-    log('impreso', `Pedido #${pedido.id} impreso correctamente`, { pedidoId: pedido.id });
+    log('impreso', esCajon ? `Cajón abierto (pedido #${pedido.id})` : `Pedido #${pedido.id} impreso correctamente`, { pedidoId: pedido.id });
   } catch (e) {
     log('error', `Falló la impresión del pedido #${pedido.id}: ${e.message}`, { pedidoId: pedido.id });
     try {
@@ -100,7 +121,8 @@ async function ciclo() {
   if (!config.estaConfigurada()) return;
 
   try {
-    const { pendientes } = await llamarApi('pendientes.php?token=' + encodeURIComponent(config.get('token')));
+    const data = await llamarApi('pendientes.php?token=' + encodeURIComponent(config.get('token')));
+    const pendientes = Array.isArray(data.pendientes) ? data.pendientes : [];
     for (const item of pendientes) {
       // Uno por uno, no en paralelo: evita mandarle dos trabajos a la vez a
       // una impresora que puede no soportarlo bien.

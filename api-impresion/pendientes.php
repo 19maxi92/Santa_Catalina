@@ -12,7 +12,7 @@ $pdo = getConnection();
 $estacion = autenticarEstacion($pdo);
 
 $stmt = $pdo->prepare("
-    SELECT ci.id, ci.pedido_id, ci.codigo, ci.created_at
+    SELECT ci.id, ci.pedido_id, ci.codigo, ci.accion, ci.created_at
     FROM cola_impresion ci
     WHERE ci.ubicacion = ?
       AND ci.estado = 'pendiente'

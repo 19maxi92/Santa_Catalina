@@ -34,7 +34,7 @@ if ($stmt->rowCount() === 0) {
 
 // Traer los datos del pedido para armar la comanda
 $stmt = $pdo->prepare("
-    SELECT ci.codigo, p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido
+    SELECT ci.codigo, ci.accion, p.*, cf.nombre as cliente_fijo_nombre, cf.apellido as cliente_fijo_apellido
     FROM cola_impresion ci
     JOIN pedidos p ON p.id = ci.pedido_id
     LEFT JOIN clientes_fijos cf ON p.cliente_fijo_id = cf.id

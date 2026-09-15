@@ -1393,7 +1393,8 @@ function finalizarYCrearPedidos() {
             estado: 'Pendiente',
             observaciones: observacionesCompletas,
             cliente_fijo_id: clienteFijoId,
-            pagado: datosCliente.yaPagado ? 1 : 0
+            pagado: datosCliente.yaPagado ? 1 : 0,
+            imprimir_auto: datosCliente.imprimirAuto ? 1 : 0
         };
 
         if (item.sabores_personalizados_json) {
@@ -1432,27 +1433,13 @@ function finalizarYCrearPedidos() {
                 });
                 msg += `\nTOTAL: $${total.toLocaleString()}`;
 
-                // IMPRESIÓN AUTOMÁTICA si está marcado el checkbox
+                // IMPRESIÓN AUTOMÁTICA: si está marcado, ya se encoló en el servidor
+                // (procesar_pedido_express.php) — la estación de esa sucursal la imprime sola.
                 if (datosCliente.imprimirAuto) {
-                    msg += `\n\n🖨️ Abriendo ${resultados.length} comanda(s) para imprimir...`;
-                    alert(msg);
-
-                    // Abrir ventanas de impresión para cada pedido
-                    resultados.forEach((r, index) => {
-                        setTimeout(() => {
-                            const url = `../impresion/comanda_simple.php?pedido=${r.pedido_id}&auto=1`;
-                            window.open(url, `comanda_${r.pedido_id}`, 'width=450,height=700');
-                        }, index * 500); // Delay de 500ms entre cada ventana
-                    });
-
-                    // Redirigir después de abrir las ventanas
-                    setTimeout(() => {
-                        window.location.href = '<?= $volver_url ?>';
-                    }, resultados.length * 500 + 1000);
-                } else {
-                    alert(msg);
-                    window.location.href = '<?= $volver_url ?>';
+                    msg += `\n\n🖨️ Encolado(s) para impresión automática en su sucursal.`;
                 }
+                alert(msg);
+                window.location.href = '<?= $volver_url ?>';
             } else {
                 // Mostrar errores específicos
                 let errorMsg = '❌ Error al crear pedidos:\n\n';
