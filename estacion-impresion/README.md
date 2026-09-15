@@ -29,6 +29,40 @@ Hace falta:
    - Impresora instalada en Windows (USB compartida): `printer:NombreExacto`
      (el nombre tal cual aparece en "Impresoras y escáneres" de Windows)
 
+## Diseño de la comanda
+
+`src/ticket.js` reproduce el mismo diseño que la comanda manual del admin
+(`admin/modules/impresion/comanda_simple.php`): ubicación en recuadro, fecha
+y turno grande, nombre del cliente, observaciones resaltadas, sabores en
+recuadro + total de sándwiches (o el producto en recuadro), precio grande en
+recuadro y el pie chico con modalidad/pago/fecha/número de pedido.
+
+Los recuadros se dibujan con los caracteres de caja de la página de códigos
+CP850, que la app le activa a la impresora en cada trabajo. Para ver cómo
+queda sin impresora: `node test_ticket.js`. Para verificar en la impresora
+real: botón **Imprimir prueba** de la app — si en vez de líneas salen
+símbolos raros, la impresora no soporta CP850 (raro en una POS80).
+
+## Cajón de dinero (Local 1)
+
+Cuando en **Ver Pedidos** se pasa un pedido de Local 1 a *Entregado* y se
+elige **Efectivo** en la ventana de forma de pago, el servidor encola un
+trabajo `abrir_cajon` y la estación de Local 1 le manda a la impresora el
+pulso de apertura (ESC p, a los dos pines del RJ11, 100 ms) — probado para
+un cajón Gadnic RUHF65 conectado al puerto de cajón de la impresora. No se
+imprime nada. Lo mismo pasa desde el dashboard propio de Local 1
+(`empleados/dashboard_local1.php`) cuando el pedido ya estaba cargado como
+efectivo.
+
+Si el cajón no abre, revisar en este orden:
+
+1. Que la app esté abierta en la PC de Local 1, configurada como
+   **Local 1**, y que en la cola de la app aparezca "Abriendo cajón".
+2. Que el cajón esté enchufado al puerto RJ11 de la impresora (no a la PC).
+3. Que la app instalada sea una versión generada **después** de estos
+   cambios (ver abajo): una versión vieja imprime una comanda en vez de
+   abrir el cajón.
+
 ## Desarrollo local
 
 ```bash
@@ -44,6 +78,10 @@ npm run dist
 ```
 
 El instalador queda en `estacion-impresion/dist/` (no se sube al repo).
+
+**Importante:** cada vez que cambia algo en `main.js` o `src/`, hay que
+volver a generar el instalador y reinstalarlo en cada PC. Los cambios en la
+web (PHP) se despliegan solos; los de la app de escritorio, no.
 
 ## ⚠️ Qué se probó y qué falta probar
 

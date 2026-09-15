@@ -198,11 +198,7 @@ try {
 
     // Impresión automática: encolar para que la estación de esta sucursal la imprima sola
     if ($imprimir_auto) {
-        try {
-            $codigo = 'comanda_' . $pedido_id . '_' . time();
-            $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, ?, 'imprimir_comanda', 'pendiente')")
-                ->execute([$pedido_id, $codigo, $ubicacion]);
-        } catch (\Throwable $_e) {}
+        encolarTrabajoImpresion($pdo, (int)$pedido_id, $ubicacion, 'imprimir_comanda');
     }
 
     // Log detallado del pedido express

@@ -102,4 +102,41 @@ function ubicacionesVisibles($mi_ubicacion) {
     }
     return [$mi_ubicacion];
 }
+
+/**
+ * Encola un trabajo para la app de escritorio "Estación de Impresión"
+ * (estacion-impresion/), que lo levanta sola por api-impresion/.
+ *
+ *   $accion = 'imprimir_comanda'  → imprime la comanda del pedido
+ *   $accion = 'abrir_cajon'       → solo abre el cajón de dinero (cobro en efectivo)
+ *
+ * Nunca rompe el flujo que la llama: si algo falla devuelve false y lo deja
+ * en el error_log. Si falta la columna `accion` (migración
+ * migrations/add_accion_cola_impresion.php sin correr), la agrega sola y
+ * reintenta, para que el cajón no quede "mudo" sin que nadie se entere.
+ */
+function encolarTrabajoImpresion(PDO $pdo, int $pedido_id, string $ubicacion, string $accion = 'imprimir_comanda'): bool {
+    $prefijo = $accion === 'abrir_cajon' ? 'cajon' : 'comanda';
+    // Sufijo aleatorio: dos clics en el mismo segundo no chocan contra el UNIQUE de `codigo`
+    $codigo = $prefijo . '_' . $pedido_id . '_' . time() . '_' . bin2hex(random_bytes(2));
+    $sql = "INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, ?, ?, 'pendiente')";
+
+    try {
+        $pdo->prepare($sql)->execute([$pedido_id, $codigo, $ubicacion, $accion]);
+        return true;
+    } catch (\Throwable $e) {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'accion') !== false && stripos($msg, 'column') !== false) {
+            try {
+                $pdo->exec("ALTER TABLE cola_impresion ADD COLUMN accion VARCHAR(30) NOT NULL DEFAULT 'imprimir_comanda' AFTER ubicacion");
+                $pdo->prepare($sql)->execute([$pedido_id, $codigo, $ubicacion, $accion]);
+                return true;
+            } catch (\Throwable $e2) {
+                $msg = $e2->getMessage();
+            }
+        }
+        error_log("cola_impresion: no se pudo encolar '$accion' del pedido #$pedido_id ($ubicacion): $msg");
+        return false;
+    }
+}
 ?>

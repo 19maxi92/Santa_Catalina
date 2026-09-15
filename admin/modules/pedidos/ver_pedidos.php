@@ -89,18 +89,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Cobro en efectivo en Local 1: pedir a la estación que abra el cajón (no imprime nada)
                         if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && $pedidoActual['ubicacion'] === 'Local 1') {
-                            try {
-                                $codigo = 'cajon_' . $id . '_' . time();
-                                $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
-                                    ->execute([$id, $codigo]);
-                            } catch (\Throwable $_e) {}
+                            $aviso_cajon = encolarTrabajoImpresion($pdo, $id, 'Local 1', 'abrir_cajon')
+                                ? " · 💵 Abriendo cajón"
+                                : " · ⚠️ No se pudo pedir la apertura del cajón (avisar al admin)";
                         }
                     } else {
                         $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id = ?");
                         $stmt->execute([$estado, $id]);
                     }
 
-                    $_SESSION['mensaje'] = "✅ Estado actualizado";
+                    $_SESSION['mensaje'] = "✅ Estado actualizado" . ($aviso_cajon ?? '');
                     try { require_once '../../../google_sheets_helper.php'; actualizarEstadoEnSheets($id, $estado); } catch (\Throwable $_e) {}
                 }
                 break;
@@ -194,12 +192,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if ($nuevo_estado) {
                                 $forma_pago_masiva = $_POST['forma_pago'] ?? null;
                                 if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia'])) {
+                                    $abrir_cajon_por = null; // primer pedido de Local 1 cobrado en efectivo (una sola apertura)
                                     // Actualizar uno por uno para aplicar lógica de precio
                                     foreach ($pedidos as $_pid) {
                                         $_pid = (int)$_pid;
-                                        $stmtP = $pdo->prepare("SELECT producto, precio FROM pedidos WHERE id = ?");
+                                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion FROM pedidos WHERE id = ?");
                                         $stmtP->execute([$_pid]);
                                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
+                                        if ($pedidoActual && $forma_pago_masiva === 'Efectivo' && $pedidoActual['ubicacion'] === 'Local 1' && $abrir_cajon_por === null) {
+                                            $abrir_cajon_por = $_pid;
+                                        }
                                         $nuevo_precio = null;
                                         if ($pedidoActual && $forma_pago_masiva === 'Efectivo') {
                                             $nombreProducto = $pedidoActual['producto'];
@@ -220,6 +222,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         } else {
                                             $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?")->execute([$nuevo_estado, $forma_pago_masiva, $_pid]);
                                         }
+                                    }
+                                    // Varios pedidos cobrados en efectivo juntos: el cajón se abre una sola vez
+                                    if ($abrir_cajon_por !== null) {
+                                        encolarTrabajoImpresion($pdo, $abrir_cajon_por, 'Local 1', 'abrir_cajon');
                                     }
                                 } else {
                                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");

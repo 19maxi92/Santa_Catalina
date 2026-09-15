@@ -50,11 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                     error_log("LOCAL1: Estado pedido #$pedido_id cambiado a $nuevo_estado por usuario #{$_SESSION['empleado_id']}");
 
                     if ($nuevo_estado === 'Entregado' && $pedido_actual['forma_pago'] === 'Efectivo') {
-                        try {
-                            $codigo = 'cajon_' . $pedido_id . '_' . time();
-                            $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
-                                ->execute([$pedido_id, $codigo]);
-                        } catch (\Throwable $_e) {}
+                        encolarTrabajoImpresion($pdo, $pedido_id, 'Local 1', 'abrir_cajon');
                     }
                 } else {
                     $error = "No tiene permisos para modificar este pedido";
@@ -76,11 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion'])) {
                     error_log("LOCAL1: Pedido #$pedido_id entregado por usuario #{$_SESSION['empleado_id']}");
 
                     if ($pedido_actual['forma_pago'] === 'Efectivo') {
-                        try {
-                            $codigo = 'cajon_' . $pedido_id . '_' . time();
-                            $pdo->prepare("INSERT INTO cola_impresion (pedido_id, codigo, ubicacion, accion, estado) VALUES (?, ?, 'Local 1', 'abrir_cajon', 'pendiente')")
-                                ->execute([$pedido_id, $codigo]);
-                        } catch (\Throwable $_e) {}
+                        encolarTrabajoImpresion($pdo, $pedido_id, 'Local 1', 'abrir_cajon');
                     }
                 } else {
                     $error = "No tiene permisos para modificar este pedido";
