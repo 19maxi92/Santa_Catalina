@@ -22,7 +22,7 @@ Hace falta:
 
 1. Correr la migración `migrations/add_cola_impresion.php` una vez (crea las
    tablas nuevas, no toca ninguna existente).
-2. Entrar a `api-impresion/estaciones.php` (logueado como admin) y crear una
+2. Entrar a `api-impresion/estaciones_v2.php` (logueado como admin) y crear una
    estación — te da un **token** que hay que pegar en la app.
 3. Saber cómo se conecta la impresora térmica desde esa PC:
    - Impresora en red (por IP): `tcp://192.168.1.41`

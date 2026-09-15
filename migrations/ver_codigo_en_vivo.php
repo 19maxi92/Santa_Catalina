@@ -12,7 +12,7 @@ header('Content-Type: text/plain; charset=utf-8');
 
 $permitidos = [
     'procesar_pedido_express' => __DIR__ . '/../admin/modules/pedidos/procesar_pedido_express.php',
-    'estaciones' => __DIR__ . '/../api-impresion/estaciones.php',
+    'estaciones' => __DIR__ . '/../api-impresion/estaciones_v2.php',
     'config' => __DIR__ . '/../admin/config.php',
 ];
 
