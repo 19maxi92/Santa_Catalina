@@ -106,14 +106,30 @@ function enviarPedidoASheets($pedido_id, $datos, $tipo = 'comun') {
 
 /**
  * Actualiza el estado de un pedido en Sheets (busca por ID en ambas hojas).
+ *
+ * Opcionalmente también actualiza la forma de pago y el precio final: es lo
+ * que se define al marcar Entregado (Efectivo / Transferencia), y el precio
+ * puede cambiar (descuento por efectivo). Si no se pasan, el Sheet solo
+ * cambia la columna Estado, igual que siempre.
+ *
+ * @param int         $pedido_id
+ * @param string      $estado
+ * @param string|null $forma_pago  'Efectivo' | 'Transferencia' (col Pago)
+ * @param float|null  $precio      precio final (col Precio)
  */
-function actualizarEstadoEnSheets($pedido_id, $estado) {
-    $payload = json_encode([
+function actualizarEstadoEnSheets($pedido_id, $estado, $forma_pago = null, $precio = null) {
+    $datos = [
         'action' => 'actualizar_estado',
         'id'     => (int)$pedido_id,
         'estado' => $estado,
-    ]);
-    _sheets_curl($payload);
+    ];
+    if ($forma_pago !== null && $forma_pago !== '') {
+        $datos['forma_pago'] = $forma_pago;
+    }
+    if ($precio !== null && $precio !== '') {
+        $datos['precio'] = (float)$precio;
+    }
+    _sheets_curl(json_encode($datos));
 }
 
 /**
