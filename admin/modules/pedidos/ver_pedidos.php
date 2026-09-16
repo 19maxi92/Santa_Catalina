@@ -46,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 if ($id && $estado) {
                     $forma_pago_nueva = $_POST['forma_pago'] ?? null;
+                    $sheets_forma_pago = null; // se completan solo al entregar con forma de pago
+                    $sheets_precio = null;
 
                     // Si se marca como Entregado y viene forma de pago, actualizar precio y forma_pago
                     if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia'])) {
@@ -86,6 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?");
                             $stmt->execute([$estado, $forma_pago_nueva, $id]);
                         }
+                        // Para reflejar en el Sheet lo mismo que quedó en el sistema
+                        $sheets_forma_pago = $forma_pago_nueva;
+                        $sheets_precio = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
 
                         // Cobro en efectivo en Local 1: pedir a la estación que abra el cajón (no imprime nada)
                         if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && $pedidoActual['ubicacion'] === 'Local 1') {
@@ -99,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
 
                     $_SESSION['mensaje'] = "✅ Estado actualizado" . ($aviso_cajon ?? '');
-                    try { require_once '../../../google_sheets_helper.php'; actualizarEstadoEnSheets($id, $estado); } catch (\Throwable $_e) {}
+                    try { require_once '../../../google_sheets_helper.php'; actualizarEstadoEnSheets($id, $estado, $sheets_forma_pago, $sheets_precio); } catch (\Throwable $_e) {}
                 }
                 break;
                 
@@ -193,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $forma_pago_masiva = $_POST['forma_pago'] ?? null;
                                 if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia'])) {
                                     $abrir_cajon_por = null; // primer pedido de Local 1 cobrado en efectivo (una sola apertura)
+                                    $sheets_precios = []; // precio final por pedido, para reflejarlo en el Sheet
                                     // Actualizar uno por uno para aplicar lógica de precio
                                     foreach ($pedidos as $_pid) {
                                         $_pid = (int)$_pid;
@@ -222,6 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         } else {
                                             $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, updated_at = NOW() WHERE id = ?")->execute([$nuevo_estado, $forma_pago_masiva, $_pid]);
                                         }
+                                        $sheets_precios[$_pid] = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
                                     }
                                     // Varios pedidos cobrados en efectivo juntos: el cajón se abre una sola vez
                                     if ($abrir_cajon_por !== null) {
@@ -231,7 +238,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
                                     $stmt->execute(array_merge([$nuevo_estado], $pedidos));
                                 }
-                                try { require_once '../../../google_sheets_helper.php'; foreach ($pedidos as $_pid) { actualizarEstadoEnSheets($_pid, $nuevo_estado); } } catch (\Throwable $_e) {}
+                                try {
+                                    require_once '../../../google_sheets_helper.php';
+                                    foreach ($pedidos as $_pid) {
+                                        if (isset($sheets_precios)) {
+                                            actualizarEstadoEnSheets($_pid, $nuevo_estado, $forma_pago_masiva, $sheets_precios[(int)$_pid] ?? null);
+                                        } else {
+                                            actualizarEstadoEnSheets($_pid, $nuevo_estado);
+                                        }
+                                    }
+                                } catch (\Throwable $_e) {}
                                 $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
                             }
                             break;
