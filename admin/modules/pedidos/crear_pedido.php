@@ -435,15 +435,10 @@ try {
                             </label>
                         </div>
 
-                        <!-- Impresión automática de comanda -->
+                        <!-- Impresión automática de comanda: siempre activa, el servidor decide según el tipo -->
                         <div class="mb-6 bg-orange-50 border-2 border-orange-200 rounded-lg p-4">
-                            <label class="flex items-center cursor-pointer">
-                                <input type="checkbox" id="imprimirAuto" name="imprimir_auto" value="1" class="w-5 h-5 text-orange-600 mr-3">
-                                <div>
-                                    <span class="font-bold text-gray-800">🖨️ Imprimir comanda automáticamente</span>
-                                    <p class="text-xs text-gray-600 mt-1" id="imprimirAutoInfo">(Se imprimirá en la ubicación seleccionada al crear el pedido)</p>
-                                </div>
-                            </label>
+                            <span class="font-bold text-gray-800">🖨️ Impresión automática de comanda</span>
+                            <p class="text-xs text-gray-600 mt-1">(Los personalizados/planchas se imprimen solos en la sucursal; los comunes no generan comanda)</p>
                         </div>
 
                         <!-- Observaciones generales -->
@@ -953,7 +948,6 @@ function validarPaso1() {
         turno: turno.value,
         formaPago: 'Transferencia',
         yaPagado: document.getElementById('yaPagado').checked,
-        imprimirAuto: document.getElementById('imprimirAuto').checked,
         observacionesGenerales: document.getElementById('observaciones_generales').value.trim()
     };
 
@@ -1393,8 +1387,7 @@ function finalizarYCrearPedidos() {
             estado: 'Pendiente',
             observaciones: observacionesCompletas,
             cliente_fijo_id: clienteFijoId,
-            pagado: datosCliente.yaPagado ? 1 : 0,
-            imprimir_auto: datosCliente.imprimirAuto ? 1 : 0
+            pagado: datosCliente.yaPagado ? 1 : 0
         };
 
         if (item.sabores_personalizados_json) {
@@ -1433,10 +1426,12 @@ function finalizarYCrearPedidos() {
                 });
                 msg += `\nTOTAL: $${total.toLocaleString()}`;
 
-                // IMPRESIÓN AUTOMÁTICA: si está marcado, ya se encoló en el servidor
-                // (procesar_pedido_express.php) — la estación de esa sucursal la imprime sola.
-                if (datosCliente.imprimirAuto) {
-                    msg += `\n\n🖨️ Encolado(s) para impresión automática en su sucursal.`;
+                // IMPRESIÓN AUTOMÁTICA: siempre encolada en el servidor (procesar_pedido_express.php)
+                // para los ítems personalizados — la estación de esa sucursal los imprime sola.
+                // Los comunes no generan comanda.
+                const personalizadosEncolados = pedidosAcumulados.filter(p => p.tipo_pedido === 'personalizado').length;
+                if (personalizadosEncolados > 0) {
+                    msg += `\n\n🖨️ ${personalizadosEncolados} personalizado(s) encolado(s) para impresión automática en su sucursal.`;
                 }
                 alert(msg);
                 window.location.href = '<?= $volver_url ?>';
