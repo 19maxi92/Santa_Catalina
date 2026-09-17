@@ -1,6 +1,7 @@
 
                 <?php
 require_once '../admin/config.php';
+require_once '../admin/cola_impresion.php'; // cajón (explícito, por si config.php quedó viejo en el servidor)
 session_start();
 
 // Verificar acceso de empleado

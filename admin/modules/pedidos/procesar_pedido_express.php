@@ -7,6 +7,7 @@ Procesa pedidos rápidos creados desde el dashboard de administración
 
 header('Content-Type: application/json');
 require_once '../../config.php';
+require_once '../../cola_impresion.php'; // impresión automática (explícito, por si config.php quedó viejo en el servidor)
 
 // Verificar autenticación de staff (admin o empleado)
 if (!isStaffLoggedIn()) {

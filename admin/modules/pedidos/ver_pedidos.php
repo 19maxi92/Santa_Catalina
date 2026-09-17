@@ -2,6 +2,7 @@
 // admin/modules/pedidos/ver_pedidos.php - VERSIÓN COMPLETA MEJORADA
 ob_start();
 require_once '../../config.php';
+require_once '../../cola_impresion.php'; // cajón y comandas automáticas (explícito, por si config.php quedó viejo en el servidor)
 requireStaffLogin();
 
 // Si es empleado, su sucursal queda fija y no puede eliminar pedidos
@@ -92,8 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sheets_forma_pago = $forma_pago_nueva;
                         $sheets_precio = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
 
-                        // Cobro en efectivo en Local 1: pedir a la estación que abra el cajón (no imprime nada)
-                        if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && $pedidoActual['ubicacion'] === 'Local 1') {
+                        // Cobro en efectivo en Local 1 (pedido de Local 1, o personal de Local 1 cobrando
+                        // en mostrador un pedido de reparto): pedir a la estación que abra el cajón (no imprime nada)
+                        if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
                             $aviso_cajon = encolarTrabajoImpresion($pdo, $id, 'Local 1', 'abrir_cajon')
                                 ? " · 💵 Abriendo cajón"
                                 : " · ⚠️ No se pudo pedir la apertura del cajón (avisar al admin)";
@@ -205,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion FROM pedidos WHERE id = ?");
                                         $stmtP->execute([$_pid]);
                                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
-                                        if ($pedidoActual && $forma_pago_masiva === 'Efectivo' && $pedidoActual['ubicacion'] === 'Local 1' && $abrir_cajon_por === null) {
+                                        if ($pedidoActual && $forma_pago_masiva === 'Efectivo' && $abrir_cajon_por === null && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
                                             $abrir_cajon_por = $_pid;
                                         }
                                         $nuevo_precio = null;
@@ -231,8 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $sheets_precios[$_pid] = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
                                     }
                                     // Varios pedidos cobrados en efectivo juntos: el cajón se abre una sola vez
+                                    $aviso_cajon_masivo = '';
                                     if ($abrir_cajon_por !== null) {
-                                        encolarTrabajoImpresion($pdo, $abrir_cajon_por, 'Local 1', 'abrir_cajon');
+                                        $aviso_cajon_masivo = encolarTrabajoImpresion($pdo, $abrir_cajon_por, 'Local 1', 'abrir_cajon')
+                                            ? " · 💵 Abriendo cajón"
+                                            : " · ⚠️ No se pudo pedir la apertura del cajón (avisar al admin)";
                                     }
                                 } else {
                                     $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, updated_at = NOW() WHERE id IN ($placeholders)");
@@ -248,7 +253,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         }
                                     }
                                 } catch (\Throwable $_e) {}
-                                $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'";
+                                $_SESSION['mensaje'] = "✅ " . count($pedidos) . " pedido(s) → '$nuevo_estado'" . ($aviso_cajon_masivo ?? '');
                             }
                             break;
                             
