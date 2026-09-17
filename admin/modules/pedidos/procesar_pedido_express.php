@@ -75,7 +75,6 @@ try {
     $turno_entrega = isset($data['turno']) && $data['turno'] ? trim($data['turno']) : null;
     $cliente_fijo_id = isset($data['cliente_fijo_id']) && $data['cliente_fijo_id'] ? (int)$data['cliente_fijo_id'] : null;
     $pagado = isset($data['pagado']) && $data['pagado'] ? 1 : 0;
-    $imprimir_auto = isset($data['imprimir_auto']) && $data['imprimir_auto'] ? true : false;
 
     // Validaciones específicas
     if (empty($nombre)) {
@@ -197,9 +196,10 @@ try {
 
     $pedido_id = $pdo->lastInsertId();
 
-    // Impresión automática: solo pedidos personalizados (planchas armadas a mano).
-    // Los comunes (jamón y queso, surtidos, etc.) no necesitan comanda impresa.
-    if ($imprimir_auto && $tipo_pedido === 'personalizado') {
+    // Impresión automática siempre activa, solo para pedidos personalizados
+    // (planchas armadas a mano). Los comunes (jamón y queso, surtidos, etc.)
+    // no necesitan comanda impresa.
+    if ($tipo_pedido === 'personalizado') {
         encolarTrabajoImpresion($pdo, (int)$pedido_id, $ubicacion, 'imprimir_comanda');
     }
 
