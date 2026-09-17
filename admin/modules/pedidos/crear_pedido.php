@@ -441,7 +441,7 @@ try {
                                 <input type="checkbox" id="imprimirAuto" name="imprimir_auto" value="1" class="w-5 h-5 text-orange-600 mr-3">
                                 <div>
                                     <span class="font-bold text-gray-800">🖨️ Imprimir comanda automáticamente</span>
-                                    <p class="text-xs text-gray-600 mt-1" id="imprimirAutoInfo">(Se imprimirá en la ubicación seleccionada al crear el pedido)</p>
+                                    <p class="text-xs text-gray-600 mt-1" id="imprimirAutoInfo">(Solo imprime los ítems personalizados/planchas; los comunes no generan comanda)</p>
                                 </div>
                             </label>
                         </div>
@@ -1434,9 +1434,11 @@ function finalizarYCrearPedidos() {
                 msg += `\nTOTAL: $${total.toLocaleString()}`;
 
                 // IMPRESIÓN AUTOMÁTICA: si está marcado, ya se encoló en el servidor
-                // (procesar_pedido_express.php) — la estación de esa sucursal la imprime sola.
-                if (datosCliente.imprimirAuto) {
-                    msg += `\n\n🖨️ Encolado(s) para impresión automática en su sucursal.`;
+                // (procesar_pedido_express.php) — pero solo para los ítems personalizados,
+                // la estación de esa sucursal los imprime sola. Los comunes no generan comanda.
+                const personalizadosEncolados = pedidosAcumulados.filter(p => p.tipo_pedido === 'personalizado').length;
+                if (datosCliente.imprimirAuto && personalizadosEncolados > 0) {
+                    msg += `\n\n🖨️ ${personalizadosEncolados} personalizado(s) encolado(s) para impresión automática en su sucursal.`;
                 }
                 alert(msg);
                 window.location.href = '<?= $volver_url ?>';

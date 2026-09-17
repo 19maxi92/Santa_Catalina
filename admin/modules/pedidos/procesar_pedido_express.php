@@ -197,8 +197,9 @@ try {
 
     $pedido_id = $pdo->lastInsertId();
 
-    // Impresión automática: encolar para que la estación de esta sucursal la imprima sola
-    if ($imprimir_auto) {
+    // Impresión automática: solo pedidos personalizados (planchas armadas a mano).
+    // Los comunes (jamón y queso, surtidos, etc.) no necesitan comanda impresa.
+    if ($imprimir_auto && $tipo_pedido === 'personalizado') {
         encolarTrabajoImpresion($pdo, (int)$pedido_id, $ubicacion, 'imprimir_comanda');
     }
 
