@@ -1037,6 +1037,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CONFIG ESTÁTICA DE TURNOS (hora/corte — sin stock)
     // ============================================================
     const turnosConfig = <?= $turnos_config_json ?>;
+
+    // Los lunes, para Retiro, la Siesta se extiende hasta el cierre (18hs) porque ese día
+    // no hay turno Tarde. Devuelve el hora_fin real a usar (el de config, salvo esta excepción).
+    function horaFinEfectiva(turno, fechaISO, modalidad) {
+        const diaSemana = new Date(fechaISO + 'T12:00:00').getDay();
+        if (diaSemana === 1 && modalidad === 'Retiro' && turno === 'Siesta') return '18:00';
+        const cfg = turnosConfig.find(t => t.turno === turno);
+        return cfg ? cfg.hora_fin : null;
+    }
+
     const preciosElegidos = <?= $precios_elegidos_json ?>;
     const localidadesActivas = <?= $localidades_activas_json ?>;
     // Tabla de precios personalizados por planchas (transferencia)
@@ -1117,8 +1127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (Date.now() < cutoffUTC) return true;
 
         // Retiro: si el turno ya arrancó pero sigue vigente (no pasó hora_fin), se puede pedir para retirar hoy
-        if (estado.modalidad === 'Retiro' && cfg.hora_fin) {
-            const [hf, minf] = cfg.hora_fin.split(':').map(Number);
+        const horaFin = horaFinEfectiva(turno, fechaISO, estado.modalidad);
+        if (estado.modalidad === 'Retiro' && horaFin) {
+            const [hf, minf] = horaFin.split(':').map(Number);
             const turnoFinUTC = Date.UTC(y, mo - 1, d, hf + 3, minf);
             if (Date.now() >= turnoInicioUTC && Date.now() < turnoFinUTC) return true;
         }
@@ -1157,10 +1168,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const ok  = turnoDisponibleDeDisp(cfg.turno, fechaISO);
             const sel = estado.turno === cfg.turno;
             const disp = estado.disponibilidad?.[cfg.turno];
+            const horaFin = horaFinEfectiva(cfg.turno, fechaISO, estado.modalidad);
             return `<div class="turno-card p-4 text-center ${!ok ? 'sin-stock' : ''} ${sel ? 'seleccionado' : ''}"
                          onclick="${ok ? `seleccionarTurno('${cfg.turno}','${fechaISO}')` : ''}">
                 <div class="text-2xl font-black text-gray-900">${cfg.turno}</div>
-                <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}${cfg.hora_fin ? ' – ' + cfg.hora_fin : ''}</div>
+                <div class="text-sm text-gray-500 mt-1">${cfg.hora_inicio}${horaFin ? ' – ' + horaFin : ''}</div>
                 <div class="mt-2 text-xs font-bold ${ok ? 'text-green-600' : 'text-red-500'}">
                     ${ok ? `✅ ${disp?.disponible ?? '—'} cupos` : `❌ ${turnoMotivoBloqueo(cfg.turno, fechaISO)}`}
                 </div>

@@ -82,6 +82,12 @@ foreach (['Mañana', 'Siesta', 'Tarde'] as $turno) {
     $dayConfig = $stmt->fetch();
 
     $global = $globalConfig[$turno] ?? ['hora_inicio' => '00:00', 'hora_fin' => '00:00', 'minutos_antes_corte' => 30];
+
+    // Los lunes, para Retiro, la Siesta se extiende hasta el cierre (18hs): ese día no hay turno Tarde.
+    $hora_fin_efectiva = $global['hora_fin'];
+    if ($diaSemana === 1 && $modalidad === 'Retiro' && $turno === 'Siesta') {
+        $hora_fin_efectiva = '18:00:00';
+    }
     $maxPedidos = $dayConfig ? (int)$dayConfig[$colMax] : 30;
     $activo     = $dayConfig ? (bool)$dayConfig['activo'] : false;
 
@@ -106,7 +112,7 @@ foreach (['Mañana', 'Siesta', 'Tarde'] as $turno) {
         'turno'               => $turno,
         'modalidad'           => $modalidad,
         'hora_inicio'         => substr($global['hora_inicio'], 0, 5),
-        'hora_fin'            => substr($global['hora_fin'], 0, 5),
+        'hora_fin'            => substr($hora_fin_efectiva, 0, 5),
         'minutos_antes_corte' => (int)$global['minutos_antes_corte'],
         'max_pedidos'         => $maxPedidos,
         'ocupados'            => $ocupados,

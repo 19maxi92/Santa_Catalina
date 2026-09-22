@@ -110,6 +110,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
                 
+            case 'cambiar_ubicacion':
+                // Reasignar la sucursal de un pedido ya cargado (por error de carga, etc.) — solo admin.
+                if ($ubicacion_fija) {
+                    $_SESSION['error'] = "❌ No tenés permiso para cambiar la sucursal de un pedido";
+                    header('Location: ' . $_SERVER['REQUEST_URI']);
+                    exit;
+                }
+                $nueva_ubicacion = $_POST['ubicacion'] ?? '';
+                if ($id && in_array($nueva_ubicacion, ['Local 1', 'Fábrica', 'Villa Elisa'], true)) {
+                    $stmt = $pdo->prepare("UPDATE pedidos SET ubicacion = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$nueva_ubicacion, $id]);
+                    $_SESSION['mensaje'] = "✅ Sucursal cambiada a $nueva_ubicacion";
+                }
+                break;
+
             case 'eliminar':
                 if ($id) {
                     $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id = ?");
@@ -365,13 +380,13 @@ if ($filtro_modalidad) {
 }
 
 if ($ubicaciones_permitidas) {
+    // Empleado: restringido a su(s) sucursal(es), esto sigue siendo server-side.
     $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
     $sql .= " AND p.ubicacion IN ($ph)";
     $params = array_merge($params, $ubicaciones_permitidas);
-} elseif ($filtro_ubicacion) {
-    $sql .= " AND p.ubicacion = ?";
-    $params[] = $filtro_ubicacion;
 }
+// Admin: ya no se restringe por sucursal acá — trae todas y el filtro de
+// checkboxes (client-side, igual que el de estado) decide qué se muestra.
 
 if ($fecha_desde || $fecha_hasta) {
     $desde = $fecha_desde ?: '2000-01-01';
@@ -795,29 +810,40 @@ arsort($productos_unicos); // más pedidos primero
             <!-- SEPARADOR -->
             <div class="border-t border-gray-300 mb-4"></div>
 
-            <!-- TABS DE UBICACIÓN / MODALIDAD -->
-            <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
+            <!-- FILTRO MÚLTIPLE DE SUCURSALES (CLIENT-SIDE, igual que el de estados) -->
+            <?php if (!$ubicacion_fija): ?>
+            <div class="mb-4">
+                <div class="text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-map-marked-alt mr-1"></i>Filtrar por sucursal (seleccionar una o varias):
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Local 1" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-purple-100 text-purple-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-purple-500 transition-all">
+                            🏪 Local 1
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Fábrica" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-orange-100 text-orange-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-orange-500 transition-all">
+                            🏭 Fábrica
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Villa Elisa" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-teal-100 text-teal-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-teal-500 transition-all">
+                            🏬 Villa Elisa
+                        </span>
+                    </label>
+                    <button type="button" onclick="toggleTodasUbicaciones()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-2 rounded-lg font-semibold border-2 border-gray-400 transition-all">
+                        <i class="fas fa-check-double mr-1"></i>Todas/Ninguna
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
 
-                <?php if (!$ubicacion_fija): ?>
-                <!-- TODAS (solo admin: un empleado ya está fijo en su sucursal) -->
-                <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= empty($filtro_ubicacion) && empty($filtro_modalidad) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
-                    <i class="fas fa-map-marked-alt"></i>
-                    Todas
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Local 1&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Local 1' ? 'active' : 'bg-purple-100 text-purple-800' ?>">
-                    🏪 Local 1
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Fábrica&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Fábrica' ? 'active' : 'bg-orange-100 text-orange-800' ?>">
-                    🏭 Fábrica
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Villa Elisa&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Villa Elisa' ? 'active' : 'bg-teal-100 text-teal-800' ?>">
-                    🏬 Villa Elisa
-                </a>
-                <?php endif; ?>
+            <!-- TABS DE MODALIDAD -->
+            <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
                 <a href="?estado=<?= $filtro_estado ?>&modalidad=Delivery&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
                     🛵 Delivery
@@ -1078,6 +1104,7 @@ arsort($productos_unicos); // más pedidos primero
                         <?php $tiene_bebidas_card = !empty($pedido['bebidas_json']); ?>
                         <div class="pedido-card <?= $tiene_bebidas_card ? 'bg-cyan-50 border-l-4 border-l-cyan-400 border border-cyan-200' : ($es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white') ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
                              data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>"
+                             data-ubicacion="<?= htmlspecialchars($pedido['ubicacion'] ?? '', ENT_QUOTES) ?>"
                              data-producto="<?= htmlspecialchars($pedido['producto'] ?? '', ENT_QUOTES) ?>"
                              data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>"
                              data-tiene-bebidas="<?= $tiene_bebidas_card ? '1' : '0' ?>"
@@ -1215,7 +1242,25 @@ arsort($productos_unicos); // más pedidos primero
                                             </select>
                                         </form>
                                     </div>
-                                    
+
+                                    <?php if (!$ubicacion_fija): ?>
+                                    <!-- CAMBIAR SUCURSAL (solo admin) -->
+                                    <div class="min-w-[110px]">
+                                        <form method="POST" class="inline">
+                                            <input type="hidden" name="accion" value="cambiar_ubicacion">
+                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                            <select name="ubicacion"
+                                                    onchange="if(confirm('¿Cambiar la sucursal de este pedido a ' + this.options[this.selectedIndex].text.trim() + '?')) this.form.submit(); else this.value='<?= htmlspecialchars($pedido['ubicacion'], ENT_QUOTES) ?>'"
+                                                    class="w-full text-xs font-semibold border rounded-lg px-2 py-1 cursor-pointer"
+                                                    title="Cambiar sucursal">
+                                                <option value="Local 1" <?= $pedido['ubicacion'] === 'Local 1' ? 'selected' : '' ?>>🏪 Local 1</option>
+                                                <option value="Fábrica" <?= $pedido['ubicacion'] === 'Fábrica' ? 'selected' : '' ?>>🏭 Fábrica</option>
+                                                <option value="Villa Elisa" <?= $pedido['ubicacion'] === 'Villa Elisa' ? 'selected' : '' ?>>🏬 Villa Elisa</option>
+                                            </select>
+                                        </form>
+                                    </div>
+                                    <?php endif; ?>
+
                                     <!-- PRECIO -->
                                     <div class="text-right min-w-[80px]">
                                         <div class="text-lg font-bold text-green-600">
@@ -1974,9 +2019,12 @@ arsort($productos_unicos); // más pedidos primero
     function renderVistaClientes() {
         const estados = Array.from(document.querySelectorAll('.filter-estado-checkbox:checked')).map(c => c.value);
         const productos = Array.from(document.querySelectorAll('.filter-producto-checkbox:checked')).map(c => c.value);
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicaciones = Array.from(document.querySelectorAll('.filter-ubicacion-checkbox:checked')).map(c => c.value);
 
         const filtrados = pedidosData.filter(p =>
             (estados.length === 0 || estados.includes(p.estado)) &&
+            (ubicacionCheckboxes.length === 0 || ubicaciones.includes(p.ubicacion)) &&
             (productos.length === 0 || productos.includes(p.producto))
         );
 
@@ -2115,6 +2163,13 @@ arsort($productos_unicos); // más pedidos primero
         const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
         const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
 
+        // Sucursales seleccionadas (solo existe el grupo para admin; un empleado
+        // no tiene estos checkboxes, así que no filtra por esto)
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicacionesSeleccionadas = Array.from(
+            document.querySelectorAll('.filter-ubicacion-checkbox:checked')
+        ).map(cb => cb.value);
+
         // Productos seleccionados (pueden estar activos al mismo tiempo)
         const productosSeleccionados = Array.from(
             document.querySelectorAll('.filter-producto-checkbox:checked')
@@ -2122,7 +2177,7 @@ arsort($productos_unicos); // más pedidos primero
 
         const pedidos = document.querySelectorAll('[data-pedido-id]');
 
-        if (estadosSeleccionados.length === 0) {
+        if (estadosSeleccionados.length === 0 || (ubicacionCheckboxes.length > 0 && ubicacionesSeleccionadas.length === 0)) {
             pedidos.forEach(pedido => pedido.style.display = 'none');
             actualizarContador();
             return;
@@ -2130,11 +2185,13 @@ arsort($productos_unicos); // más pedidos primero
 
         pedidos.forEach(pedido => {
             const estado = pedido.dataset.estado;
+            const ubicacion = pedido.dataset.ubicacion || '';
             const prod = pedido.dataset.producto || '';
 
-            const pasaEstado   = estadosSeleccionados.includes(estado);
-            const pasaProducto = productosSeleccionados.length === 0 || productosSeleccionados.includes(prod);
-            const mostrar = pasaEstado && pasaProducto;
+            const pasaEstado    = estadosSeleccionados.includes(estado);
+            const pasaUbicacion = ubicacionCheckboxes.length === 0 || ubicacionesSeleccionadas.includes(ubicacion);
+            const pasaProducto  = productosSeleccionados.length === 0 || productosSeleccionados.includes(prod);
+            const mostrar = pasaEstado && pasaUbicacion && pasaProducto;
 
             pedido.style.display = mostrar ? '' : 'none';
             if (!mostrar) {
@@ -2147,6 +2204,9 @@ arsort($productos_unicos); // más pedidos primero
         if (vistaClientesActiva) renderVistaClientes();
 
         localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
+        if (ubicacionCheckboxes.length > 0) {
+            localStorage.setItem('filtrosUbicacionesVerPedidos', JSON.stringify(ubicacionesSeleccionadas));
+        }
     }
 
     // ============================================
@@ -2161,18 +2221,24 @@ arsort($productos_unicos); // más pedidos primero
         const btnLimpiar = document.getElementById('btn-limpiar-producto');
         if (btnLimpiar) btnLimpiar.classList.toggle('hidden', seleccionados.length === 0);
 
-        // Combinar con el filtro de estados
+        // Combinar con el filtro de estados y de sucursales
         const estadosActivos = Array.from(
             document.querySelectorAll('.filter-estado-checkbox:checked')
+        ).map(cb => cb.value);
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicacionesActivas = Array.from(
+            document.querySelectorAll('.filter-ubicacion-checkbox:checked')
         ).map(cb => cb.value);
 
         document.querySelectorAll('[data-pedido-id]').forEach(fila => {
             const prod  = fila.dataset.producto || '';
             const estado = fila.dataset.estado || '';
+            const ubicacion = fila.dataset.ubicacion || '';
 
-            const pasaEstado  = estadosActivos.length === 0 || estadosActivos.includes(estado);
+            const pasaEstado    = estadosActivos.length === 0 || estadosActivos.includes(estado);
+            const pasaUbicacion = ubicacionCheckboxes.length === 0 || ubicacionesActivas.includes(ubicacion);
             const pasaProducto = seleccionados.length === 0 || seleccionados.includes(prod);
-            const visible = pasaEstado && pasaProducto;
+            const visible = pasaEstado && pasaUbicacion && pasaProducto;
 
             fila.style.display = visible ? '' : 'none';
             if (!visible) {
@@ -2362,6 +2428,17 @@ arsort($productos_unicos); // más pedidos primero
         aplicarFiltrosMultiples();
     }
 
+    function toggleTodasUbicaciones() {
+        const checkboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const algunoMarcado = Array.from(checkboxes).some(cb => cb.checked);
+
+        checkboxes.forEach(cb => {
+            cb.checked = !algunoMarcado;
+        });
+
+        aplicarFiltrosMultiples();
+    }
+
     // Restaurar filtros guardados
     window.addEventListener('DOMContentLoaded', () => {
         const filtrosGuardados = localStorage.getItem('filtrosEstadosVerPedidos');
@@ -2376,6 +2453,18 @@ arsort($productos_unicos); // más pedidos primero
                 });
             } catch (e) {
                 console.error('Error al cargar filtros guardados:', e);
+            }
+        }
+
+        const ubicacionesGuardadas = localStorage.getItem('filtrosUbicacionesVerPedidos');
+        if (ubicacionesGuardadas) {
+            try {
+                const ubicaciones = JSON.parse(ubicacionesGuardadas);
+                document.querySelectorAll('.filter-ubicacion-checkbox').forEach(cb => {
+                    cb.checked = ubicaciones.includes(cb.value);
+                });
+            } catch (e) {
+                console.error('Error al cargar filtros de sucursal guardados:', e);
             }
         }
 
