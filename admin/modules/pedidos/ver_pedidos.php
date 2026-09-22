@@ -51,13 +51,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sheets_precio = null;
 
                     // Si se marca como Entregado y viene forma de pago, actualizar precio y forma_pago
-                    if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia'])) {
+                    // DNI: como Transferencia, sin descuento (se puede sumar descuento más adelante si hace falta).
+                    // Dividido: dos formas de pago, cada una con su monto (no aplica el descuento de Efectivo).
+                    if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia', 'DNI', 'Dividido'])) {
                         // Obtener datos actuales del pedido
-                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion FROM pedidos WHERE id = ?");
+                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion, observaciones FROM pedidos WHERE id = ?");
                         $stmtP->execute([$id]);
                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
 
                         $nuevo_precio = null;
+                        $nuevas_observaciones = null;
+                        $incluye_efectivo = $forma_pago_nueva === 'Efectivo';
 
                         if ($pedidoActual) {
                             $nombreProducto = $pedidoActual['producto'];
@@ -79,10 +83,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $nuevo_precio = (float)$prod['precio_efectivo'];
                                     }
                                 }
+                            } elseif ($forma_pago_nueva === 'Dividido') {
+                                $forma_pago_1 = $_POST['forma_pago_1'] ?? '';
+                                $forma_pago_2 = $_POST['forma_pago_2'] ?? '';
+                                $monto_1 = (float)($_POST['monto_1'] ?? 0);
+                                $monto_2 = (float)($_POST['monto_2'] ?? 0);
+                                if ($monto_1 > 0 && $monto_2 > 0) {
+                                    $nuevo_precio = $monto_1 + $monto_2;
+                                    $nuevas_observaciones = trim(($pedidoActual['observaciones'] ?? '') .
+                                        "\n\n💳 Cobro dividido: $forma_pago_1 $" . number_format($monto_1, 0, ',', '.') .
+                                        " + $forma_pago_2 $" . number_format($monto_2, 0, ',', '.'));
+                                    $incluye_efectivo = ($forma_pago_1 === 'Efectivo' || $forma_pago_2 === 'Efectivo');
+                                }
                             }
                         }
 
-                        if ($nuevo_precio !== null) {
+                        if ($nuevas_observaciones !== null) {
+                            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
+                            $stmt->execute([$estado, $forma_pago_nueva, $nuevo_precio, $nuevas_observaciones, $id]);
+                        } elseif ($nuevo_precio !== null) {
                             $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, updated_at = NOW() WHERE id = ?");
                             $stmt->execute([$estado, $forma_pago_nueva, $nuevo_precio, $id]);
                         } else {
@@ -94,8 +113,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sheets_precio = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
 
                         // Cobro en efectivo en Local 1 (pedido de Local 1, o personal de Local 1 cobrando
-                        // en mostrador un pedido de reparto): pedir a la estación que abra el cajón (no imprime nada)
-                        if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
+                        // en mostrador un pedido de reparto): pedir a la estación que abra el cajón (no imprime nada).
+                        // También aplica si el cobro dividido incluye una parte en efectivo.
+                        if ($incluye_efectivo && $pedidoActual && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
                             $aviso_cajon = encolarTrabajoImpresion($pdo, $id, 'Local 1', 'abrir_cajon')
                                 ? " · 💵 Abriendo cajón"
                                 : " · ⚠️ No se pudo pedir la apertura del cajón (avisar al admin)";
@@ -213,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $nuevo_estado = $_POST['nuevo_estado'] ?? '';
                             if ($nuevo_estado) {
                                 $forma_pago_masiva = $_POST['forma_pago'] ?? null;
-                                if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia'])) {
+                                if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia', 'DNI'])) {
                                     $abrir_cajon_por = null; // primer pedido de Local 1 cobrado en efectivo (una sola apertura)
                                     $sheets_precios = []; // precio final por pedido, para reflejarlo en el Sheet
                                     // Actualizar uno por uno para aplicar lógica de precio
@@ -1199,7 +1219,12 @@ arsort($productos_unicos); // más pedidos primero
                                                     <?= $pedido['modalidad'] === 'Retiro' ? '📦' : '🏍️' ?>
                                                 </span>
                                                 <span title="<?= $pedido['forma_pago'] ?>">
-                                                    <?= $pedido['forma_pago'] === 'Efectivo' ? '💵' : '💳' ?>
+                                                    <?= match($pedido['forma_pago']) {
+                                                        'Efectivo' => '💵',
+                                                        'DNI' => '🪪',
+                                                        'Dividido' => '🔀',
+                                                        default => '💳',
+                                                    } ?>
                                                 </span>
                                                 <?php if ($pedido['forma_pago'] === 'Transferencia'): ?>
                                                     <span title="<?= $pedido['pagado'] ? 'Pago confirmado' : 'Pago pendiente' ?>"
@@ -1558,7 +1583,7 @@ arsort($productos_unicos); // más pedidos primero
                     </div>
                     <div class="detalle-valor flex items-center gap-3 flex-wrap">
                         <span class="badge bg-purple-100 text-purple-800">
-                            ${pedido.forma_pago === 'Efectivo' ? '💵' : '💳'} ${pedido.forma_pago}
+                            ${pedido.forma_pago === 'Efectivo' ? '💵' : (pedido.forma_pago === 'DNI' ? '🪪' : (pedido.forma_pago === 'Dividido' ? '🔀' : '💳'))} ${pedido.forma_pago}
                         </span>
                         ${pedido.forma_pago === 'Transferencia' ? `
                         <span id="badge-pago-${pedido.id}" class="badge ${pedido.pagado ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -2677,19 +2702,62 @@ document.addEventListener('wheel', function() {
 <div id="modal-forma-pago" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
         <h2 class="text-xl font-bold text-gray-800 mb-1 text-center">💳 Forma de Pago</h2>
-        <p class="text-sm text-gray-500 text-center mb-6">¿Cómo está pagando el cliente?</p>
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <button onclick="confirmarPago('Efectivo')"
-                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-green-400 bg-green-50 hover:bg-green-100 transition font-bold text-green-700 text-lg">
-                <span class="text-3xl">💵</span>
-                Efectivo
-            </button>
-            <button onclick="confirmarPago('Transferencia')"
-                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 transition font-bold text-blue-700 text-lg">
-                <span class="text-3xl">💳</span>
-                Transferencia
+        <p class="text-sm text-gray-500 text-center mb-4">¿Cómo está pagando el cliente?</p>
+
+        <!-- VISTA NORMAL: 3 botones simples -->
+        <div id="pago-vista-simple">
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="confirmarPago('Efectivo')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-green-400 bg-green-50 hover:bg-green-100 transition font-bold text-green-700 text-sm">
+                    <span class="text-2xl">💵</span>
+                    Efectivo
+                </button>
+                <button onclick="confirmarPago('Transferencia')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 transition font-bold text-blue-700 text-sm">
+                    <span class="text-2xl">💳</span>
+                    Transferencia
+                </button>
+                <button onclick="confirmarPago('DNI')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 hover:bg-indigo-100 transition font-bold text-indigo-700 text-sm">
+                    <span class="text-2xl">🪪</span>
+                    Cuenta DNI
+                </button>
+            </div>
+
+            <label id="pago-toggle-dividido-label" class="flex items-center gap-2 mb-4 text-sm text-gray-600 cursor-pointer">
+                <input type="checkbox" id="pago-toggle-dividido" onchange="toggleCobroDividido()">
+                Cobro dividido (pagó con 2 formas de pago)
+            </label>
+        </div>
+
+        <!-- VISTA COBRO DIVIDIDO -->
+        <div id="pago-vista-dividido" class="hidden mb-4">
+            <p class="text-xs text-gray-500 mb-3">Total del pedido: <strong id="pago-dividido-total">$0</strong> — los dos montos tienen que sumar ese total.</p>
+
+            <div class="flex gap-2 mb-3">
+                <select id="pago-dividido-forma-1" class="flex-1 border rounded-lg px-2 py-2 text-sm">
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Transferencia" selected>💳 Transferencia</option>
+                    <option value="DNI">🪪 Cuenta DNI</option>
+                </select>
+                <input type="number" id="pago-dividido-monto-1" placeholder="Monto" class="w-28 border rounded-lg px-2 py-2 text-sm" oninput="actualizarRestanteDividido()">
+            </div>
+            <div class="flex gap-2 mb-2">
+                <select id="pago-dividido-forma-2" class="flex-1 border rounded-lg px-2 py-2 text-sm">
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Transferencia" selected>💳 Transferencia</option>
+                    <option value="DNI">🪪 Cuenta DNI</option>
+                </select>
+                <input type="number" id="pago-dividido-monto-2" placeholder="Monto" class="w-28 border rounded-lg px-2 py-2 text-sm" oninput="actualizarRestanteDividido()">
+            </div>
+            <p id="pago-dividido-restante" class="text-xs text-right text-gray-400 mb-3"></p>
+
+            <button onclick="confirmarPagoDividido()"
+                    class="w-full py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white font-bold text-sm transition">
+                Confirmar cobro dividido
             </button>
         </div>
+
         <button onclick="cancelarPago()"
                 class="w-full py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm transition">
             Cancelar
@@ -2726,8 +2794,63 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+function _precioPedidoModalPago() {
+    let pedidoId = null;
+    if (_modalEntregaOrigen === 'inline' && _modalEntregaSel) {
+        const inputId = _modalEntregaSel.closest('form')?.querySelector('input[name="id"]');
+        pedidoId = inputId ? inputId.value : null;
+    } else if (_modalEntregaOrigen === 'cliente' && _modalEntregaSel) {
+        pedidoId = _modalEntregaSel.dataset.pedidoId;
+    }
+    if (!pedidoId) return null;
+    const p = pedidosData.find(x => x.id == pedidoId);
+    return p ? Number(p.precio) : null;
+}
+
 function abrirModalPago() {
     document.getElementById('modal-forma-pago').classList.remove('hidden');
+
+    // Resetear a la vista simple cada vez que se abre
+    document.getElementById('pago-toggle-dividido').checked = false;
+    document.getElementById('pago-vista-simple').classList.remove('hidden');
+    document.getElementById('pago-vista-dividido').classList.add('hidden');
+    document.getElementById('pago-dividido-monto-1').value = '';
+    document.getElementById('pago-dividido-monto-2').value = '';
+
+    // Cobro dividido no aplica al cambio masivo (son varios pedidos con precios distintos)
+    const esMasivo = _modalEntregaOrigen === 'masivo';
+    document.getElementById('pago-toggle-dividido-label').classList.toggle('hidden', esMasivo);
+
+    if (!esMasivo) {
+        const precio = _precioPedidoModalPago();
+        document.getElementById('pago-dividido-total').textContent = precio !== null
+            ? '$' + Math.round(precio).toLocaleString('es-AR') : '$?';
+    }
+}
+
+function toggleCobroDividido() {
+    const activo = document.getElementById('pago-toggle-dividido').checked;
+    document.getElementById('pago-vista-simple').classList.toggle('hidden', activo);
+    document.getElementById('pago-vista-dividido').classList.toggle('hidden', !activo);
+    actualizarRestanteDividido();
+}
+
+function actualizarRestanteDividido() {
+    const precio = _precioPedidoModalPago();
+    const m1 = parseFloat(document.getElementById('pago-dividido-monto-1').value) || 0;
+    const m2 = parseFloat(document.getElementById('pago-dividido-monto-2').value) || 0;
+    const restante = document.getElementById('pago-dividido-restante');
+    if (precio === null) { restante.textContent = ''; return; }
+    const falta = precio - (m1 + m2);
+    if (Math.abs(falta) < 1) {
+        restante.textContent = '✅ Los montos suman el total';
+        restante.className = 'text-xs text-right text-green-600 font-semibold mb-3';
+    } else {
+        restante.textContent = falta > 0
+            ? `Faltan $${Math.round(falta).toLocaleString('es-AR')}`
+            : `Sobran $${Math.round(Math.abs(falta)).toLocaleString('es-AR')}`;
+        restante.className = 'text-xs text-right text-orange-500 mb-3';
+    }
 }
 
 function cancelarPago() {
@@ -2789,6 +2912,61 @@ function confirmarPago(formaPago) {
     _modalEntregaSel = null;
     _modalEntregaOrigen = null;
     window._masivoPendienteIds = null;
+}
+
+function confirmarPagoDividido() {
+    const forma1 = document.getElementById('pago-dividido-forma-1').value;
+    const forma2 = document.getElementById('pago-dividido-forma-2').value;
+    const monto1 = parseFloat(document.getElementById('pago-dividido-monto-1').value) || 0;
+    const monto2 = parseFloat(document.getElementById('pago-dividido-monto-2').value) || 0;
+
+    if (monto1 <= 0 || monto2 <= 0) {
+        alert('⚠️ Cargá los dos montos');
+        return;
+    }
+    const precio = _precioPedidoModalPago();
+    if (precio !== null && Math.abs(precio - (monto1 + monto2)) >= 1) {
+        if (!confirm(`Los montos suman $${Math.round(monto1 + monto2).toLocaleString('es-AR')} y el pedido es de $${Math.round(precio).toLocaleString('es-AR')}. ¿Confirmar igual?`)) {
+            return;
+        }
+    }
+
+    document.getElementById('modal-forma-pago').classList.add('hidden');
+
+    const campos = [
+        ['forma_pago', 'Dividido'],
+        ['forma_pago_1', forma1], ['monto_1', monto1],
+        ['forma_pago_2', forma2], ['monto_2', monto2],
+    ];
+
+    if (_modalEntregaOrigen === 'inline') {
+        const form = _modalEntregaSel.closest('form');
+        campos.forEach(([n, v]) => {
+            let input = form.querySelector(`input[name="${n}"]`);
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden'; input.name = n;
+                form.appendChild(input);
+            }
+            input.value = v;
+        });
+        form.submit();
+    } else if (_modalEntregaOrigen === 'cliente') {
+        const pedidoId = _modalEntregaSel ? _modalEntregaSel.dataset.pedidoId : null;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        [['accion', 'cambiar_estado'], ['id', pedidoId], ['estado', 'Entregado'], ...campos].forEach(([n, v]) => {
+            const i = document.createElement('input');
+            i.type = 'hidden'; i.name = n; i.value = v;
+            form.appendChild(i);
+        });
+        document.body.appendChild(form);
+        form.submit();
+    }
+    // Nota: 'masivo' no ofrece cobro dividido (el checkbox queda oculto en ese caso).
+
+    _modalEntregaSel = null;
+    _modalEntregaOrigen = null;
 }
 </script>
 
