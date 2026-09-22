@@ -60,10 +60,25 @@ function _sheets_curl($payload) {
     curl_setopt($ch, CURLOPT_POSTFIELDS,     $payload);
     curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT,        5);
+    curl_setopt($ch, CURLOPT_TIMEOUT,        10);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_exec($ch);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Apps Script responde con 302 a script.googleusercontent.com
+    curl_setopt($ch, CURLOPT_POSTREDIR,      3);    // Mantener POST (con el body) al seguir el 301/302, si no Apps Script nunca recibe los datos
+    $respuesta = curl_exec($ch);
+    $curl_error = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    // Nunca rompe el flujo que la llama, pero deja rastro: si Google Sheets
+    // deja de recibir pedidos (deployment vencido, cuota excedida, etc.) antes
+    // esto fallaba en silencio total y nadie se enteraba hasta días después.
+    if ($curl_error) {
+        error_log("google_sheets: error de conexión ($curl_error) — payload: " . substr($payload, 0, 300));
+    } elseif ($http_code !== 200) {
+        error_log("google_sheets: HTTP $http_code — respuesta: " . substr((string)$respuesta, 0, 300) . " — payload: " . substr($payload, 0, 300));
+    } elseif (stripos((string)$respuesta, 'error') !== false) {
+        error_log("google_sheets: el Apps Script devolvió error — respuesta: " . substr((string)$respuesta, 0, 300) . " — payload: " . substr($payload, 0, 300));
+    }
 }
 
 /**
