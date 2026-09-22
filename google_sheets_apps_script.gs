@@ -46,6 +46,19 @@ function actualizarHeaders() {
 }
 
 function doPost(e) {
+  // Cuando llegan varias llamadas casi juntas (ej. el cambio masivo a "Entregado",
+  // que manda una llamada por pedido) se pisaban entre sí escribiendo en el mismo
+  // Sheet y Google terminaba rechazando alguna directamente como "Fallida" (sin
+  // ejecutar ni una línea de código, por eso no dejaba ningún log). El lock hace
+  // que esperen su turno en vez de competir.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+  } catch (lockErr) {
+    console.error('doPost: no se pudo obtener el lock — ' + lockErr);
+    return ContentService.createTextOutput('error: script ocupado, reintentar');
+  }
+
   try {
     const data = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -128,7 +141,10 @@ function doPost(e) {
 
     return ContentService.createTextOutput('ok');
 
-  } catch(err) {
+  } catch (err) {
+    console.error('doPost: ' + err.toString());
     return ContentService.createTextOutput('error: ' + err.toString());
+  } finally {
+    lock.releaseLock();
   }
 }
