@@ -66,8 +66,13 @@ function _sheets_curl_intento($payload) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT,        8);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Apps Script responde con 302 a script.googleusercontent.com
-    curl_setopt($ch, CURLOPT_POSTREDIR,      3);    // Mantener POST (con el body) al seguir el 301/302, si no Apps Script nunca recibe los datos
+    // Apps Script ya ejecuta doPost() en ESTE POST y responde con un 302 a
+    // script.googleusercontent.com/.../echo — esa URL de eco solo acepta GET
+    // (confirmado: "allow: HEAD, GET"). Hay que seguir el redirect para leer la
+    // respuesta real, pero como GET (default de curl al seguir un 301/302), NUNCA
+    // reenviando el POST — si no, ese segundo salto vuelve con 405 y hace pensar
+    // que falló el envío entero, aunque el pedido ya se haya guardado en la hoja.
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     $respuesta = curl_exec($ch);
     $curl_error = curl_error($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

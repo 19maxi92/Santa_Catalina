@@ -99,8 +99,10 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HEADER,         true);
 curl_setopt($ch, CURLOPT_TIMEOUT,        20);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+// Seguir el redirect de Apps Script como GET (no reenviar el POST): el doPost()
+// ya se ejecutó en el primer request, este segundo salto es solo para leer la
+// respuesta y la URL de eco de Google solo acepta GET/HEAD.
 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-curl_setopt($ch, CURLOPT_POSTREDIR,      3);
 curl_setopt($ch, CURLINFO_HEADER_OUT,    true);
 $respuesta_completa = curl_exec($ch);
 $duracion = round(microtime(true) - $inicio, 2);
