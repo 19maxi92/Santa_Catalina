@@ -1770,10 +1770,16 @@ if (isset($sheets_pedido_id) && isset($sheets_data_online)) {
         fastcgi_finish_request();
     }
     try {
+        error_log("PEDIDO ONLINE: llegó al punto de mandar a Sheets, pedido #$sheets_pedido_id");
         require_once '../google_sheets_helper.php';
         enviarPedidoASheets($sheets_pedido_id, $sheets_data_online, 'online');
     } catch (\Throwable $e_sheets) {
         error_log("PEDIDO ONLINE: no se pudo mandar a Sheets pedido #$sheets_pedido_id: " . $e_sheets->getMessage());
     }
+} elseif ($pedido_confirmado !== null) {
+    // Se confirmó el pedido pero $sheets_pedido_id/$sheets_data_online no quedaron seteados:
+    // esto no debería pasar nunca si el pedido se creó bien, así que si aparece este log
+    // el problema está más arriba, en el bloque que arma esas variables.
+    error_log("PEDIDO ONLINE: pedido confirmado pero sin datos para mandar a Sheets (revisar el bloque que arma \$sheets_pedido_id)");
 }
 ?>

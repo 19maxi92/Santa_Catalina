@@ -253,6 +253,7 @@ try {
     // así que si no se lo agarra explícito el pedido queda sin mandar a Sheets
     // sin dejar ningún rastro.
     try {
+        error_log("PEDIDO EXPRESS ADMIN: llegó al punto de mandar a Sheets, pedido #$pedido_id");
         require_once '../../../google_sheets_helper.php';
         enviarPedidoASheets($pedido_id, [
             'nombre'        => $nombre,

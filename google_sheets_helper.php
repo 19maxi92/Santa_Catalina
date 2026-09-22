@@ -94,10 +94,17 @@ function _sheets_curl_intento($payload) {
  * Nunca rompe el flujo que la llama: si los 3 intentos fallan, solo lo loguea.
  */
 function _sheets_curl($payload) {
+    // Log incondicional (éxito o falla): hasta ahora un envío "exitoso" no dejaba
+    // ningún rastro, así que no había forma de distinguir "nunca se llamó" de
+    // "se llamó, Google dijo OK, pero no pasó nada". Se puede sacar una vez que
+    // se confirme que el problema real quedó resuelto.
+    error_log("google_sheets: enviando — payload: " . substr($payload, 0, 300));
+
     $intentos = [0, 400000, 1200000]; // microsegundos de espera antes de cada intento (0, 0.4s, 1.2s)
     foreach ($intentos as $i => $espera) {
         if ($espera > 0) usleep($espera);
         $resultado = _sheets_curl_intento($payload);
+        error_log("google_sheets: intento #" . ($i + 1) . " — " . ($resultado['ok'] ? 'OK' : $resultado['motivo']));
         if ($resultado['ok']) return;
     }
 
