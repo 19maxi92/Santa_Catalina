@@ -1761,12 +1761,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </body>
 </html>
 <?php
-// Enviar a Google Sheets en background (sin bloquear al usuario)
+// Enviar a Google Sheets en background (sin bloquear al usuario).
+// fastcgi_finish_request() ya cerró la conexión con el cliente: cualquier error
+// acá (sin try/catch, ni siquiera se veía en el error_log) mataba el pedido de
+// Sheets en silencio total, sin que nada ni nadie se enterara.
 if (isset($sheets_pedido_id) && isset($sheets_data_online)) {
     if (function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();
     }
-    require_once '../google_sheets_helper.php';
-    enviarPedidoASheets($sheets_pedido_id, $sheets_data_online, 'online');
+    try {
+        require_once '../google_sheets_helper.php';
+        enviarPedidoASheets($sheets_pedido_id, $sheets_data_online, 'online');
+    } catch (\Throwable $e_sheets) {
+        error_log("PEDIDO ONLINE: no se pudo mandar a Sheets pedido #$sheets_pedido_id: " . $e_sheets->getMessage());
+    }
 }
 ?>

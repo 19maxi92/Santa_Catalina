@@ -246,23 +246,32 @@ try {
         fastcgi_finish_request();
     }
 
-    // Enviar a Google Sheets en background (sin bloquear al usuario)
-    require_once '../../../google_sheets_helper.php';
-    enviarPedidoASheets($pedido_id, [
-        'nombre'        => $nombre,
-        'apellido'      => $apellido,
-        'telefono'      => $telefono,
-        'producto'      => $producto,
-        'cantidad'      => $cantidad,
-        'precio'        => $precio,
-        'forma_pago'    => $forma_pago,
-        'modalidad'     => $modalidad,
-        'ubicacion'     => $ubicacion,
-        'estado'        => $estado,
-        'direccion'     => $direccion,
-        'observaciones'  => $observaciones,
-        'fecha_entrega'  => $fecha_entrega,
-    ], 'comun');
+    // Enviar a Google Sheets en background (sin bloquear al usuario).
+    // fastcgi_finish_request() ya cerró la conexión con el cliente: un error acá
+    // (incluso un Fatal/\Throwable real, no solo Exception) es invisible para el
+    // usuario y para el catch de abajo (que solo atrapa Exception/PDOException),
+    // así que si no se lo agarra explícito el pedido queda sin mandar a Sheets
+    // sin dejar ningún rastro.
+    try {
+        require_once '../../../google_sheets_helper.php';
+        enviarPedidoASheets($pedido_id, [
+            'nombre'        => $nombre,
+            'apellido'      => $apellido,
+            'telefono'      => $telefono,
+            'producto'      => $producto,
+            'cantidad'      => $cantidad,
+            'precio'        => $precio,
+            'forma_pago'    => $forma_pago,
+            'modalidad'     => $modalidad,
+            'ubicacion'     => $ubicacion,
+            'estado'        => $estado,
+            'direccion'     => $direccion,
+            'observaciones'  => $observaciones,
+            'fecha_entrega'  => $fecha_entrega,
+        ], 'comun');
+    } catch (\Throwable $e_sheets) {
+        error_log("ERROR PEDIDO EXPRESS ADMIN: no se pudo mandar a Sheets pedido #$pedido_id: " . $e_sheets->getMessage());
+    }
 
 } catch (Exception $e) {
     error_log("ERROR PEDIDO EXPRESS ADMIN: " . $e->getMessage());
