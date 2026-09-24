@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Dividido: dos formas de pago, cada una con su monto (no aplica el descuento de Efectivo).
                     if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia', 'DNI', 'Dividido'])) {
                         // Obtener datos actuales del pedido
-                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion, observaciones FROM pedidos WHERE id = ?");
+                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion, observaciones, COALESCE(bebidas_precio, 0) as bebidas_precio FROM pedidos WHERE id = ?");
                         $stmtP->execute([$id]);
                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
 
@@ -89,7 +89,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $monto_1 = (float)($_POST['monto_1'] ?? 0);
                                 $monto_2 = (float)($_POST['monto_2'] ?? 0);
                                 if ($monto_1 > 0 && $monto_2 > 0) {
-                                    $nuevo_precio = $monto_1 + $monto_2;
+                                    // Los 2 montos cubren producto + bebida (si hay); "precio" solo guarda el
+                                    // producto (la bebida sigue aparte en bebidas_precio, no se duplica).
+                                    $bebidas_precio_actual = (float)$pedidoActual['bebidas_precio'];
+                                    $nuevo_precio = ($monto_1 + $monto_2) - $bebidas_precio_actual;
                                     $nuevas_observaciones = trim(($pedidoActual['observaciones'] ?? '') .
                                         "\n\n💳 Cobro dividido: $forma_pago_1 $" . number_format($monto_1, 0, ',', '.') .
                                         " + $forma_pago_2 $" . number_format($monto_2, 0, ',', '.'));
@@ -2804,7 +2807,8 @@ function _precioPedidoModalPago() {
     }
     if (!pedidoId) return null;
     const p = pedidosData.find(x => x.id == pedidoId);
-    return p ? Number(p.precio) : null;
+    // El total a cobrar incluye la bebida (se carga aparte, a mano) además del precio del producto.
+    return p ? Number(p.precio) + Number(p.bebidas_precio || 0) : null;
 }
 
 function abrirModalPago() {
