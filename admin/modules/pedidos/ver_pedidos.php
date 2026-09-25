@@ -148,6 +148,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
 
+            case 'cambiar_fecha':
+                // Reprogramar la entrega (cliente que cambia el día/turno) — solo admin.
+                if ($ubicacion_fija) {
+                    $_SESSION['error'] = "❌ No tenés permiso para cambiar la fecha de un pedido";
+                    header('Location: ' . $_SERVER['REQUEST_URI']);
+                    exit;
+                }
+                $ids_fecha   = array_filter(array_map('intval', (array)($_POST['pedidos'] ?? [])));
+                $nueva_fecha = $_POST['fecha_entrega'] ?? '';
+                $nuevo_turno = $_POST['turno'] ?? '';
+                $turnos_validos = ['Mañana', 'Siesta', 'Tarde'];
+                $dt_nueva = DateTime::createFromFormat('!Y-m-d', $nueva_fecha);
+                if (!$ids_fecha || !$dt_nueva || $dt_nueva->format('Y-m-d') !== $nueva_fecha
+                    || ($nuevo_turno !== '' && !in_array($nuevo_turno, $turnos_validos, true))) {
+                    $_SESSION['error'] = "❌ Fecha o turno inválidos";
+                    break;
+                }
+
+                $dias_semana = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+                $fmt_dia = fn(string $ymd) => $dias_semana[(int)date('w', strtotime($ymd))] . ' ' . date('d/m', strtotime($ymd));
+                $quien = $_SESSION['admin_name'] ?? $_SESSION['admin_user'] ?? 'admin';
+                $cuando = (new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires')))->format('d/m H:i');
+
+                $stmtP = $pdo->prepare("SELECT fecha_entrega, turno_entrega, observaciones, created_at FROM pedidos WHERE id = ?");
+                $stmtU = $pdo->prepare("UPDATE pedidos SET fecha_entrega = ?, turno_entrega = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
+                $movidos = 0;
+                foreach ($ids_fecha as $pid) {
+                    $stmtP->execute([$pid]);
+                    $p = $stmtP->fetch(PDO::FETCH_ASSOC);
+                    if (!$p) continue;
+
+                    $obs = (string)($p['observaciones'] ?? '');
+                    $fecha_vieja = $p['fecha_entrega'] ?: substr($p['created_at'], 0, 10);
+                    $turno_viejo = $p['turno_entrega'] ?: (preg_match('/Turno:\s*(Mañana|Siesta|Tarde)/iu', $obs, $mt) ? $mt[1] : '');
+                    $turno_final = $nuevo_turno !== '' ? $nuevo_turno : $turno_viejo;
+
+                    // La comanda (admin y estación) lee el turno de la línea "Turno: X" de las
+                    // observaciones y los pedidos online traen "Fecha entrega: dd/mm/aaaa": se
+                    // actualizan para que lo impreso no quede con el día/turno viejo.
+                    if ($turno_final !== '') {
+                        $obs = preg_match('/^Turno:.*$/mu', $obs)
+                            ? preg_replace('/^Turno:.*$/mu', 'Turno: ' . $turno_final, $obs, 1)
+                            : 'Turno: ' . $turno_final . ($obs !== '' ? "\n" . $obs : '');
+                    }
+                    $obs = preg_replace('/^Fecha entrega:.*$/mu', 'Fecha entrega: ' . $dt_nueva->format('d/m/Y'), $obs, 1);
+
+                    $antes   = trim($fmt_dia($fecha_vieja) . ' ' . $turno_viejo);
+                    $despues = trim($fmt_dia($nueva_fecha) . ' ' . $turno_final);
+                    $obs = rtrim($obs) . "\n📅 Reprogramado $cuando ($quien): $antes → $despues";
+
+                    $stmtU->execute([$nueva_fecha, $turno_final !== '' ? $turno_final : null, $obs, $pid]);
+                    $movidos++;
+                }
+                $aviso_filtro = $nueva_fecha !== date('Y-m-d') ? ' (si estás viendo otro día, ya no aparece en esta lista)' : '';
+                $_SESSION['mensaje'] = "✅ $movidos pedido(s) reprogramado(s) para el " . $fmt_dia($nueva_fecha)
+                    . ($nuevo_turno !== '' ? " · $nuevo_turno" : '') . $aviso_filtro;
+                break;
+
             case 'eliminar':
                 if ($id) {
                     $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id = ?");
@@ -1044,6 +1102,12 @@ arsort($productos_unicos); // más pedidos primero
                         </button>
                         
                         <?php if (!$ubicacion_fija): ?>
+                        <!-- CAMBIAR FECHA (solo admin) -->
+                        <button type="button" onclick="cambiarFechaMasivo()" class="btn bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-calendar-alt"></i>
+                            Cambiar Fecha
+                        </button>
+
                         <!-- ELIMINAR (solo admin) -->
                         <button type="button" onclick="eliminarMasivo()" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                             <i class="fas fa-trash-alt"></i>
@@ -1305,6 +1369,15 @@ arsort($productos_unicos); // más pedidos primero
                                             <i class="fas fa-edit"></i>
                                         </button>
 
+                                        <?php if (!$ubicacion_fija): ?>
+                                        <!-- CAMBIAR FECHA (solo admin) -->
+                                        <button onclick="abrirCambiarFecha([<?= $pedido['id'] ?>])"
+                                                class="btn bg-teal-600 hover:bg-teal-700 text-white p-2 rounded text-xs"
+                                                title="Fechas / reprogramar entrega">
+                                            <i class="fas fa-calendar-alt"></i>
+                                        </button>
+                                        <?php endif; ?>
+
                                         <!-- IMPRIMIR -->
                                         <?php if ($pedido['impreso']): ?>
                                             <!-- Botón bloqueado -->
@@ -1440,6 +1513,8 @@ arsort($productos_unicos); // más pedidos primero
             'estado' => $p['estado'],
             'observaciones' => $p['observaciones'] ?? '',
             'created_at' => $p['created_at'],
+            'fecha_entrega' => $p['fecha_entrega'] ?? null,
+            'turno' => $p['turno_entrega'] ?: (preg_match('/Turno:\s*(Mañana|Siesta|Tarde)/iu', $p['observaciones'] ?? '', $mt) ? $mt[1] : ''),
             'minutos' => $p['minutos_transcurridos'],
             'impreso' => $p['impreso'],
             'pagado'        => (int)($p['pagado'] ?? 0),
@@ -2698,6 +2773,198 @@ document.addEventListener('wheel', function() {
     });
 })();
 </script>
+
+<?php if (!$ubicacion_fija): ?>
+<!-- ============================================
+     MODAL FECHAS / REPROGRAMAR ENTREGA (solo admin)
+============================================ -->
+<div id="modal-cambiar-fecha" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 id="cf-titulo" class="text-xl font-bold text-gray-800 mb-4 text-center">📅 Fechas del pedido</h2>
+
+        <div id="cf-info" class="mb-4 text-sm"></div>
+
+        <div class="border-t pt-4">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Reprogramar entrega para:</p>
+            <div class="flex gap-2 mb-3">
+                <input type="date" id="cf-fecha" class="flex-1 border rounded-lg px-3 py-2 text-sm" onchange="chequearCuposCambioFecha()">
+                <select id="cf-turno" class="flex-1 border rounded-lg px-3 py-2 text-sm" onchange="chequearCuposCambioFecha()"></select>
+            </div>
+            <div id="cf-avisos" class="text-xs mb-4"></div>
+        </div>
+
+        <div class="flex gap-2">
+            <button onclick="cerrarCambiarFecha()" class="flex-1 py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm">
+                Cancelar
+            </button>
+            <button onclick="confirmarCambioFecha()" class="flex-1 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm">
+                Guardar nueva fecha
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const TURNOS_CF = <?= json_encode(array_map(fn($r) => substr($r['inicio'], 0, 5) . '-' . substr($r['fin'], 0, 5), $turnos_config ?: []), JSON_UNESCAPED_UNICODE) ?>;
+let _cfIds = [];
+let _cfAvisos = [];
+let _cfReqId = 0;
+
+function _cfEsc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function _cfDia(ymd) {
+    if (!ymd) return '—';
+    const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    return `${dias[new Date(y, m - 1, d).getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+}
+function _cfCreado(dt) {
+    if (!dt) return '—';
+    const [f, h] = String(dt).split(' ');
+    const [y, m, d] = f.split('-');
+    return `${d}/${m}/${y}${h ? ' ' + h.slice(0, 5) : ''}`;
+}
+function _cfFechaActual(p) {
+    return (p.fecha_entrega || String(p.created_at || '').slice(0, 10)).slice(0, 10);
+}
+
+function cambiarFechaMasivo() {
+    const ids = getSeleccionados();
+    if (ids.length === 0) { alert('⚠️ Seleccioná al menos un pedido'); return; }
+    abrirCambiarFecha(ids);
+}
+
+function abrirCambiarFecha(ids) {
+    const pedidos = ids.map(id => pedidosData.find(p => p.id == id)).filter(Boolean);
+    if (pedidos.length === 0) return;
+    _cfIds = pedidos.map(p => p.id);
+    const unico = pedidos.length === 1 ? pedidos[0] : null;
+
+    document.getElementById('cf-titulo').textContent = unico
+        ? `📅 Fechas del pedido #${unico.id}`
+        : `📅 Reprogramar ${pedidos.length} pedidos`;
+
+    let info = '';
+    if (unico) {
+        const historial = String(unico.observaciones || '').split('\n').filter(l => l.startsWith('📅 Reprogramado'));
+        info = `
+            <div class="font-semibold text-gray-800 mb-2">${_cfEsc(unico.nombre)} ${_cfEsc(unico.apellido)} · ${_cfEsc(unico.modalidad)}</div>
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-gray-50 rounded-lg p-2">
+                    <div class="text-xs text-gray-500">Se creó</div>
+                    <div class="font-semibold">${_cfCreado(unico.created_at)}</div>
+                </div>
+                <div class="bg-teal-50 rounded-lg p-2">
+                    <div class="text-xs text-gray-500">Entrega actual</div>
+                    <div class="font-semibold">${_cfDia(_cfFechaActual(unico))}${unico.turno ? ' · ' + _cfEsc(unico.turno) : ''}</div>
+                </div>
+            </div>
+            ${historial.length ? `<div class="mt-3"><div class="text-xs text-gray-500 mb-1">Cambios anteriores:</div>
+                ${historial.map(l => `<div class="text-xs text-gray-700">${_cfEsc(l)}</div>`).join('')}</div>` : ''}`;
+    } else {
+        info = `<div class="space-y-1">${pedidos.map(p => `
+            <div class="flex justify-between bg-gray-50 rounded px-2 py-1 text-xs">
+                <span>#${p.id} ${_cfEsc(p.nombre)} ${_cfEsc(p.apellido)}</span>
+                <span class="text-gray-600">${_cfDia(_cfFechaActual(p))}${p.turno ? ' · ' + _cfEsc(p.turno) : ''}</span>
+            </div>`).join('')}</div>`;
+    }
+    document.getElementById('cf-info').innerHTML = info;
+
+    const sel = document.getElementById('cf-turno');
+    const opciones = Object.entries(TURNOS_CF).map(([t, h]) => `<option value="${_cfEsc(t)}">${_cfEsc(t)} (${h})</option>`).join('');
+    sel.innerHTML = unico
+        ? (unico.turno ? '' : '<option value="">Sin turno</option>') + opciones
+        : '<option value="">— Mantener el turno de cada uno —</option>' + opciones;
+    sel.value = unico ? (unico.turno || '') : '';
+
+    document.getElementById('cf-fecha').value = unico ? _cfFechaActual(unico) : '';
+    document.getElementById('cf-avisos').innerHTML = '';
+    _cfAvisos = [];
+    document.getElementById('modal-cambiar-fecha').classList.remove('hidden');
+}
+
+function cerrarCambiarFecha() {
+    document.getElementById('modal-cambiar-fecha').classList.add('hidden');
+    _cfIds = [];
+}
+
+// Aviso de cupos: no bloquea, solo informa (la decisión es de ustedes)
+async function chequearCuposCambioFecha() {
+    const fecha = document.getElementById('cf-fecha').value;
+    const turnoSel = document.getElementById('cf-turno').value;
+    const cont = document.getElementById('cf-avisos');
+    _cfAvisos = [];
+    if (!fecha) { cont.innerHTML = ''; return; }
+
+    const reqId = ++_cfReqId;
+    const pedidos = _cfIds.map(id => pedidosData.find(p => p.id == id)).filter(Boolean);
+    const hoy = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    const avisos = [];
+    if (fecha < hoy) avisos.push('Es una fecha que ya pasó.');
+
+    // Pedidos que se suman a cada (modalidad, turno) destino, sin contar los que ya estaban ahí
+    const movidos = {};
+    for (const p of pedidos) {
+        const turno = turnoSel || p.turno;
+        if (!turno) continue;
+        if (_cfFechaActual(p) === fecha && p.turno === turno) continue;
+        const k = `${p.modalidad}|${turno}`;
+        movidos[k] = (movidos[k] || 0) + 1;
+    }
+
+    const diaSemana = new Date(fecha + 'T12:00:00').getDay();
+    const modalidades = [...new Set(Object.keys(movidos).map(k => k.split('|')[0]))];
+    for (const modalidad of modalidades) {
+        if (diaSemana === 1 && modalidad === 'Retiro' && movidos['Retiro|Tarde']) {
+            avisos.push('Los lunes cerramos a las 18hs: no hay turno Tarde para retiro.');
+        }
+        if (fecha < hoy) continue;
+        try {
+            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fecha}&modalidad=${encodeURIComponent(modalidad)}`);
+            if (!res.ok) continue;
+            const disp = await res.json();
+            for (const [k, cant] of Object.entries(movidos)) {
+                const [mod, turno] = k.split('|');
+                if (mod !== modalidad || !disp[turno]) continue;
+                const d = disp[turno];
+                if (!d.activo) {
+                    avisos.push(`${modalidad} · ${turno}: ese turno no está habilitado ese día.`);
+                } else if (d.ocupados + cant > d.max_pedidos) {
+                    avisos.push(`${modalidad} · ${turno}: ${d.ocupados}/${d.max_pedidos} cupos ocupados, con ${cant > 1 ? 'estos' : 'este'} quedaría en ${d.ocupados + cant}/${d.max_pedidos}.`);
+                }
+            }
+        } catch (e) { /* si no se puede consultar, no se avisa */ }
+    }
+
+    if (reqId !== _cfReqId) return; // llegó una respuesta vieja
+    _cfAvisos = avisos;
+    cont.innerHTML = avisos.length
+        ? `<div class="bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg p-2">${avisos.map(a => '⚠️ ' + _cfEsc(a)).join('<br>')}</div>`
+        : (modalidades.length ? '<div class="text-green-600">✅ Hay cupo en ese turno.</div>' : '');
+}
+
+async function confirmarCambioFecha() {
+    const fecha = document.getElementById('cf-fecha').value;
+    const turno = document.getElementById('cf-turno').value;
+    if (!fecha) { alert('⚠️ Elegí la nueva fecha'); return; }
+
+    await chequearCuposCambioFecha();
+    if (_cfAvisos.length && !confirm('Atención:\n- ' + _cfAvisos.join('\n- ') + '\n\n¿Reprogramar igual?')) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    const campos = [['accion', 'cambiar_fecha'], ['fecha_entrega', fecha], ['turno', turno], ..._cfIds.map(id => ['pedidos[]', id])];
+    campos.forEach(([n, v]) => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = n; i.value = v;
+        form.appendChild(i);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+<?php endif; ?>
 
 <!-- ============================================
      MODAL FORMA DE PAGO (al marcar Entregado)
