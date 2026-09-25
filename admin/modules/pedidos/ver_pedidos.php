@@ -1319,9 +1319,9 @@ arsort($productos_unicos); // más pedidos primero
                                         </button>
                                     </div>
 
-                                    <!-- ESTADO COMPACTO -->
-                                    <div class="min-w-[130px]">
-                                        <form method="POST" class="inline">
+                                    <!-- ESTADO + SUCURSAL (apilados, para no ensanchar la fila) -->
+                                    <div class="w-[130px] shrink-0 flex flex-col gap-1">
+                                        <form method="POST" class="block">
                                             <input type="hidden" name="accion" value="cambiar_estado">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
                                             <select name="estado"
@@ -1333,12 +1333,10 @@ arsort($productos_unicos); // más pedidos primero
                                                 <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>📦 Entregado</option>
                                             </select>
                                         </form>
-                                    </div>
 
-                                    <?php if (!$ubicacion_fija): ?>
-                                    <!-- CAMBIAR SUCURSAL (solo admin) -->
-                                    <div class="min-w-[110px]">
-                                        <form method="POST" class="inline">
+                                        <?php if (!$ubicacion_fija): ?>
+                                        <!-- CAMBIAR SUCURSAL (solo admin) -->
+                                        <form method="POST" class="block">
                                             <input type="hidden" name="accion" value="cambiar_ubicacion">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
                                             <select name="ubicacion"
@@ -1350,18 +1348,18 @@ arsort($productos_unicos); // más pedidos primero
                                                 <option value="Villa Elisa" <?= $pedido['ubicacion'] === 'Villa Elisa' ? 'selected' : '' ?>>🏬 Villa Elisa</option>
                                             </select>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
-                                    <?php endif; ?>
 
                                     <!-- PRECIO -->
-                                    <div class="text-right min-w-[80px]">
+                                    <div class="text-right min-w-[64px] shrink-0">
                                         <div class="text-lg font-bold text-green-600">
                                             $<?= number_format($pedido['precio']/1000, 0) ?>K
                                         </div>
                                     </div>
                                     
-                                    <!-- ACCIONES COMPACTAS -->
-                                    <div class="flex items-center gap-1">
+                                    <!-- ACCIONES COMPACTAS (hasta 3 por fila, bajan a una 2da fila en vez de salirse de la tarjeta) -->
+                                    <div class="w-[110px] shrink-0 flex flex-wrap justify-end items-center gap-1">
                                         <!-- EDITAR -->
                                         <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
                                                 class="btn bg-purple-500 hover:bg-purple-600 text-white p-2 rounded text-xs"
