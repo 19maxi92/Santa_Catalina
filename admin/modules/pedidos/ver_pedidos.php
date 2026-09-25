@@ -51,13 +51,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sheets_precio = null;
 
                     // Si se marca como Entregado y viene forma de pago, actualizar precio y forma_pago
-                    if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia'])) {
+                    // DNI: como Transferencia, sin descuento (se puede sumar descuento más adelante si hace falta).
+                    // Dividido: dos formas de pago, cada una con su monto (no aplica el descuento de Efectivo).
+                    if ($estado === 'Entregado' && in_array($forma_pago_nueva, ['Efectivo', 'Transferencia', 'DNI', 'Dividido'])) {
                         // Obtener datos actuales del pedido
-                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion FROM pedidos WHERE id = ?");
+                        $stmtP = $pdo->prepare("SELECT producto, precio, ubicacion, observaciones, COALESCE(bebidas_precio, 0) as bebidas_precio FROM pedidos WHERE id = ?");
                         $stmtP->execute([$id]);
                         $pedidoActual = $stmtP->fetch(PDO::FETCH_ASSOC);
 
                         $nuevo_precio = null;
+                        $nuevas_observaciones = null;
+                        $incluye_efectivo = $forma_pago_nueva === 'Efectivo';
 
                         if ($pedidoActual) {
                             $nombreProducto = $pedidoActual['producto'];
@@ -79,10 +83,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $nuevo_precio = (float)$prod['precio_efectivo'];
                                     }
                                 }
+                            } elseif ($forma_pago_nueva === 'Dividido') {
+                                $forma_pago_1 = $_POST['forma_pago_1'] ?? '';
+                                $forma_pago_2 = $_POST['forma_pago_2'] ?? '';
+                                $monto_1 = (float)($_POST['monto_1'] ?? 0);
+                                $monto_2 = (float)($_POST['monto_2'] ?? 0);
+                                if ($monto_1 > 0 && $monto_2 > 0) {
+                                    // Los 2 montos cubren producto + bebida (si hay); "precio" solo guarda el
+                                    // producto (la bebida sigue aparte en bebidas_precio, no se duplica).
+                                    $bebidas_precio_actual = (float)$pedidoActual['bebidas_precio'];
+                                    $nuevo_precio = ($monto_1 + $monto_2) - $bebidas_precio_actual;
+                                    $nuevas_observaciones = trim(($pedidoActual['observaciones'] ?? '') .
+                                        "\n\n💳 Cobro dividido: $forma_pago_1 $" . number_format($monto_1, 0, ',', '.') .
+                                        " + $forma_pago_2 $" . number_format($monto_2, 0, ',', '.'));
+                                    $incluye_efectivo = ($forma_pago_1 === 'Efectivo' || $forma_pago_2 === 'Efectivo');
+                                }
                             }
                         }
 
-                        if ($nuevo_precio !== null) {
+                        if ($nuevas_observaciones !== null) {
+                            $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
+                            $stmt->execute([$estado, $forma_pago_nueva, $nuevo_precio, $nuevas_observaciones, $id]);
+                        } elseif ($nuevo_precio !== null) {
                             $stmt = $pdo->prepare("UPDATE pedidos SET estado = ?, forma_pago = ?, precio = ?, updated_at = NOW() WHERE id = ?");
                             $stmt->execute([$estado, $forma_pago_nueva, $nuevo_precio, $id]);
                         } else {
@@ -94,8 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sheets_precio = $nuevo_precio !== null ? $nuevo_precio : ($pedidoActual ? (float)$pedidoActual['precio'] : null);
 
                         // Cobro en efectivo en Local 1 (pedido de Local 1, o personal de Local 1 cobrando
-                        // en mostrador un pedido de reparto): pedir a la estación que abra el cajón (no imprime nada)
-                        if ($forma_pago_nueva === 'Efectivo' && $pedidoActual && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
+                        // en mostrador un pedido de reparto): pedir a la estación que abra el cajón (no imprime nada).
+                        // También aplica si el cobro dividido incluye una parte en efectivo.
+                        if ($incluye_efectivo && $pedidoActual && debeAbrirCajonLocal1($pedidoActual['ubicacion'], $ubicacion_fija)) {
                             $aviso_cajon = encolarTrabajoImpresion($pdo, $id, 'Local 1', 'abrir_cajon')
                                 ? " · 💵 Abriendo cajón"
                                 : " · ⚠️ No se pudo pedir la apertura del cajón (avisar al admin)";
@@ -110,6 +133,79 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
                 
+            case 'cambiar_ubicacion':
+                // Reasignar la sucursal de un pedido ya cargado (por error de carga, etc.) — solo admin.
+                if ($ubicacion_fija) {
+                    $_SESSION['error'] = "❌ No tenés permiso para cambiar la sucursal de un pedido";
+                    header('Location: ' . $_SERVER['REQUEST_URI']);
+                    exit;
+                }
+                $nueva_ubicacion = $_POST['ubicacion'] ?? '';
+                if ($id && in_array($nueva_ubicacion, ['Local 1', 'Fábrica', 'Villa Elisa'], true)) {
+                    $stmt = $pdo->prepare("UPDATE pedidos SET ubicacion = ?, updated_at = NOW() WHERE id = ?");
+                    $stmt->execute([$nueva_ubicacion, $id]);
+                    $_SESSION['mensaje'] = "✅ Sucursal cambiada a $nueva_ubicacion";
+                }
+                break;
+
+            case 'cambiar_fecha':
+                // Reprogramar la entrega (cliente que cambia el día/turno) — solo admin.
+                if ($ubicacion_fija) {
+                    $_SESSION['error'] = "❌ No tenés permiso para cambiar la fecha de un pedido";
+                    header('Location: ' . $_SERVER['REQUEST_URI']);
+                    exit;
+                }
+                $ids_fecha   = array_filter(array_map('intval', (array)($_POST['pedidos'] ?? [])));
+                $nueva_fecha = $_POST['fecha_entrega'] ?? '';
+                $nuevo_turno = $_POST['turno'] ?? '';
+                $turnos_validos = ['Mañana', 'Siesta', 'Tarde'];
+                $dt_nueva = DateTime::createFromFormat('!Y-m-d', $nueva_fecha);
+                if (!$ids_fecha || !$dt_nueva || $dt_nueva->format('Y-m-d') !== $nueva_fecha
+                    || ($nuevo_turno !== '' && !in_array($nuevo_turno, $turnos_validos, true))) {
+                    $_SESSION['error'] = "❌ Fecha o turno inválidos";
+                    break;
+                }
+
+                $dias_semana = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+                $fmt_dia = fn(string $ymd) => $dias_semana[(int)date('w', strtotime($ymd))] . ' ' . date('d/m', strtotime($ymd));
+                $quien = $_SESSION['admin_name'] ?? $_SESSION['admin_user'] ?? 'admin';
+                $cuando = (new DateTime('now', new DateTimeZone('America/Argentina/Buenos_Aires')))->format('d/m H:i');
+
+                $stmtP = $pdo->prepare("SELECT fecha_entrega, turno_entrega, observaciones, created_at FROM pedidos WHERE id = ?");
+                $stmtU = $pdo->prepare("UPDATE pedidos SET fecha_entrega = ?, turno_entrega = ?, observaciones = ?, updated_at = NOW() WHERE id = ?");
+                $movidos = 0;
+                foreach ($ids_fecha as $pid) {
+                    $stmtP->execute([$pid]);
+                    $p = $stmtP->fetch(PDO::FETCH_ASSOC);
+                    if (!$p) continue;
+
+                    $obs = (string)($p['observaciones'] ?? '');
+                    $fecha_vieja = $p['fecha_entrega'] ?: substr($p['created_at'], 0, 10);
+                    $turno_viejo = $p['turno_entrega'] ?: (preg_match('/Turno:\s*(Mañana|Siesta|Tarde)/iu', $obs, $mt) ? $mt[1] : '');
+                    $turno_final = $nuevo_turno !== '' ? $nuevo_turno : $turno_viejo;
+
+                    // La comanda (admin y estación) lee el turno de la línea "Turno: X" de las
+                    // observaciones y los pedidos online traen "Fecha entrega: dd/mm/aaaa": se
+                    // actualizan para que lo impreso no quede con el día/turno viejo.
+                    if ($turno_final !== '') {
+                        $obs = preg_match('/^Turno:.*$/mu', $obs)
+                            ? preg_replace('/^Turno:.*$/mu', 'Turno: ' . $turno_final, $obs, 1)
+                            : 'Turno: ' . $turno_final . ($obs !== '' ? "\n" . $obs : '');
+                    }
+                    $obs = preg_replace('/^Fecha entrega:.*$/mu', 'Fecha entrega: ' . $dt_nueva->format('d/m/Y'), $obs, 1);
+
+                    $antes   = trim($fmt_dia($fecha_vieja) . ' ' . $turno_viejo);
+                    $despues = trim($fmt_dia($nueva_fecha) . ' ' . $turno_final);
+                    $obs = rtrim($obs) . "\n📅 Reprogramado $cuando ($quien): $antes → $despues";
+
+                    $stmtU->execute([$nueva_fecha, $turno_final !== '' ? $turno_final : null, $obs, $pid]);
+                    $movidos++;
+                }
+                $aviso_filtro = $nueva_fecha !== date('Y-m-d') ? ' (si estás viendo otro día, ya no aparece en esta lista)' : '';
+                $_SESSION['mensaje'] = "✅ $movidos pedido(s) reprogramado(s) para el " . $fmt_dia($nueva_fecha)
+                    . ($nuevo_turno !== '' ? " · $nuevo_turno" : '') . $aviso_filtro;
+                break;
+
             case 'eliminar':
                 if ($id) {
                     $stmt = $pdo->prepare("DELETE FROM pedidos WHERE id = ?");
@@ -198,7 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $nuevo_estado = $_POST['nuevo_estado'] ?? '';
                             if ($nuevo_estado) {
                                 $forma_pago_masiva = $_POST['forma_pago'] ?? null;
-                                if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia'])) {
+                                if ($nuevo_estado === 'Entregado' && in_array($forma_pago_masiva, ['Efectivo', 'Transferencia', 'DNI'])) {
                                     $abrir_cajon_por = null; // primer pedido de Local 1 cobrado en efectivo (una sola apertura)
                                     $sheets_precios = []; // precio final por pedido, para reflejarlo en el Sheet
                                     // Actualizar uno por uno para aplicar lógica de precio
@@ -365,13 +461,13 @@ if ($filtro_modalidad) {
 }
 
 if ($ubicaciones_permitidas) {
+    // Empleado: restringido a su(s) sucursal(es), esto sigue siendo server-side.
     $ph = implode(',', array_fill(0, count($ubicaciones_permitidas), '?'));
     $sql .= " AND p.ubicacion IN ($ph)";
     $params = array_merge($params, $ubicaciones_permitidas);
-} elseif ($filtro_ubicacion) {
-    $sql .= " AND p.ubicacion = ?";
-    $params[] = $filtro_ubicacion;
 }
+// Admin: ya no se restringe por sucursal acá — trae todas y el filtro de
+// checkboxes (client-side, igual que el de estado) decide qué se muestra.
 
 if ($fecha_desde || $fecha_hasta) {
     $desde = $fecha_desde ?: '2000-01-01';
@@ -795,29 +891,40 @@ arsort($productos_unicos); // más pedidos primero
             <!-- SEPARADOR -->
             <div class="border-t border-gray-300 mb-4"></div>
 
-            <!-- TABS DE UBICACIÓN / MODALIDAD -->
-            <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
+            <!-- FILTRO MÚLTIPLE DE SUCURSALES (CLIENT-SIDE, igual que el de estados) -->
+            <?php if (!$ubicacion_fija): ?>
+            <div class="mb-4">
+                <div class="text-sm font-semibold text-gray-700 mb-2">
+                    <i class="fas fa-map-marked-alt mr-1"></i>Filtrar por sucursal (seleccionar una o varias):
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Local 1" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-purple-100 text-purple-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-purple-500 transition-all">
+                            🏪 Local 1
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Fábrica" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-orange-100 text-orange-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-orange-500 transition-all">
+                            🏭 Fábrica
+                        </span>
+                    </label>
+                    <label class="filter-checkbox-label inline-flex items-center">
+                        <input type="checkbox" class="filter-ubicacion-checkbox mr-2" value="Villa Elisa" checked onchange="aplicarFiltrosMultiples()">
+                        <span class="bg-teal-100 text-teal-800 text-sm px-3 py-2 rounded-lg cursor-pointer border-2 border-transparent hover:border-teal-500 transition-all">
+                            🏬 Villa Elisa
+                        </span>
+                    </label>
+                    <button type="button" onclick="toggleTodasUbicaciones()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm px-3 py-2 rounded-lg font-semibold border-2 border-gray-400 transition-all">
+                        <i class="fas fa-check-double mr-1"></i>Todas/Ninguna
+                    </button>
+                </div>
+            </div>
+            <?php endif; ?>
 
-                <?php if (!$ubicacion_fija): ?>
-                <!-- TODAS (solo admin: un empleado ya está fijo en su sucursal) -->
-                <a href="?estado=<?= $filtro_estado ?>&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= empty($filtro_ubicacion) && empty($filtro_modalidad) ? 'active' : 'bg-gray-100 text-gray-700' ?>">
-                    <i class="fas fa-map-marked-alt"></i>
-                    Todas
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Local 1&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Local 1' ? 'active' : 'bg-purple-100 text-purple-800' ?>">
-                    🏪 Local 1
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Fábrica&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Fábrica' ? 'active' : 'bg-orange-100 text-orange-800' ?>">
-                    🏭 Fábrica
-                </a>
-                <a href="?estado=<?= $filtro_estado ?>&ubicacion=Villa Elisa&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
-                   class="filter-tab <?= $filtro_ubicacion === 'Villa Elisa' ? 'active' : 'bg-teal-100 text-teal-800' ?>">
-                    🏬 Villa Elisa
-                </a>
-                <?php endif; ?>
+            <!-- TABS DE MODALIDAD -->
+            <div class="flex space-x-2 mb-4 flex-wrap gap-y-2">
                 <a href="?estado=<?= $filtro_estado ?>&modalidad=Delivery&fecha_desde=<?= $fecha_desde ?>&fecha_hasta=<?= $fecha_hasta ?>"
                    class="filter-tab <?= $filtro_modalidad === 'Delivery' ? 'active' : 'bg-blue-100 text-blue-800' ?>">
                     🛵 Delivery
@@ -995,6 +1102,12 @@ arsort($productos_unicos); // más pedidos primero
                         </button>
                         
                         <?php if (!$ubicacion_fija): ?>
+                        <!-- CAMBIAR FECHA (solo admin) -->
+                        <button type="button" onclick="cambiarFechaMasivo()" class="btn bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                            <i class="fas fa-calendar-alt"></i>
+                            Cambiar Fecha
+                        </button>
+
                         <!-- ELIMINAR (solo admin) -->
                         <button type="button" onclick="eliminarMasivo()" class="btn bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                             <i class="fas fa-trash-alt"></i>
@@ -1078,6 +1191,7 @@ arsort($productos_unicos); // más pedidos primero
                         <?php $tiene_bebidas_card = !empty($pedido['bebidas_json']); ?>
                         <div class="pedido-card <?= $tiene_bebidas_card ? 'bg-cyan-50 border-l-4 border-l-cyan-400 border border-cyan-200' : ($es_online ? 'bg-teal-50 border border-teal-200' : 'bg-white') ?> rounded-lg shadow-md hover:shadow-xl p-3 <?= $clase_prioridad ?>"
                              data-pedido-id="<?= $pedido['id'] ?>" data-estado="<?= $pedido['estado'] ?>"
+                             data-ubicacion="<?= htmlspecialchars($pedido['ubicacion'] ?? '', ENT_QUOTES) ?>"
                              data-producto="<?= htmlspecialchars($pedido['producto'] ?? '', ENT_QUOTES) ?>"
                              data-cantidad="<?= (int)($pedido['cantidad'] ?? 1) ?>"
                              data-tiene-bebidas="<?= $tiene_bebidas_card ? '1' : '0' ?>"
@@ -1172,7 +1286,12 @@ arsort($productos_unicos); // más pedidos primero
                                                     <?= $pedido['modalidad'] === 'Retiro' ? '📦' : '🏍️' ?>
                                                 </span>
                                                 <span title="<?= $pedido['forma_pago'] ?>">
-                                                    <?= $pedido['forma_pago'] === 'Efectivo' ? '💵' : '💳' ?>
+                                                    <?= match($pedido['forma_pago']) {
+                                                        'Efectivo' => '💵',
+                                                        'DNI' => '🪪',
+                                                        'Dividido' => '🔀',
+                                                        default => '💳',
+                                                    } ?>
                                                 </span>
                                                 <?php if ($pedido['forma_pago'] === 'Transferencia'): ?>
                                                     <span title="<?= $pedido['pagado'] ? 'Pago confirmado' : 'Pago pendiente' ?>"
@@ -1200,9 +1319,9 @@ arsort($productos_unicos); // más pedidos primero
                                         </button>
                                     </div>
 
-                                    <!-- ESTADO COMPACTO -->
-                                    <div class="min-w-[130px]">
-                                        <form method="POST" class="inline">
+                                    <!-- ESTADO + SUCURSAL (apilados, para no ensanchar la fila) -->
+                                    <div class="w-[130px] shrink-0 flex flex-col gap-1">
+                                        <form method="POST" class="block">
                                             <input type="hidden" name="accion" value="cambiar_estado">
                                             <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
                                             <select name="estado"
@@ -1214,23 +1333,48 @@ arsort($productos_unicos); // más pedidos primero
                                                 <option value="Entregado" <?= $pedido['estado'] === 'Entregado' ? 'selected' : '' ?>>📦 Entregado</option>
                                             </select>
                                         </form>
+
+                                        <?php if (!$ubicacion_fija): ?>
+                                        <!-- CAMBIAR SUCURSAL (solo admin) -->
+                                        <form method="POST" class="block">
+                                            <input type="hidden" name="accion" value="cambiar_ubicacion">
+                                            <input type="hidden" name="id" value="<?= $pedido['id'] ?>">
+                                            <select name="ubicacion"
+                                                    onchange="if(confirm('¿Cambiar la sucursal de este pedido a ' + this.options[this.selectedIndex].text.trim() + '?')) this.form.submit(); else this.value='<?= htmlspecialchars($pedido['ubicacion'], ENT_QUOTES) ?>'"
+                                                    class="w-full text-xs font-semibold border rounded-lg px-2 py-1 cursor-pointer"
+                                                    title="Cambiar sucursal">
+                                                <option value="Local 1" <?= $pedido['ubicacion'] === 'Local 1' ? 'selected' : '' ?>>🏪 Local 1</option>
+                                                <option value="Fábrica" <?= $pedido['ubicacion'] === 'Fábrica' ? 'selected' : '' ?>>🏭 Fábrica</option>
+                                                <option value="Villa Elisa" <?= $pedido['ubicacion'] === 'Villa Elisa' ? 'selected' : '' ?>>🏬 Villa Elisa</option>
+                                            </select>
+                                        </form>
+                                        <?php endif; ?>
                                     </div>
-                                    
+
                                     <!-- PRECIO -->
-                                    <div class="text-right min-w-[80px]">
+                                    <div class="text-right min-w-[64px] shrink-0">
                                         <div class="text-lg font-bold text-green-600">
                                             $<?= number_format($pedido['precio']/1000, 0) ?>K
                                         </div>
                                     </div>
                                     
-                                    <!-- ACCIONES COMPACTAS -->
-                                    <div class="flex items-center gap-1">
+                                    <!-- ACCIONES COMPACTAS (hasta 3 por fila, bajan a una 2da fila en vez de salirse de la tarjeta) -->
+                                    <div class="w-[110px] shrink-0 flex flex-wrap justify-end items-center gap-1">
                                         <!-- EDITAR -->
                                         <button onclick="abrirEditarPedido(<?= $pedido['id'] ?>)"
                                                 class="btn bg-purple-500 hover:bg-purple-600 text-white p-2 rounded text-xs"
                                                 title="Editar pedido">
                                             <i class="fas fa-edit"></i>
                                         </button>
+
+                                        <?php if (!$ubicacion_fija): ?>
+                                        <!-- CAMBIAR FECHA (solo admin) -->
+                                        <button onclick="abrirCambiarFecha([<?= $pedido['id'] ?>])"
+                                                class="btn bg-teal-600 hover:bg-teal-700 text-white p-2 rounded text-xs"
+                                                title="Fechas / reprogramar entrega">
+                                            <i class="fas fa-calendar-alt"></i>
+                                        </button>
+                                        <?php endif; ?>
 
                                         <!-- IMPRIMIR -->
                                         <?php if ($pedido['impreso']): ?>
@@ -1367,6 +1511,8 @@ arsort($productos_unicos); // más pedidos primero
             'estado' => $p['estado'],
             'observaciones' => $p['observaciones'] ?? '',
             'created_at' => $p['created_at'],
+            'fecha_entrega' => $p['fecha_entrega'] ?? null,
+            'turno' => $p['turno_entrega'] ?: (preg_match('/Turno:\s*(Mañana|Siesta|Tarde)/iu', $p['observaciones'] ?? '', $mt) ? $mt[1] : ''),
             'minutos' => $p['minutos_transcurridos'],
             'impreso' => $p['impreso'],
             'pagado'        => (int)($p['pagado'] ?? 0),
@@ -1513,7 +1659,7 @@ arsort($productos_unicos); // más pedidos primero
                     </div>
                     <div class="detalle-valor flex items-center gap-3 flex-wrap">
                         <span class="badge bg-purple-100 text-purple-800">
-                            ${pedido.forma_pago === 'Efectivo' ? '💵' : '💳'} ${pedido.forma_pago}
+                            ${pedido.forma_pago === 'Efectivo' ? '💵' : (pedido.forma_pago === 'DNI' ? '🪪' : (pedido.forma_pago === 'Dividido' ? '🔀' : '💳'))} ${pedido.forma_pago}
                         </span>
                         ${pedido.forma_pago === 'Transferencia' ? `
                         <span id="badge-pago-${pedido.id}" class="badge ${pedido.pagado ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -1974,9 +2120,12 @@ arsort($productos_unicos); // más pedidos primero
     function renderVistaClientes() {
         const estados = Array.from(document.querySelectorAll('.filter-estado-checkbox:checked')).map(c => c.value);
         const productos = Array.from(document.querySelectorAll('.filter-producto-checkbox:checked')).map(c => c.value);
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicaciones = Array.from(document.querySelectorAll('.filter-ubicacion-checkbox:checked')).map(c => c.value);
 
         const filtrados = pedidosData.filter(p =>
             (estados.length === 0 || estados.includes(p.estado)) &&
+            (ubicacionCheckboxes.length === 0 || ubicaciones.includes(p.ubicacion)) &&
             (productos.length === 0 || productos.includes(p.producto))
         );
 
@@ -2115,6 +2264,13 @@ arsort($productos_unicos); // más pedidos primero
         const checkboxes = document.querySelectorAll('.filter-estado-checkbox:checked');
         const estadosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
 
+        // Sucursales seleccionadas (solo existe el grupo para admin; un empleado
+        // no tiene estos checkboxes, así que no filtra por esto)
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicacionesSeleccionadas = Array.from(
+            document.querySelectorAll('.filter-ubicacion-checkbox:checked')
+        ).map(cb => cb.value);
+
         // Productos seleccionados (pueden estar activos al mismo tiempo)
         const productosSeleccionados = Array.from(
             document.querySelectorAll('.filter-producto-checkbox:checked')
@@ -2122,7 +2278,7 @@ arsort($productos_unicos); // más pedidos primero
 
         const pedidos = document.querySelectorAll('[data-pedido-id]');
 
-        if (estadosSeleccionados.length === 0) {
+        if (estadosSeleccionados.length === 0 || (ubicacionCheckboxes.length > 0 && ubicacionesSeleccionadas.length === 0)) {
             pedidos.forEach(pedido => pedido.style.display = 'none');
             actualizarContador();
             return;
@@ -2130,11 +2286,13 @@ arsort($productos_unicos); // más pedidos primero
 
         pedidos.forEach(pedido => {
             const estado = pedido.dataset.estado;
+            const ubicacion = pedido.dataset.ubicacion || '';
             const prod = pedido.dataset.producto || '';
 
-            const pasaEstado   = estadosSeleccionados.includes(estado);
-            const pasaProducto = productosSeleccionados.length === 0 || productosSeleccionados.includes(prod);
-            const mostrar = pasaEstado && pasaProducto;
+            const pasaEstado    = estadosSeleccionados.includes(estado);
+            const pasaUbicacion = ubicacionCheckboxes.length === 0 || ubicacionesSeleccionadas.includes(ubicacion);
+            const pasaProducto  = productosSeleccionados.length === 0 || productosSeleccionados.includes(prod);
+            const mostrar = pasaEstado && pasaUbicacion && pasaProducto;
 
             pedido.style.display = mostrar ? '' : 'none';
             if (!mostrar) {
@@ -2147,6 +2305,9 @@ arsort($productos_unicos); // más pedidos primero
         if (vistaClientesActiva) renderVistaClientes();
 
         localStorage.setItem('filtrosEstadosVerPedidos', JSON.stringify(estadosSeleccionados));
+        if (ubicacionCheckboxes.length > 0) {
+            localStorage.setItem('filtrosUbicacionesVerPedidos', JSON.stringify(ubicacionesSeleccionadas));
+        }
     }
 
     // ============================================
@@ -2161,18 +2322,24 @@ arsort($productos_unicos); // más pedidos primero
         const btnLimpiar = document.getElementById('btn-limpiar-producto');
         if (btnLimpiar) btnLimpiar.classList.toggle('hidden', seleccionados.length === 0);
 
-        // Combinar con el filtro de estados
+        // Combinar con el filtro de estados y de sucursales
         const estadosActivos = Array.from(
             document.querySelectorAll('.filter-estado-checkbox:checked')
+        ).map(cb => cb.value);
+        const ubicacionCheckboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const ubicacionesActivas = Array.from(
+            document.querySelectorAll('.filter-ubicacion-checkbox:checked')
         ).map(cb => cb.value);
 
         document.querySelectorAll('[data-pedido-id]').forEach(fila => {
             const prod  = fila.dataset.producto || '';
             const estado = fila.dataset.estado || '';
+            const ubicacion = fila.dataset.ubicacion || '';
 
-            const pasaEstado  = estadosActivos.length === 0 || estadosActivos.includes(estado);
+            const pasaEstado    = estadosActivos.length === 0 || estadosActivos.includes(estado);
+            const pasaUbicacion = ubicacionCheckboxes.length === 0 || ubicacionesActivas.includes(ubicacion);
             const pasaProducto = seleccionados.length === 0 || seleccionados.includes(prod);
-            const visible = pasaEstado && pasaProducto;
+            const visible = pasaEstado && pasaUbicacion && pasaProducto;
 
             fila.style.display = visible ? '' : 'none';
             if (!visible) {
@@ -2362,6 +2529,17 @@ arsort($productos_unicos); // más pedidos primero
         aplicarFiltrosMultiples();
     }
 
+    function toggleTodasUbicaciones() {
+        const checkboxes = document.querySelectorAll('.filter-ubicacion-checkbox');
+        const algunoMarcado = Array.from(checkboxes).some(cb => cb.checked);
+
+        checkboxes.forEach(cb => {
+            cb.checked = !algunoMarcado;
+        });
+
+        aplicarFiltrosMultiples();
+    }
+
     // Restaurar filtros guardados
     window.addEventListener('DOMContentLoaded', () => {
         const filtrosGuardados = localStorage.getItem('filtrosEstadosVerPedidos');
@@ -2376,6 +2554,18 @@ arsort($productos_unicos); // más pedidos primero
                 });
             } catch (e) {
                 console.error('Error al cargar filtros guardados:', e);
+            }
+        }
+
+        const ubicacionesGuardadas = localStorage.getItem('filtrosUbicacionesVerPedidos');
+        if (ubicacionesGuardadas) {
+            try {
+                const ubicaciones = JSON.parse(ubicacionesGuardadas);
+                document.querySelectorAll('.filter-ubicacion-checkbox').forEach(cb => {
+                    cb.checked = ubicaciones.includes(cb.value);
+                });
+            } catch (e) {
+                console.error('Error al cargar filtros de sucursal guardados:', e);
             }
         }
 
@@ -2582,25 +2772,260 @@ document.addEventListener('wheel', function() {
 })();
 </script>
 
+<?php if (!$ubicacion_fija): ?>
+<!-- ============================================
+     MODAL FECHAS / REPROGRAMAR ENTREGA (solo admin)
+============================================ -->
+<div id="modal-cambiar-fecha" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
+        <h2 id="cf-titulo" class="text-xl font-bold text-gray-800 mb-4 text-center">📅 Fechas del pedido</h2>
+
+        <div id="cf-info" class="mb-4 text-sm"></div>
+
+        <div class="border-t pt-4">
+            <p class="text-sm font-semibold text-gray-700 mb-2">Reprogramar entrega para:</p>
+            <div class="flex gap-2 mb-3">
+                <input type="date" id="cf-fecha" class="flex-1 border rounded-lg px-3 py-2 text-sm" onchange="chequearCuposCambioFecha()">
+                <select id="cf-turno" class="flex-1 border rounded-lg px-3 py-2 text-sm" onchange="chequearCuposCambioFecha()"></select>
+            </div>
+            <div id="cf-avisos" class="text-xs mb-4"></div>
+        </div>
+
+        <div class="flex gap-2">
+            <button onclick="cerrarCambiarFecha()" class="flex-1 py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm">
+                Cancelar
+            </button>
+            <button onclick="confirmarCambioFecha()" class="flex-1 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm">
+                Guardar nueva fecha
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+const TURNOS_CF = <?= json_encode(array_map(fn($r) => substr($r['inicio'], 0, 5) . '-' . substr($r['fin'], 0, 5), $turnos_config ?: []), JSON_UNESCAPED_UNICODE) ?>;
+let _cfIds = [];
+let _cfAvisos = [];
+let _cfReqId = 0;
+
+function _cfEsc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function _cfDia(ymd) {
+    if (!ymd) return '—';
+    const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+    const dias = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    return `${dias[new Date(y, m - 1, d).getDay()]} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`;
+}
+function _cfCreado(dt) {
+    if (!dt) return '—';
+    const [f, h] = String(dt).split(' ');
+    const [y, m, d] = f.split('-');
+    return `${d}/${m}/${y}${h ? ' ' + h.slice(0, 5) : ''}`;
+}
+function _cfFechaActual(p) {
+    return (p.fecha_entrega || String(p.created_at || '').slice(0, 10)).slice(0, 10);
+}
+
+function cambiarFechaMasivo() {
+    const ids = getSeleccionados();
+    if (ids.length === 0) { alert('⚠️ Seleccioná al menos un pedido'); return; }
+    abrirCambiarFecha(ids);
+}
+
+function abrirCambiarFecha(ids) {
+    const pedidos = ids.map(id => pedidosData.find(p => p.id == id)).filter(Boolean);
+    if (pedidos.length === 0) return;
+    _cfIds = pedidos.map(p => p.id);
+    const unico = pedidos.length === 1 ? pedidos[0] : null;
+
+    document.getElementById('cf-titulo').textContent = unico
+        ? `📅 Fechas del pedido #${unico.id}`
+        : `📅 Reprogramar ${pedidos.length} pedidos`;
+
+    let info = '';
+    if (unico) {
+        const historial = String(unico.observaciones || '').split('\n').filter(l => l.startsWith('📅 Reprogramado'));
+        info = `
+            <div class="font-semibold text-gray-800 mb-2">${_cfEsc(unico.nombre)} ${_cfEsc(unico.apellido)} · ${_cfEsc(unico.modalidad)}</div>
+            <div class="grid grid-cols-2 gap-2">
+                <div class="bg-gray-50 rounded-lg p-2">
+                    <div class="text-xs text-gray-500">Se creó</div>
+                    <div class="font-semibold">${_cfCreado(unico.created_at)}</div>
+                </div>
+                <div class="bg-teal-50 rounded-lg p-2">
+                    <div class="text-xs text-gray-500">Entrega actual</div>
+                    <div class="font-semibold">${_cfDia(_cfFechaActual(unico))}${unico.turno ? ' · ' + _cfEsc(unico.turno) : ''}</div>
+                </div>
+            </div>
+            ${historial.length ? `<div class="mt-3"><div class="text-xs text-gray-500 mb-1">Cambios anteriores:</div>
+                ${historial.map(l => `<div class="text-xs text-gray-700">${_cfEsc(l)}</div>`).join('')}</div>` : ''}`;
+    } else {
+        info = `<div class="space-y-1">${pedidos.map(p => `
+            <div class="flex justify-between bg-gray-50 rounded px-2 py-1 text-xs">
+                <span>#${p.id} ${_cfEsc(p.nombre)} ${_cfEsc(p.apellido)}</span>
+                <span class="text-gray-600">${_cfDia(_cfFechaActual(p))}${p.turno ? ' · ' + _cfEsc(p.turno) : ''}</span>
+            </div>`).join('')}</div>`;
+    }
+    document.getElementById('cf-info').innerHTML = info;
+
+    const sel = document.getElementById('cf-turno');
+    const opciones = Object.entries(TURNOS_CF).map(([t, h]) => `<option value="${_cfEsc(t)}">${_cfEsc(t)} (${h})</option>`).join('');
+    sel.innerHTML = unico
+        ? (unico.turno ? '' : '<option value="">Sin turno</option>') + opciones
+        : '<option value="">— Mantener el turno de cada uno —</option>' + opciones;
+    sel.value = unico ? (unico.turno || '') : '';
+
+    document.getElementById('cf-fecha').value = unico ? _cfFechaActual(unico) : '';
+    document.getElementById('cf-avisos').innerHTML = '';
+    _cfAvisos = [];
+    document.getElementById('modal-cambiar-fecha').classList.remove('hidden');
+}
+
+function cerrarCambiarFecha() {
+    document.getElementById('modal-cambiar-fecha').classList.add('hidden');
+    _cfIds = [];
+}
+
+// Aviso de cupos: no bloquea, solo informa (la decisión es de ustedes)
+async function chequearCuposCambioFecha() {
+    const fecha = document.getElementById('cf-fecha').value;
+    const turnoSel = document.getElementById('cf-turno').value;
+    const cont = document.getElementById('cf-avisos');
+    _cfAvisos = [];
+    if (!fecha) { cont.innerHTML = ''; return; }
+
+    const reqId = ++_cfReqId;
+    const pedidos = _cfIds.map(id => pedidosData.find(p => p.id == id)).filter(Boolean);
+    const hoy = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+    const avisos = [];
+    if (fecha < hoy) avisos.push('Es una fecha que ya pasó.');
+
+    // Pedidos que se suman a cada (modalidad, turno) destino, sin contar los que ya estaban ahí
+    const movidos = {};
+    for (const p of pedidos) {
+        const turno = turnoSel || p.turno;
+        if (!turno) continue;
+        if (_cfFechaActual(p) === fecha && p.turno === turno) continue;
+        const k = `${p.modalidad}|${turno}`;
+        movidos[k] = (movidos[k] || 0) + 1;
+    }
+
+    const diaSemana = new Date(fecha + 'T12:00:00').getDay();
+    const modalidades = [...new Set(Object.keys(movidos).map(k => k.split('|')[0]))];
+    for (const modalidad of modalidades) {
+        if (diaSemana === 1 && modalidad === 'Retiro' && movidos['Retiro|Tarde']) {
+            avisos.push('Los lunes cerramos a las 18hs: no hay turno Tarde para retiro.');
+        }
+        if (fecha < hoy) continue;
+        try {
+            const res = await fetch(`/pedido_online/disponibilidad.php?fecha=${fecha}&modalidad=${encodeURIComponent(modalidad)}`);
+            if (!res.ok) continue;
+            const disp = await res.json();
+            for (const [k, cant] of Object.entries(movidos)) {
+                const [mod, turno] = k.split('|');
+                if (mod !== modalidad || !disp[turno]) continue;
+                const d = disp[turno];
+                if (!d.activo) {
+                    avisos.push(`${modalidad} · ${turno}: ese turno no está habilitado ese día.`);
+                } else if (d.ocupados + cant > d.max_pedidos) {
+                    avisos.push(`${modalidad} · ${turno}: ${d.ocupados}/${d.max_pedidos} cupos ocupados, con ${cant > 1 ? 'estos' : 'este'} quedaría en ${d.ocupados + cant}/${d.max_pedidos}.`);
+                }
+            }
+        } catch (e) { /* si no se puede consultar, no se avisa */ }
+    }
+
+    if (reqId !== _cfReqId) return; // llegó una respuesta vieja
+    _cfAvisos = avisos;
+    cont.innerHTML = avisos.length
+        ? `<div class="bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg p-2">${avisos.map(a => '⚠️ ' + _cfEsc(a)).join('<br>')}</div>`
+        : (modalidades.length ? '<div class="text-green-600">✅ Hay cupo en ese turno.</div>' : '');
+}
+
+async function confirmarCambioFecha() {
+    const fecha = document.getElementById('cf-fecha').value;
+    const turno = document.getElementById('cf-turno').value;
+    if (!fecha) { alert('⚠️ Elegí la nueva fecha'); return; }
+
+    await chequearCuposCambioFecha();
+    if (_cfAvisos.length && !confirm('Atención:\n- ' + _cfAvisos.join('\n- ') + '\n\n¿Reprogramar igual?')) return;
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    const campos = [['accion', 'cambiar_fecha'], ['fecha_entrega', fecha], ['turno', turno], ..._cfIds.map(id => ['pedidos[]', id])];
+    campos.forEach(([n, v]) => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = n; i.value = v;
+        form.appendChild(i);
+    });
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+<?php endif; ?>
+
 <!-- ============================================
      MODAL FORMA DE PAGO (al marcar Entregado)
 ============================================ -->
 <div id="modal-forma-pago" class="fixed inset-0 z-50 hidden flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
         <h2 class="text-xl font-bold text-gray-800 mb-1 text-center">💳 Forma de Pago</h2>
-        <p class="text-sm text-gray-500 text-center mb-6">¿Cómo está pagando el cliente?</p>
-        <div class="grid grid-cols-2 gap-4 mb-6">
-            <button onclick="confirmarPago('Efectivo')"
-                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-green-400 bg-green-50 hover:bg-green-100 transition font-bold text-green-700 text-lg">
-                <span class="text-3xl">💵</span>
-                Efectivo
-            </button>
-            <button onclick="confirmarPago('Transferencia')"
-                    class="flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 transition font-bold text-blue-700 text-lg">
-                <span class="text-3xl">💳</span>
-                Transferencia
+        <p class="text-sm text-gray-500 text-center mb-4">¿Cómo está pagando el cliente?</p>
+
+        <!-- VISTA NORMAL: 3 botones simples -->
+        <div id="pago-vista-simple">
+            <div class="grid grid-cols-3 gap-2 mb-4">
+                <button onclick="confirmarPago('Efectivo')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-green-400 bg-green-50 hover:bg-green-100 transition font-bold text-green-700 text-sm">
+                    <span class="text-2xl">💵</span>
+                    Efectivo
+                </button>
+                <button onclick="confirmarPago('Transferencia')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 transition font-bold text-blue-700 text-sm">
+                    <span class="text-2xl">💳</span>
+                    Transferencia
+                </button>
+                <button onclick="confirmarPago('DNI')"
+                        class="flex flex-col items-center justify-center gap-1 p-3 rounded-xl border-2 border-indigo-400 bg-indigo-50 hover:bg-indigo-100 transition font-bold text-indigo-700 text-sm">
+                    <span class="text-2xl">🪪</span>
+                    Cuenta DNI
+                </button>
+            </div>
+
+            <label id="pago-toggle-dividido-label" class="flex items-center gap-2 mb-4 text-sm text-gray-600 cursor-pointer">
+                <input type="checkbox" id="pago-toggle-dividido" onchange="toggleCobroDividido()">
+                Cobro dividido (pagó con 2 formas de pago)
+            </label>
+        </div>
+
+        <!-- VISTA COBRO DIVIDIDO -->
+        <div id="pago-vista-dividido" class="hidden mb-4">
+            <p class="text-xs text-gray-500 mb-3">Total del pedido: <strong id="pago-dividido-total">$0</strong> — los dos montos tienen que sumar ese total.</p>
+
+            <div class="flex gap-2 mb-3">
+                <select id="pago-dividido-forma-1" class="flex-1 border rounded-lg px-2 py-2 text-sm">
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Transferencia" selected>💳 Transferencia</option>
+                    <option value="DNI">🪪 Cuenta DNI</option>
+                </select>
+                <input type="number" id="pago-dividido-monto-1" placeholder="Monto" class="w-28 border rounded-lg px-2 py-2 text-sm" oninput="actualizarRestanteDividido()">
+            </div>
+            <div class="flex gap-2 mb-2">
+                <select id="pago-dividido-forma-2" class="flex-1 border rounded-lg px-2 py-2 text-sm">
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Transferencia" selected>💳 Transferencia</option>
+                    <option value="DNI">🪪 Cuenta DNI</option>
+                </select>
+                <input type="number" id="pago-dividido-monto-2" placeholder="Monto" class="w-28 border rounded-lg px-2 py-2 text-sm" oninput="actualizarRestanteDividido()">
+            </div>
+            <p id="pago-dividido-restante" class="text-xs text-right text-gray-400 mb-3"></p>
+
+            <button onclick="confirmarPagoDividido()"
+                    class="w-full py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white font-bold text-sm transition">
+                Confirmar cobro dividido
             </button>
         </div>
+
         <button onclick="cancelarPago()"
                 class="w-full py-2 rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100 text-sm transition">
             Cancelar
@@ -2637,8 +3062,64 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+function _precioPedidoModalPago() {
+    let pedidoId = null;
+    if (_modalEntregaOrigen === 'inline' && _modalEntregaSel) {
+        const inputId = _modalEntregaSel.closest('form')?.querySelector('input[name="id"]');
+        pedidoId = inputId ? inputId.value : null;
+    } else if (_modalEntregaOrigen === 'cliente' && _modalEntregaSel) {
+        pedidoId = _modalEntregaSel.dataset.pedidoId;
+    }
+    if (!pedidoId) return null;
+    const p = pedidosData.find(x => x.id == pedidoId);
+    // El total a cobrar incluye la bebida (se carga aparte, a mano) además del precio del producto.
+    return p ? Number(p.precio) + Number(p.bebidas_precio || 0) : null;
+}
+
 function abrirModalPago() {
     document.getElementById('modal-forma-pago').classList.remove('hidden');
+
+    // Resetear a la vista simple cada vez que se abre
+    document.getElementById('pago-toggle-dividido').checked = false;
+    document.getElementById('pago-vista-simple').classList.remove('hidden');
+    document.getElementById('pago-vista-dividido').classList.add('hidden');
+    document.getElementById('pago-dividido-monto-1').value = '';
+    document.getElementById('pago-dividido-monto-2').value = '';
+
+    // Cobro dividido no aplica al cambio masivo (son varios pedidos con precios distintos)
+    const esMasivo = _modalEntregaOrigen === 'masivo';
+    document.getElementById('pago-toggle-dividido-label').classList.toggle('hidden', esMasivo);
+
+    if (!esMasivo) {
+        const precio = _precioPedidoModalPago();
+        document.getElementById('pago-dividido-total').textContent = precio !== null
+            ? '$' + Math.round(precio).toLocaleString('es-AR') : '$?';
+    }
+}
+
+function toggleCobroDividido() {
+    const activo = document.getElementById('pago-toggle-dividido').checked;
+    document.getElementById('pago-vista-simple').classList.toggle('hidden', activo);
+    document.getElementById('pago-vista-dividido').classList.toggle('hidden', !activo);
+    actualizarRestanteDividido();
+}
+
+function actualizarRestanteDividido() {
+    const precio = _precioPedidoModalPago();
+    const m1 = parseFloat(document.getElementById('pago-dividido-monto-1').value) || 0;
+    const m2 = parseFloat(document.getElementById('pago-dividido-monto-2').value) || 0;
+    const restante = document.getElementById('pago-dividido-restante');
+    if (precio === null) { restante.textContent = ''; return; }
+    const falta = precio - (m1 + m2);
+    if (Math.abs(falta) < 1) {
+        restante.textContent = '✅ Los montos suman el total';
+        restante.className = 'text-xs text-right text-green-600 font-semibold mb-3';
+    } else {
+        restante.textContent = falta > 0
+            ? `Faltan $${Math.round(falta).toLocaleString('es-AR')}`
+            : `Sobran $${Math.round(Math.abs(falta)).toLocaleString('es-AR')}`;
+        restante.className = 'text-xs text-right text-orange-500 mb-3';
+    }
 }
 
 function cancelarPago() {
@@ -2700,6 +3181,61 @@ function confirmarPago(formaPago) {
     _modalEntregaSel = null;
     _modalEntregaOrigen = null;
     window._masivoPendienteIds = null;
+}
+
+function confirmarPagoDividido() {
+    const forma1 = document.getElementById('pago-dividido-forma-1').value;
+    const forma2 = document.getElementById('pago-dividido-forma-2').value;
+    const monto1 = parseFloat(document.getElementById('pago-dividido-monto-1').value) || 0;
+    const monto2 = parseFloat(document.getElementById('pago-dividido-monto-2').value) || 0;
+
+    if (monto1 <= 0 || monto2 <= 0) {
+        alert('⚠️ Cargá los dos montos');
+        return;
+    }
+    const precio = _precioPedidoModalPago();
+    if (precio !== null && Math.abs(precio - (monto1 + monto2)) >= 1) {
+        if (!confirm(`Los montos suman $${Math.round(monto1 + monto2).toLocaleString('es-AR')} y el pedido es de $${Math.round(precio).toLocaleString('es-AR')}. ¿Confirmar igual?`)) {
+            return;
+        }
+    }
+
+    document.getElementById('modal-forma-pago').classList.add('hidden');
+
+    const campos = [
+        ['forma_pago', 'Dividido'],
+        ['forma_pago_1', forma1], ['monto_1', monto1],
+        ['forma_pago_2', forma2], ['monto_2', monto2],
+    ];
+
+    if (_modalEntregaOrigen === 'inline') {
+        const form = _modalEntregaSel.closest('form');
+        campos.forEach(([n, v]) => {
+            let input = form.querySelector(`input[name="${n}"]`);
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden'; input.name = n;
+                form.appendChild(input);
+            }
+            input.value = v;
+        });
+        form.submit();
+    } else if (_modalEntregaOrigen === 'cliente') {
+        const pedidoId = _modalEntregaSel ? _modalEntregaSel.dataset.pedidoId : null;
+        const form = document.createElement('form');
+        form.method = 'POST';
+        [['accion', 'cambiar_estado'], ['id', pedidoId], ['estado', 'Entregado'], ...campos].forEach(([n, v]) => {
+            const i = document.createElement('input');
+            i.type = 'hidden'; i.name = n; i.value = v;
+            form.appendChild(i);
+        });
+        document.body.appendChild(form);
+        form.submit();
+    }
+    // Nota: 'masivo' no ofrece cobro dividido (el checkbox queda oculto en ese caso).
+
+    _modalEntregaSel = null;
+    _modalEntregaOrigen = null;
 }
 </script>
 

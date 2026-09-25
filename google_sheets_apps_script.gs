@@ -32,8 +32,23 @@ function setupSheet(sheet) {
   hRng.setValues([HEADERS]);
   hRng.setBackground('#1a73e8').setFontColor('#ffffff').setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.getRange(2, 2, 2000, 1).setNumberFormat('@');  // Fecha/Hora
-  sheet.getRange(2, 14, 2000, 1).setNumberFormat('@'); // Fecha Entrega
+  // OJO: nada de setNumberFormat acá. Si la hoja es una Tabla de Sheets (columna
+  // con formato fijado por la Tabla, no celda por celda), Google tira
+  // "No puedes establecer el formato de los números de las celdas en una columna
+  // escrita" y esa excepción no la agarra ni nuestro propio try/catch — rompe
+  // TODA inserción de fila nueva en seco, sin dejar rastro reconocible. El texto
+  // de Fecha/Hora y Fecha Entrega se fuerza con un apóstrofe al escribirlo
+  // (comoTexto, más abajo), sin tocar el formato de la columna.
+}
+
+/**
+ * Antepone un apóstrofe para forzar que Sheets guarde el valor como texto
+ * literal sin auto-convertirlo a fecha/número — sin tocar el formato de la
+ * celda (setNumberFormat), que es lo que rompía al escribir en una Tabla.
+ */
+function comoTexto(valor) {
+  if (valor === undefined || valor === null || valor === '') return '';
+  return "'" + valor;
 }
 
 function actualizarHeaders() {
@@ -46,6 +61,19 @@ function actualizarHeaders() {
 }
 
 function doPost(e) {
+  // Cuando llegan varias llamadas casi juntas (ej. el cambio masivo a "Entregado",
+  // que manda una llamada por pedido) se pisaban entre sí escribiendo en el mismo
+  // Sheet y Google terminaba rechazando alguna directamente como "Fallida" (sin
+  // ejecutar ni una línea de código, por eso no dejaba ningún log). El lock hace
+  // que esperen su turno en vez de competir.
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(5000);
+  } catch (lockErr) {
+    console.error('doPost: no se pudo obtener el lock — ' + lockErr);
+    return ContentService.createTextOutput('error: script ocupado, reintentar');
+  }
+
   try {
     const data = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -99,27 +127,24 @@ function doPost(e) {
     }
 
     const fila = [
-      data.id,            //  1  ID
-      data.fecha_hora,    //  2  Fecha/Hora  ← campo unificado
-      data.nombre,        //  3  Nombre
-      data.apellido,      //  4  Apellido
-      data.telefono,      //  5  Teléfono
-      data.direccion,     //  6  Dirección
-      data.producto,      //  7  Producto
-      data.cantidad,      //  8  Cantidad
-      data.precio,        //  9  Precio
-      data.forma_pago,    // 10  Pago
-      data.modalidad,     // 11  Modalidad
-      data.ubicacion,     // 12  Ubicación
-      data.estado,        // 13  Estado
-      data.fecha_entrega, // 14  Fecha Entrega
-      data.observaciones  // 15  Observaciones
+      data.id,                        //  1  ID
+      comoTexto(data.fecha_hora),     //  2  Fecha/Hora  ← campo unificado (texto, no fecha)
+      data.nombre,                    //  3  Nombre
+      data.apellido,                  //  4  Apellido
+      data.telefono,                  //  5  Teléfono
+      data.direccion,                 //  6  Dirección
+      data.producto,                  //  7  Producto
+      data.cantidad,                  //  8  Cantidad
+      data.precio,                    //  9  Precio
+      data.forma_pago,                // 10  Pago
+      data.modalidad,                 // 11  Modalidad
+      data.ubicacion,                 // 12  Ubicación
+      data.estado,                    // 13  Estado
+      comoTexto(data.fecha_entrega),  // 14  Fecha Entrega (texto, no fecha)
+      data.observaciones              // 15  Observaciones
     ];
 
     const nuevaFila = sheet.getLastRow() + 1;
-
-    sheet.getRange(nuevaFila, 2).setNumberFormat('@');  // Fecha/Hora como texto
-    sheet.getRange(nuevaFila, 14).setNumberFormat('@'); // Fecha Entrega como texto
 
     sheet.getRange(nuevaFila, 1, 1, HEADERS.length).setValues([fila]);
 
@@ -128,7 +153,10 @@ function doPost(e) {
 
     return ContentService.createTextOutput('ok');
 
-  } catch(err) {
+  } catch (err) {
+    console.error('doPost: ' + err.toString());
     return ContentService.createTextOutput('error: ' + err.toString());
+  } finally {
+    lock.releaseLock();
   }
 }

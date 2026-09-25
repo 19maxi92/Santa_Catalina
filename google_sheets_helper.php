@@ -54,31 +54,69 @@ function _sheets_fecha_entrega($fecha) {
     return $fecha;
 }
 
-function _sheets_curl($payload) {
+/**
+ * Un solo intento de POST al Apps Script.
+ * Devuelve true si respondió HTTP 200 sin decir "error: ..." en el cuerpo.
+ */
+function _sheets_curl_intento($payload) {
     $ch = curl_init(GOOGLE_SHEETS_URL);
     curl_setopt($ch, CURLOPT_POST,           true);
     curl_setopt($ch, CURLOPT_POSTFIELDS,     $payload);
     curl_setopt($ch, CURLOPT_HTTPHEADER,     ['Content-Type: application/json']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT,        10);
+    curl_setopt($ch, CURLOPT_TIMEOUT,        8);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true); // Apps Script responde con 302 a script.googleusercontent.com
-    curl_setopt($ch, CURLOPT_POSTREDIR,      3);    // Mantener POST (con el body) al seguir el 301/302, si no Apps Script nunca recibe los datos
+    // Apps Script ya ejecuta doPost() en ESTE POST y responde con un 302 a
+    // script.googleusercontent.com/.../echo — esa URL de eco solo acepta GET
+    // (confirmado: "allow: HEAD, GET"). Hay que seguir el redirect para leer la
+    // respuesta real, pero como GET (default de curl al seguir un 301/302), NUNCA
+    // reenviando el POST — si no, ese segundo salto vuelve con 405 y hace pensar
+    // que falló el envío entero, aunque el pedido ya se haya guardado en la hoja.
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     $respuesta = curl_exec($ch);
     $curl_error = curl_error($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
+    if ($curl_error) {
+        return ['ok' => false, 'motivo' => "error de conexión ($curl_error)"];
+    }
+    if ($http_code !== 200) {
+        return ['ok' => false, 'motivo' => "HTTP $http_code — respuesta: " . substr((string)$respuesta, 0, 300)];
+    }
+    if (stripos((string)$respuesta, 'error') !== false) {
+        return ['ok' => false, 'motivo' => "Apps Script devolvió error — respuesta: " . substr((string)$respuesta, 0, 300)];
+    }
+    return ['ok' => true, 'motivo' => null];
+}
+
+/**
+ * POST al Apps Script con reintentos: cuando muchos pedidos se cargan/actualizan
+ * casi al mismo tiempo (ej. el cambio masivo a "Entregado"), Apps Script rechaza
+ * algunas ejecuciones por exceso de llamadas simultáneas ("Fallida", sin ningún
+ * log — ni siquiera llega a correr el código). Reintentar con una pausa corta
+ * alcanza para que la segunda o tercera vuelta sí entre.
+ * Nunca rompe el flujo que la llama: si los 3 intentos fallan, solo lo loguea.
+ */
+function _sheets_curl($payload) {
+    // Log incondicional (éxito o falla): hasta ahora un envío "exitoso" no dejaba
+    // ningún rastro, así que no había forma de distinguir "nunca se llamó" de
+    // "se llamó, Google dijo OK, pero no pasó nada". Se puede sacar una vez que
+    // se confirme que el problema real quedó resuelto.
+    error_log("google_sheets: enviando — payload: " . substr($payload, 0, 300));
+
+    $intentos = [0, 400000, 1200000]; // microsegundos de espera antes de cada intento (0, 0.4s, 1.2s)
+    foreach ($intentos as $i => $espera) {
+        if ($espera > 0) usleep($espera);
+        $resultado = _sheets_curl_intento($payload);
+        error_log("google_sheets: intento #" . ($i + 1) . " — " . ($resultado['ok'] ? 'OK' : $resultado['motivo']));
+        if ($resultado['ok']) return;
+    }
+
     // Nunca rompe el flujo que la llama, pero deja rastro: si Google Sheets
     // deja de recibir pedidos (deployment vencido, cuota excedida, etc.) antes
     // esto fallaba en silencio total y nadie se enteraba hasta días después.
-    if ($curl_error) {
-        error_log("google_sheets: error de conexión ($curl_error) — payload: " . substr($payload, 0, 300));
-    } elseif ($http_code !== 200) {
-        error_log("google_sheets: HTTP $http_code — respuesta: " . substr((string)$respuesta, 0, 300) . " — payload: " . substr($payload, 0, 300));
-    } elseif (stripos((string)$respuesta, 'error') !== false) {
-        error_log("google_sheets: el Apps Script devolvió error — respuesta: " . substr((string)$respuesta, 0, 300) . " — payload: " . substr($payload, 0, 300));
-    }
+    error_log("google_sheets: falló tras " . count($intentos) . " intentos (" . $resultado['motivo'] . ") — payload: " . substr($payload, 0, 300));
 }
 
 /**
